@@ -53,9 +53,68 @@ function IconHome({ className }: { className?: string }) {
   return (
     <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
-        d="M4 10.5L12 4l8 6.5V20a1 1 0 01-1 1h-5v-6H10v6H5a1 1 0 01-1-1v-9.5z"
+        d="M4 10.5L12 3l8 7.5V20a1 1 0 01-1 1h-4.5v-7H9.5v7H5a1 1 0 01-1-1V10.5z"
         stroke="currentColor"
         strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 21V12.5h6V21"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/** Impostazioni manifestazione (generali) — sliders, distinto dal PMA. */
+function IconSliders({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <line x1="3" y1="7" x2="21" y2="7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <circle cx="9" cy="7" r="2.25" stroke="currentColor" strokeWidth="1.5" fill="none" />
+      <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <circle cx="15" cy="12" r="2.25" stroke="currentColor" strokeWidth="1.5" fill="none" />
+      <line x1="3" y1="17" x2="21" y2="17" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <circle cx="11" cy="17" r="2.25" stroke="currentColor" strokeWidth="1.5" fill="none" />
+    </svg>
+  )
+}
+
+/** Dashboard PMA — grafico, distinto da edificio / dashboard manifestazione. */
+function IconPmaDashboard({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 19h16" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path
+        d="M7 19V11M12 19V7M17 19v-5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/** Impostazioni PMA — chiave, distinto dalle impostazioni manifestazione. */
+function IconWrench({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M14.7 6.3a4 4 0 010 5.65l-7.07 7.07a2.5 2.5 0 01-3.54-3.54l7.07-7.07"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M16.24 8.76L19 6l2 2-2.76 2.76"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>
@@ -67,33 +126,6 @@ function IconLayout({ className }: { className?: string }) {
     <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M4 4h7v7H4V4zm9 0h7v4h-7V4zm0 6h7v10h-7V10zM4 13h7v7H4v-7z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function IconSettings({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" strokeWidth="1.75" />
-      <path
-        d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82 1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"
-        stroke="currentColor"
-        strokeWidth="1.25"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function IconBuilding({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M4 21V8l8-4 8 4v13M9 21v-6h6v6"
         stroke="currentColor"
         strokeWidth="1.75"
         strokeLinejoin="round"
@@ -390,7 +422,7 @@ export function AppSidebar({ user, theme, layout = 'rail', onNavigate }: AppSide
             <NavItem
               to={`/manifestazione/${manSeg}/impostazioni`}
               rank={rank}
-              icon={<IconSettings />}
+              icon={<IconSliders />}
               label={rank === 'Triage' ? 'Impostazioni manifestazione (sola lettura)' : 'Impostazioni manifestazione'}
               mini={mini}
               onNavigate={onNavigate}
@@ -404,7 +436,7 @@ export function AppSidebar({ user, theme, layout = 'rail', onNavigate }: AppSide
               to={`/pma/${pmaSeg}`}
               end
               rank={rank}
-              icon={<IconBuilding />}
+              icon={<IconPmaDashboard />}
               label="Dashboard PMA"
               mini={mini}
               onNavigate={onNavigate}
@@ -412,7 +444,7 @@ export function AppSidebar({ user, theme, layout = 'rail', onNavigate }: AppSide
             <NavItem
               to={`/pma/${pmaSeg}/impostazioni`}
               rank={rank}
-              icon={<IconSettings />}
+              icon={<IconWrench />}
               label="Impostazioni PMA"
               mini={mini}
               onNavigate={onNavigate}

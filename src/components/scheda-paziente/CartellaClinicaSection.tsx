@@ -41,21 +41,66 @@ function sortRivDesc(rows: RivalutazioneVoce[]) {
 const PV_INPUT =
   'mt-0.5 w-full min-w-0 rounded-md border border-slate-300 px-1.5 py-1 text-xs disabled:bg-slate-100'
 
-function PvField({
+type PvTone = 'critical' | 'warn' | null
+
+function worstSpo2(row: ParametroVitaleRilevazione): number | null {
+  const a = row.spo2_aa
+  const b = row.spo2_o2
+  if (a == null && b == null) return null
+  if (a == null) return b
+  if (b == null) return a
+  return Math.min(a, b)
+}
+
+/** Soglie semplificate per evidenziare valori critici in monitoraggio. */
+function pvTones(row: ParametroVitaleRilevazione): Record<string, PvTone> {
+  const spo = worstSpo2(row)
+  const tones: Record<string, PvTone> = {}
+  if (row.gcs <= 8) tones.gcs = 'critical'
+  else if (row.gcs <= 12) tones.gcs = 'warn'
+  if (row.fr < 8 || row.fr > 32) tones.fr = 'critical'
+  else if (row.fr < 10 || row.fr > 28) tones.fr = 'warn'
+  if (spo != null) {
+    if (spo < 90) tones.spo2 = 'critical'
+    else if (spo < 94) tones.spo2 = 'warn'
+  }
+  if (row.fc < 45 || row.fc > 140) tones.fc = 'critical'
+  else if (row.fc < 55 || row.fc > 120) tones.fc = 'warn'
+  if (row.pa_sistolica < 85 || row.pa_sistolica > 180) tones.pa_sys = 'critical'
+  else if (row.pa_sistolica < 90 || row.pa_sistolica > 160) tones.pa_sys = 'warn'
+  if (row.pa_diastolica < 45 || row.pa_diastolica > 110) tones.pa_dia = 'critical'
+  else if (row.pa_diastolica < 55 || row.pa_diastolica > 100) tones.pa_dia = 'warn'
+  if (row.temperatura != null) {
+    if (row.temperatura >= 39.5 || row.temperatura < 35) tones.temp = 'critical'
+    else if (row.temperatura >= 38.5 || row.temperatura < 36) tones.temp = 'warn'
+  }
+  if (row.nrs != null) {
+    if (row.nrs >= 8) tones.nrs = 'critical'
+    else if (row.nrs >= 6) tones.nrs = 'warn'
+  }
+  return tones
+}
+
+function MonitorCell({
   label,
+  tone,
   children,
-  minWClass = 'min-w-[5.5rem]',
 }: {
   label: string
+  tone: PvTone
   children: ReactNode
-  /** Larghezza minima cella nella riga orizzontale (scroll su tablet). */
-  minWClass?: string
 }) {
+  const shell =
+    tone === 'critical'
+      ? 'border-red-400 bg-red-50 shadow-[inset_0_0_0_1px_rgba(252,165,165,0.45)]'
+      : tone === 'warn'
+        ? 'border-amber-300 bg-amber-50'
+        : 'border-slate-200 bg-white'
   return (
-    <label className={`block shrink-0 ${minWClass} text-[10px]`}>
-      <span className="font-medium text-slate-600">{label}</span>
-      {children}
-    </label>
+    <div className={`rounded-md border px-1.5 py-1 ${shell}`}>
+      <div className="text-[9px] font-semibold uppercase tracking-wide text-slate-600">{label}</div>
+      <div className="mt-0.5 min-w-0">{children}</div>
+    </div>
   )
 }
 
@@ -68,182 +113,184 @@ function ParametriVitaliBlock({
   canEdit: boolean
   onPatch: (id: string, partial: Partial<ParametroVitaleRilevazione>) => void
 }) {
+  const t = pvTones(row)
+
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2 sm:p-3">
-      <div className="max-w-full overflow-x-auto overflow-y-visible [-webkit-overflow-scrolling:touch]">
-        <div className="flex w-max min-w-full items-end gap-x-2 gap-y-2 pb-0.5">
-          <PvField label="Data/ora" minWClass="min-w-[10.5rem]">
-            <input
-              type="datetime-local"
-              disabled={!canEdit}
-              defaultValue={toDatetimeLocal(row.registrato_at)}
-              onBlur={(e) => {
-                const ts = datetimeLocalToTimestamp(e.target.value)
-                if (ts) onPatch(row.id, { registrato_at: ts })
-              }}
-              className={PV_INPUT}
-            />
-          </PvField>
-          <PvField label="Operatore" minWClass="min-w-[7rem]">
-            <input
-              type="text"
-              disabled={!canEdit}
-              defaultValue={row.operatore_nome}
-              onBlur={(e) => onPatch(row.id, { operatore_nome: e.target.value.trim() || '—' })}
-              className={PV_INPUT}
-            />
-          </PvField>
-          <PvField label="GCS" minWClass="min-w-[3.25rem]">
-            <input
-              type="number"
-              min={1}
-              max={15}
-              disabled={!canEdit}
-              defaultValue={row.gcs}
-              onBlur={(e) => {
-                const n = Number(e.target.value)
-                if (!Number.isFinite(n)) return
-                onPatch(row.id, { gcs: Math.min(15, Math.max(1, Math.floor(n))) })
-              }}
-              className={PV_INPUT}
-            />
-          </PvField>
-          <PvField label="FR" minWClass="min-w-[3.25rem]">
-            <input
-              type="number"
-              min={0}
-              disabled={!canEdit}
-              defaultValue={row.fr}
-              onBlur={(e) => {
-                const n = Number(e.target.value)
-                if (!Number.isFinite(n)) return
-                onPatch(row.id, { fr: Math.max(0, Math.floor(n)) })
-              }}
-              className={PV_INPUT}
-            />
-          </PvField>
-          <PvField label="SpO₂ aa" minWClass="min-w-[3.5rem]">
-            <input
-              type="number"
-              min={0}
-              max={100}
-              disabled={!canEdit}
-              defaultValue={row.spo2_aa ?? ''}
-              onBlur={(e) => {
-                const v = e.target.value.trim()
-                if (v === '') {
-                  onPatch(row.id, { spo2_aa: null })
-                  return
-                }
-                const n = Number(v)
-                if (!Number.isFinite(n)) return
-                onPatch(row.id, { spo2_aa: Math.min(100, Math.max(0, Math.floor(n))) })
-              }}
-              className={PV_INPUT}
-            />
-          </PvField>
-          <PvField label="SpO₂ O₂" minWClass="min-w-[3.5rem]">
-            <input
-              type="number"
-              min={0}
-              max={100}
-              disabled={!canEdit}
-              defaultValue={row.spo2_o2 ?? ''}
-              onBlur={(e) => {
-                const v = e.target.value.trim()
-                if (v === '') {
-                  onPatch(row.id, { spo2_o2: null })
-                  return
-                }
-                const n = Number(v)
-                if (!Number.isFinite(n)) return
-                onPatch(row.id, { spo2_o2: Math.min(100, Math.max(0, Math.floor(n))) })
-              }}
-              className={PV_INPUT}
-            />
-          </PvField>
-          <PvField label="FC" minWClass="min-w-[3.25rem]">
-            <input
-              type="number"
-              min={0}
-              disabled={!canEdit}
-              defaultValue={row.fc}
-              onBlur={(e) => {
-                const n = Number(e.target.value)
-                if (!Number.isFinite(n)) return
-                onPatch(row.id, { fc: Math.max(0, Math.floor(n)) })
-              }}
-              className={PV_INPUT}
-            />
-          </PvField>
-          <PvField label="PA sys" minWClass="min-w-[3.5rem]">
-            <input
-              type="number"
-              min={0}
-              disabled={!canEdit}
-              defaultValue={row.pa_sistolica}
-              onBlur={(e) => {
-                const n = Number(e.target.value)
-                if (!Number.isFinite(n)) return
-                onPatch(row.id, { pa_sistolica: Math.max(0, Math.floor(n)) })
-              }}
-              className={PV_INPUT}
-            />
-          </PvField>
-          <PvField label="PA dia" minWClass="min-w-[3.5rem]">
-            <input
-              type="number"
-              min={0}
-              disabled={!canEdit}
-              defaultValue={row.pa_diastolica}
-              onBlur={(e) => {
-                const n = Number(e.target.value)
-                if (!Number.isFinite(n)) return
-                onPatch(row.id, { pa_diastolica: Math.max(0, Math.floor(n)) })
-              }}
-              className={PV_INPUT}
-            />
-          </PvField>
-          <PvField label="T °C" minWClass="min-w-[3.75rem]">
-            <input
-              type="number"
-              step="0.1"
-              disabled={!canEdit}
-              defaultValue={row.temperatura ?? ''}
-              onBlur={(e) => {
-                const v = e.target.value.trim()
-                if (v === '') {
-                  onPatch(row.id, { temperatura: null })
-                  return
-                }
-                const n = Number(v.replace(',', '.'))
-                if (!Number.isFinite(n)) return
-                onPatch(row.id, { temperatura: n })
-              }}
-              className={PV_INPUT}
-            />
-          </PvField>
-          <PvField label="NRS" minWClass="min-w-[3.25rem]">
-            <input
-              type="number"
-              min={0}
-              max={10}
-              disabled={!canEdit}
-              defaultValue={row.nrs ?? ''}
-              onBlur={(e) => {
-                const v = e.target.value.trim()
-                if (v === '') {
-                  onPatch(row.id, { nrs: null })
-                  return
-                }
-                const n = Number(v)
-                if (!Number.isFinite(n)) return
-                onPatch(row.id, { nrs: Math.min(10, Math.max(0, Math.floor(n))) })
-              }}
-              className={PV_INPUT}
-            />
-          </PvField>
-        </div>
+    <div className="rounded-md border border-slate-300 bg-slate-200/40 p-2 shadow-sm">
+      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+        <MonitorCell label="Data/ora" tone={null}>
+          <input
+            type="datetime-local"
+            disabled={!canEdit}
+            defaultValue={toDatetimeLocal(row.registrato_at)}
+            onBlur={(e) => {
+              const ts = datetimeLocalToTimestamp(e.target.value)
+              if (ts) onPatch(row.id, { registrato_at: ts })
+            }}
+            className={PV_INPUT}
+          />
+        </MonitorCell>
+        <MonitorCell label="Operatore" tone={null}>
+          <input
+            type="text"
+            disabled={!canEdit}
+            defaultValue={row.operatore_nome}
+            onBlur={(e) => onPatch(row.id, { operatore_nome: e.target.value.trim() || '—' })}
+            className={PV_INPUT}
+          />
+        </MonitorCell>
+      </div>
+      <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        <MonitorCell label="GCS" tone={t.gcs ?? null}>
+          <input
+            type="number"
+            min={1}
+            max={15}
+            disabled={!canEdit}
+            defaultValue={row.gcs}
+            onBlur={(e) => {
+              const n = Number(e.target.value)
+              if (!Number.isFinite(n)) return
+              onPatch(row.id, { gcs: Math.min(15, Math.max(1, Math.floor(n))) })
+            }}
+            className={PV_INPUT}
+          />
+        </MonitorCell>
+        <MonitorCell label="FR" tone={t.fr ?? null}>
+          <input
+            type="number"
+            min={0}
+            disabled={!canEdit}
+            defaultValue={row.fr}
+            onBlur={(e) => {
+              const n = Number(e.target.value)
+              if (!Number.isFinite(n)) return
+              onPatch(row.id, { fr: Math.max(0, Math.floor(n)) })
+            }}
+            className={PV_INPUT}
+          />
+        </MonitorCell>
+        <MonitorCell label="SpO₂ aa" tone={t.spo2 ?? null}>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            disabled={!canEdit}
+            defaultValue={row.spo2_aa ?? ''}
+            onBlur={(e) => {
+              const v = e.target.value.trim()
+              if (v === '') {
+                onPatch(row.id, { spo2_aa: null })
+                return
+              }
+              const n = Number(v)
+              if (!Number.isFinite(n)) return
+              onPatch(row.id, { spo2_aa: Math.min(100, Math.max(0, Math.floor(n))) })
+            }}
+            className={PV_INPUT}
+          />
+        </MonitorCell>
+        <MonitorCell label="SpO₂ O₂" tone={t.spo2 ?? null}>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            disabled={!canEdit}
+            defaultValue={row.spo2_o2 ?? ''}
+            onBlur={(e) => {
+              const v = e.target.value.trim()
+              if (v === '') {
+                onPatch(row.id, { spo2_o2: null })
+                return
+              }
+              const n = Number(v)
+              if (!Number.isFinite(n)) return
+              onPatch(row.id, { spo2_o2: Math.min(100, Math.max(0, Math.floor(n))) })
+            }}
+            className={PV_INPUT}
+          />
+        </MonitorCell>
+        <MonitorCell label="FC" tone={t.fc ?? null}>
+          <input
+            type="number"
+            min={0}
+            disabled={!canEdit}
+            defaultValue={row.fc}
+            onBlur={(e) => {
+              const n = Number(e.target.value)
+              if (!Number.isFinite(n)) return
+              onPatch(row.id, { fc: Math.max(0, Math.floor(n)) })
+            }}
+            className={PV_INPUT}
+          />
+        </MonitorCell>
+        <MonitorCell label="PA sys" tone={t.pa_sys ?? null}>
+          <input
+            type="number"
+            min={0}
+            disabled={!canEdit}
+            defaultValue={row.pa_sistolica}
+            onBlur={(e) => {
+              const n = Number(e.target.value)
+              if (!Number.isFinite(n)) return
+              onPatch(row.id, { pa_sistolica: Math.max(0, Math.floor(n)) })
+            }}
+            className={PV_INPUT}
+          />
+        </MonitorCell>
+        <MonitorCell label="PA dia" tone={t.pa_dia ?? null}>
+          <input
+            type="number"
+            min={0}
+            disabled={!canEdit}
+            defaultValue={row.pa_diastolica}
+            onBlur={(e) => {
+              const n = Number(e.target.value)
+              if (!Number.isFinite(n)) return
+              onPatch(row.id, { pa_diastolica: Math.max(0, Math.floor(n)) })
+            }}
+            className={PV_INPUT}
+          />
+        </MonitorCell>
+        <MonitorCell label="T °C" tone={t.temp ?? null}>
+          <input
+            type="number"
+            step="0.1"
+            disabled={!canEdit}
+            defaultValue={row.temperatura ?? ''}
+            onBlur={(e) => {
+              const v = e.target.value.trim()
+              if (v === '') {
+                onPatch(row.id, { temperatura: null })
+                return
+              }
+              const n = Number(v.replace(',', '.'))
+              if (!Number.isFinite(n)) return
+              onPatch(row.id, { temperatura: n })
+            }}
+            className={PV_INPUT}
+          />
+        </MonitorCell>
+        <MonitorCell label="NRS" tone={t.nrs ?? null}>
+          <input
+            type="number"
+            min={0}
+            max={10}
+            disabled={!canEdit}
+            defaultValue={row.nrs ?? ''}
+            onBlur={(e) => {
+              const v = e.target.value.trim()
+              if (v === '') {
+                onPatch(row.id, { nrs: null })
+                return
+              }
+              const n = Number(v)
+              if (!Number.isFinite(n)) return
+              onPatch(row.id, { nrs: Math.min(10, Math.max(0, Math.floor(n))) })
+            }}
+            className={PV_INPUT}
+          />
+        </MonitorCell>
       </div>
     </div>
   )

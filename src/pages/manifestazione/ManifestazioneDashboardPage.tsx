@@ -11,6 +11,7 @@ import { NewPmaModal } from '../../components/manifestazione/NewPmaModal'
 import { PmaCard } from '../../components/manifestazione/PmaCard'
 import { PmaOperationalCounts } from '../../components/manifestazione/PmaOperationalCounts'
 import { PmaCentraleFocusPanel } from '../../components/manifestazione/PmaCentraleFocusPanel'
+import { PmaCapacityFromPmaId } from '../../components/manifestazione/PmaCapacityGauge'
 import type { CodiceColorePaziente } from '../../types/paziente'
 import { CODICE_COLORE_LABEL } from '../../types/paziente'
 
@@ -116,6 +117,12 @@ export function ManifestazioneDashboardPage() {
       out.set(k, sorted.slice(0, 10))
     }
     return out
+  }, [dimessiManifestazione])
+
+  const dimessiTickerRows = useMemo(() => {
+    return [...dimessiManifestazione]
+      .sort((a, b) => (b.dimesso_at?.toMillis?.() ?? 0) - (a.dimesso_at?.toMillis?.() ?? 0))
+      .slice(0, 28)
   }, [dimessiManifestazione])
 
   return (
@@ -251,6 +258,9 @@ export function ManifestazioneDashboardPage() {
                       <th scope="col" className="hidden px-4 py-3 sm:table-cell">
                         Luogo
                       </th>
+                      <th scope="col" className="hidden w-[7.5rem] px-2 py-3 text-right md:table-cell">
+                        Letti
+                      </th>
                       <th scope="col" className="min-w-[200px] px-4 py-3">
                         Carico operativo
                       </th>
@@ -267,13 +277,18 @@ export function ManifestazioneDashboardPage() {
                           <div className="mt-0.5 font-mono text-xs text-slate-500 sm:hidden">{pma.id}</div>
                         </td>
                         <td className="hidden px-4 py-3 text-slate-700 sm:table-cell">{pma.luogo}</td>
+                        <td className="hidden px-2 py-3 text-right align-middle md:table-cell">
+                          <div className="inline-block text-left">
+                            <PmaCapacityFromPmaId pmaId={pma.id} postiLetto={pma.impostazioni_pma.posti_letto} />
+                          </div>
+                        </td>
                         <td className="px-4 py-3 align-top">
                           <PmaOperationalCounts pmaId={pma.id} layout="coordination" />
                         </td>
                         <td className="px-4 py-3 text-right align-middle">
                           <Link
                             to={`/pma/${encodeURIComponent(pma.id)}`}
-                            className={`inline-flex rounded-lg px-3 py-2 text-xs font-semibold ${theme.primaryCta} ${theme.primaryCtaHover}`}
+                            className="inline-flex rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-800 shadow-sm hover:bg-slate-50"
                           >
                             Apri PMA
                           </Link>
@@ -283,6 +298,45 @@ export function ManifestazioneDashboardPage() {
                   </tbody>
                 </table>
               </div>
+
+              {dimessiTickerRows.length > 0 ? (
+                <div
+                  className="mt-3 border-t border-slate-200 pt-3"
+                  role="region"
+                  aria-label="Ultimi pazienti dimessi, scorrimento automatico"
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    Ultimi eventi — dimessi
+                  </p>
+                  <div className="mt-1.5 overflow-hidden rounded border border-slate-200 bg-slate-100 py-1.5">
+                    <div className="flex w-max animate-pmapp-ticker">
+                      {[0, 1].map((dup) => (
+                        <ul
+                          key={dup}
+                          className="flex shrink-0 items-center gap-x-10 px-4"
+                          aria-hidden={dup === 1}
+                        >
+                          {dimessiTickerRows.map((row) => (
+                            <li key={`${dup}-${row.id}`} className="whitespace-nowrap text-[11px] text-slate-600">
+                              <span className="font-mono text-slate-800">{row.id_paziente_visibile}</span>
+                              <span className="text-slate-400"> · </span>
+                              <span className="text-slate-800">
+                                {row.cognome} {row.nome}
+                              </span>
+                              <span className="text-slate-400"> · </span>
+                              dimesso {formatDimessoBreve(row.dimesso_at)}
+                              <span className="text-slate-400"> · </span>
+                              <span className="text-slate-500">
+                                {(pmaNomeById.get(row.id_pma) ?? row.id_pma) || '—'}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="mt-8 space-y-4 border-t border-slate-100 pt-6">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">

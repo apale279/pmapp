@@ -66,17 +66,17 @@ export function PmaOperationalCounts({ pmaId, layout = 'inline' }: Props) {
   return (
     <div className="space-y-2 text-xs text-slate-700">
       <div className="flex flex-wrap gap-1.5">
-        <span className="rounded-md bg-sky-50 px-2 py-0.5 font-medium text-sky-900 ring-1 ring-sky-700/15">
+        <span className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 font-medium text-slate-800">
           Arr {stats.in_arrivo}
         </span>
-        <span className="rounded-md bg-amber-50 px-2 py-0.5 font-medium text-amber-950 ring-1 ring-amber-700/15">
+        <span className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 font-medium text-slate-800">
           Att {stats.in_attesa}
         </span>
-        <span className="rounded-md bg-emerald-50 px-2 py-0.5 font-medium text-emerald-900 ring-1 ring-emerald-700/15">
+        <span className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 font-medium text-slate-800">
           Car {stats.in_carico}
         </span>
         {stats.altri > 0 ? (
-          <span className="rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-800 ring-1 ring-slate-400/25">
+          <span className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium text-slate-700">
             Altro {stats.altri}
           </span>
         ) : null}

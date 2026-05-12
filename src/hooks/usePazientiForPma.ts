@@ -22,6 +22,10 @@ export type PazienteListItem = {
   id_pma: string
   infermiere_rif: string
   medico_rif: string
+  /** Età anagrafica se presente su documento. */
+  eta: number | null
+  /** Motivo / sintesi accesso (breve descrizione). */
+  breve_descrizione: string
 }
 
 function parseListItem(id: string, d: Record<string, unknown>): PazienteListItem {
@@ -34,6 +38,14 @@ function parseListItem(id: string, d: Record<string, unknown>): PazienteListItem
   const dimesso_at =
     dim && typeof (dim as Timestamp).toMillis === 'function' ? (dim as Timestamp) : null
   const idPma = typeof d.id_pma === 'string' && d.id_pma.trim() !== '' ? d.id_pma.trim() : ''
+
+  const etaRaw = d.eta
+  const eta =
+    typeof etaRaw === 'number' && Number.isFinite(etaRaw)
+      ? Math.floor(etaRaw)
+      : null
+  const breve =
+    typeof d.breve_descrizione === 'string' ? d.breve_descrizione.trim().slice(0, 500) : ''
 
   return {
     id,
@@ -50,6 +62,8 @@ function parseListItem(id: string, d: Record<string, unknown>): PazienteListItem
     id_pma: idPma,
     infermiere_rif: typeof d.infermiere_rif === 'string' ? d.infermiere_rif : '',
     medico_rif: typeof d.medico_rif === 'string' ? d.medico_rif : '',
+    eta,
+    breve_descrizione: breve,
   }
 }
 

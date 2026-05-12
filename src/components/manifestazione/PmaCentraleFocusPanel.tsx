@@ -7,6 +7,7 @@ import { usePazientiForPma } from '../../hooks/usePazientiForPma'
 import type { Pma } from '../../types/pma'
 import type { CodiceColorePaziente } from '../../types/paziente'
 import { CODICE_COLORE_LABEL } from '../../types/paziente'
+import { PmaCapacityGauge } from './PmaCapacityGauge'
 
 const PILLS: CodiceColorePaziente[] = ['bianco', 'verde', 'giallo', 'rosso']
 
@@ -70,7 +71,8 @@ export function PmaCentraleFocusPanel({ manifestazioneId, pmaList, theme }: Prop
       inCaricoColore.giallo +
       inCaricoColore.verde +
       inCaricoColore.bianco
-    return { in_arrivo, in_attesa, inCaricoColore, inCaricoTot }
+    const occupatiLetti = items.filter((p) => p.stato !== 'dimesso').length
+    return { in_arrivo, in_attesa, inCaricoColore, inCaricoTot, occupatiLetti }
   }, [items])
 
   async function handleNuovoPazienteCentrale() {
@@ -98,14 +100,21 @@ export function PmaCentraleFocusPanel({ manifestazioneId, pmaList, theme }: Prop
 
   const sel = pmaList.find((p) => p.id === focusPmaId)
 
+  const postiLetto = sel?.impostazioni_pma.posti_letto ?? 0
+
   return (
-    <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-white via-sky-50/50 to-white p-5 shadow-md sm:p-6">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-sky-800/80">PMA in evidenza</p>
-          <h3 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">{sel?.nome ?? focusPmaId}</h3>
-          <p className="mt-0.5 text-sm text-slate-600">{sel?.luogo ?? '—'}</p>
-          <p className="mt-2 font-mono text-xs text-slate-500">{focusPmaId}</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">PMA in evidenza</p>
+          <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-900">{sel?.nome ?? focusPmaId}</h3>
+          <p className="mt-0.5 text-[13px] text-slate-600">{sel?.luogo ?? '—'}</p>
+          <p className="mt-2 font-mono text-[11px] text-slate-500">{focusPmaId}</p>
+          {postiLetto > 0 ? (
+            <div className="mt-3 max-w-xs">
+              <PmaCapacityGauge occupati={stats.occupatiLetti} posti={postiLetto} />
+            </div>
+          ) : null}
         </div>
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
           <label className="block text-xs font-medium text-slate-700">
@@ -137,8 +146,8 @@ export function PmaCentraleFocusPanel({ manifestazioneId, pmaList, theme }: Prop
         </p>
       ) : null}
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+      <div className="mt-5 grid gap-3 lg:grid-cols-3">
+        <div className="rounded-md border border-slate-200 bg-slate-50/80 p-3 shadow-sm">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Carico operativo</p>
           <p className="mt-1 text-xs text-slate-600">Pazienti in carico (e errore) per codice colore</p>
           {loading ? (
@@ -171,30 +180,31 @@ export function PmaCentraleFocusPanel({ manifestazioneId, pmaList, theme }: Prop
           )}
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+        <div className="rounded-md border border-slate-200 bg-slate-50/80 p-3 shadow-sm">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Logistica</p>
           <p className="mt-1 text-xs text-slate-600">Ingressi e attese sul PMA selezionato</p>
           {loading ? (
             <p className="mt-4 text-sm text-slate-500">…</p>
           ) : (
-            <dl className="mt-4 space-y-3">
-              <div className="flex items-baseline justify-between gap-3 rounded-lg bg-sky-50 px-3 py-2 ring-1 ring-sky-200/60">
-                <dt className="text-sm font-medium text-sky-950">In arrivo</dt>
-                <dd className="text-2xl font-bold tabular-nums text-sky-950">{stats.in_arrivo}</dd>
+            <dl className="mt-3 space-y-2">
+              <div className="flex items-baseline justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2">
+                <dt className="text-[12px] font-medium text-slate-700">In arrivo</dt>
+                <dd className="text-xl font-bold tabular-nums text-slate-900">{stats.in_arrivo}</dd>
               </div>
-              <div className="flex items-baseline justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200/70">
-                <dt className="text-sm font-medium text-amber-950">In attesa</dt>
-                <dd className="text-2xl font-bold tabular-nums text-amber-950">{stats.in_attesa}</dd>
+              <div className="flex items-baseline justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2">
+                <dt className="text-[12px] font-medium text-slate-700">In attesa</dt>
+                <dd className="text-xl font-bold tabular-nums text-slate-900">{stats.in_attesa}</dd>
               </div>
             </dl>
           )}
         </div>
 
-        <div className="flex flex-col justify-between rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-sm">
+        <div className="flex flex-col justify-between rounded-md border border-slate-200 bg-slate-50/80 p-3 shadow-sm">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-900/80">Creazione rapida</p>
-            <p className="mt-1 text-xs text-emerald-950/90">
-              Nuovo paziente in <strong>in arrivo</strong> (Centrale), poi compilazione in Generale.
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Creazione rapida</p>
+            <p className="mt-1 text-xs text-slate-600">
+              Nuovo paziente in <strong className="text-slate-800">in arrivo</strong> (Centrale), poi compilazione in
+              Generale.
             </p>
           </div>
           {user?.rank === 'Centrale' ? (
@@ -202,9 +212,9 @@ export function PmaCentraleFocusPanel({ manifestazioneId, pmaList, theme }: Prop
               type="button"
               disabled={creating || !db}
               onClick={() => void handleNuovoPazienteCentrale()}
-              className={`mt-4 inline-flex h-11 w-full items-center justify-center rounded-lg text-sm font-semibold shadow-sm disabled:opacity-50 ${theme.primaryCta} ${theme.primaryCtaHover}`}
+              className={`mt-3 inline-flex h-9 w-full items-center justify-center rounded-md border border-slate-800 bg-white text-xs font-semibold uppercase tracking-wide text-slate-900 shadow-sm transition hover:bg-slate-100 disabled:opacity-50`}
             >
-              {creating ? 'Creazione…' : 'Nuovo paziente'}
+              {creating ? 'CREAZIONE…' : 'NUOVO PAZIENTE'}
             </button>
           ) : (
             <p className="mt-4 text-xs text-slate-600">
