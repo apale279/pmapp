@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Office / Excel lock & temp (never commit)
+~$*
+**/~$*
