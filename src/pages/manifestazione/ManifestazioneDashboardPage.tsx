@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { Timestamp } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
+import { useSyncLive } from '../../context/SyncLiveContext'
 import { useRankTheme } from '../../hooks/useRankTheme'
 import { useManifestazioneDoc } from '../../hooks/useManifestazioneDoc'
 import { usePmaListForManifestazione } from '../../hooks/usePmaListForManifestazione'
@@ -12,6 +13,7 @@ import { PmaCard } from '../../components/manifestazione/PmaCard'
 import { PmaOperationalCounts } from '../../components/manifestazione/PmaOperationalCounts'
 import { PmaCentraleFocusPanel } from '../../components/manifestazione/PmaCentraleFocusPanel'
 import { PmaCapacityFromPmaId } from '../../components/manifestazione/PmaCapacityGauge'
+import { OperativePageGrid } from '../../components/layout/OperativePageGrid'
 import type { CodiceColorePaziente } from '../../types/paziente'
 import { CODICE_COLORE_LABEL } from '../../types/paziente'
 import { opPrimaryBtn } from '../../components/layout/operativeTokens'
@@ -76,6 +78,11 @@ export function ManifestazioneDashboardPage() {
   const [pmaModalKey, setPmaModalKey] = useState(0)
   const [dimessiSearch, setDimessiSearch] = useState('')
 
+  const { bumpSync } = useSyncLive()
+  useEffect(() => {
+    if (!manLoading && manExists) bumpSync()
+  }, [manLoading, manExists, bumpSync])
+
   const pmaNomeById = useMemo(() => {
     const m = new Map<string, string>()
     for (const p of pmaList) m.set(p.id, p.nome)
@@ -127,6 +134,8 @@ export function ManifestazioneDashboardPage() {
   }, [dimessiManifestazione])
 
   return (
+    <OperativePageGrid
+      main={
     <div className="mx-auto max-w-6xl space-y-8">
       {manLoading ? (
         <div className="flex items-center gap-3 py-8 text-slate-600">
@@ -550,5 +559,27 @@ export function ManifestazioneDashboardPage() {
         </>
       ) : null}
     </div>
+      }
+      aside={
+        man && manExists ? (
+          <div className="lg:sticky lg:top-4">
+            <div className="rounded-lg border border-[#e2e8f0] bg-white p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Riepilogo</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">{man.nome}</p>
+              <dl className="mt-4 space-y-2 text-xs text-slate-600">
+                <div>
+                  <dt className="text-slate-500">ID</dt>
+                  <dd className="font-mono text-slate-900">{manifestazioneId}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">Stato</dt>
+                  <dd className="text-slate-900">{man.stato}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        ) : null
+      }
+    />
   )
 }

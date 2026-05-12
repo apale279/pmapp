@@ -2,13 +2,12 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { RankThemeProvider } from '../context/RankThemeContext'
 import { OperativeAppShell } from '../components/layout/OperativeAppShell'
-import { OperativeAppSideRail } from '../components/layout/OperativeAppSideRail'
 import { useAppShellTitle } from '../hooks/useAppShellTitle'
 import type { UserProfile } from '../types/userProfile'
 
 function PmaSelfContainedOutlet() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[#f8fafc]">
       <Outlet />
     </div>
   )
@@ -18,14 +17,7 @@ function StandardAppChrome({ user, logout }: { user: UserProfile; logout: () => 
   const title = useAppShellTitle()
 
   return (
-    <OperativeAppShell
-      user={user}
-      logout={logout}
-      title={title}
-      renderRail={(variant, closeMobile) => (
-        <OperativeAppSideRail user={user} variant={variant} onNavigate={closeMobile} />
-      )}
-    >
+    <OperativeAppShell user={user} logout={logout} title={title}>
       <Outlet />
     </OperativeAppShell>
   )

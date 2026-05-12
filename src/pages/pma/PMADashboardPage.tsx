@@ -4,6 +4,7 @@ import { deleteDoc, doc, getDoc, type Timestamp } from 'firebase/firestore'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { useAuth } from '../../context/AuthContext'
+import { useSyncLive } from '../../context/SyncLiveContext'
 import { useRankTheme } from '../../hooks/useRankTheme'
 import { db } from '../../lib/firebase'
 import { staffSoftRefFromUser } from '../../lib/staffSoftRef'
@@ -38,7 +39,7 @@ const DOT_BG: Record<CodiceColorePaziente, string> = {
 
 /** Pulsanti toolbar sotto header PMA Manager. */
 const BTN_TOOLBAR_SM =
-  'inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-[11px] font-semibold uppercase tracking-wide text-[#111827] transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40'
+  'inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-[#e2e8f0] bg-white px-3 text-[11px] font-bold uppercase tracking-wide text-slate-900 transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40'
 
 function formatPermanenza(apertura: Timestamp | null, nowMs: number): string {
   if (!apertura?.toMillis) return '—'
@@ -339,6 +340,11 @@ export function PMADashboardPage() {
   const [zipBusy, setZipBusy] = useState(false)
   const [zipErr, setZipErr] = useState<string | null>(null)
   const [codiciMinoriOpen, setCodiciMinoriOpen] = useState(false)
+
+  const { bumpSync } = useSyncLive()
+  useEffect(() => {
+    if (!listaLoading) bumpSync()
+  }, [listaLoading, bumpSync])
 
   const manifestazioneForCreate =
     user?.id_manifestazione?.trim() || pmaSnap.idManifestazione?.trim() || ''
@@ -711,9 +717,9 @@ export function PMADashboardPage() {
         type="button"
         disabled={!canCreatePaziente || !manifestazioneForCreate || creating || !pmaId.trim()}
         onClick={() => void handleNuovoPazienteImmediato()}
-        className="rounded-full bg-[#2563eb] px-8 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
+        className="rounded-md bg-[#2563eb] px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
       >
-        {creating ? '…' : '+ Nuovo paziente'}
+        {creating ? '…' : '+ NUOVO PAZIENTE'}
       </button>
       <button
         type="button"
@@ -723,13 +729,13 @@ export function PMADashboardPage() {
           setDimessiModalSearch('')
           setDimessiModalErr(null)
         }}
-        className="rounded-full border border-slate-200 bg-slate-100 px-8 py-3 text-sm font-semibold text-[#111827] transition-colors hover:bg-slate-200"
+        className="rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-900 transition-colors hover:bg-slate-100"
       >
-        Pazienti dimessi
+        PAZIENTI DIMESSI
       </button>
       <Link
         to={`/pma/${encodeURIComponent(pmaId)}/impostazioni`}
-        className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-8 py-3 text-sm font-semibold text-[#111827] transition-colors hover:bg-slate-200"
+        className="inline-flex items-center justify-center gap-2 rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-900 transition-colors hover:bg-slate-100"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
           <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
@@ -740,7 +746,7 @@ export function PMADashboardPage() {
             strokeLinecap="round"
           />
         </svg>
-        Impostazioni PMA
+        IMPOSTAZIONI PMA
       </Link>
     </>
   )

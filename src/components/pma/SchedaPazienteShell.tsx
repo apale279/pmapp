@@ -1,7 +1,8 @@
-import { type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { UserProfile } from '../../types/userProfile'
-import { PmaManagerSideRail } from '../layout/PmaManagerSideRail'
-import { OperativeUserTray } from '../layout/OperativeUserTray'
+import { OperativeShellHeader } from '../layout/OperativeShellHeader'
+import { UnifiedEmojiSidebar } from '../layout/UnifiedEmojiSidebar'
+import { MobileEmojiNavOverlay, MobileNavHamburgerButton } from '../layout/MobileEmojiNav'
 import { FONT_UI } from '../layout/operativeTokens'
 
 export type SchedaPazienteShellProps = {
@@ -15,26 +16,40 @@ export type SchedaPazienteShellProps = {
 
 export function SchedaPazienteShell({
   user,
-  pmaId,
-  manifestazioneId,
+  pmaId: _pmaId,
+  manifestazioneId: _manifestazioneId,
   pazienteIdVisibile,
   logout,
   children,
 }: SchedaPazienteShellProps) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
   return (
-    <div className={`flex min-h-screen bg-white text-[#111827] ${FONT_UI}`}>
-      <PmaManagerSideRail user={user} pmaId={pmaId} manifestazioneId={manifestazioneId} />
+    <div className={`flex min-h-screen bg-[#f8fafc] text-slate-900 ${FONT_UI}`}>
+      <div className="hidden shrink-0 md:block">
+        <UnifiedEmojiSidebar user={user} variant="rail" />
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4">
-          <h1 className="min-w-0 truncate text-sm font-semibold text-[#111827] sm:text-[15px]">
-            PMA Manager - Scheda Paziente - {pazienteIdVisibile}
-          </h1>
-          <OperativeUserTray user={user} logout={logout} />
-        </header>
+        <OperativeShellHeader
+          user={user}
+          logout={logout}
+          hamburger={<MobileNavHamburgerButton onOpen={() => setMobileNavOpen(true)} />}
+          title={
+            <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-[15px]">
+              PMA Manager - Scheda Paziente - {pazienteIdVisibile}
+            </h1>
+          }
+        />
 
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>
       </div>
+
+      <MobileEmojiNavOverlay
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+        user={user}
+      />
     </div>
   )
 }

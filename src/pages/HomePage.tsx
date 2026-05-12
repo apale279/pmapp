@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useSyncLive } from '../context/SyncLiveContext'
+import { OperativePageGrid } from '../components/layout/OperativePageGrid'
 import { useRankTheme } from '../hooks/useRankTheme'
 import { useManifestazioneDoc } from '../hooks/useManifestazioneDoc'
 import { usePmaDocNome, usePmaDocSnapshot } from '../hooks/usePmaDocNome'
@@ -31,8 +33,15 @@ export function HomePage() {
   const pmaNome = usePmaDocNome(staffPmaId)
   const pmaManifestazioneId = usePmaDocSnapshot(staffPmaId).idManifestazione
 
+  const { bumpSync } = useSyncLive()
+  useEffect(() => {
+    if (!loading) bumpSync()
+  }, [loading, bumpSync])
+
   return (
-    <div className="mx-auto max-w-5xl space-y-10">
+    <OperativePageGrid
+      main={
+    <div className="space-y-10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[#111827]">Homepage</h1>
@@ -49,7 +58,7 @@ export function HomePage() {
             }}
             className={`${opPrimaryBtn} shrink-0 px-5`}
           >
-            Nuova manifestazione
+            NUOVA MANIFESTAZIONE
           </button>
         ) : null}
       </div>
@@ -193,5 +202,18 @@ export function HomePage() {
         onClose={() => setModalOpen(false)}
       />
     </div>
+      }
+      aside={
+        <div className="lg:sticky lg:top-4">
+          <div className="rounded-lg border border-[#e2e8f0] bg-white p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Spazio operativo</p>
+            <p className="mt-2 text-xs leading-relaxed text-slate-600">
+              La barra emoji a sinistra è identica in tutta l&apos;app. Tooltip al passaggio del mouse sulle
+              icone.
+            </p>
+          </div>
+        </div>
+      }
+    />
   )
 }

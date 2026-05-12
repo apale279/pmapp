@@ -1,7 +1,8 @@
-import { type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { UserProfile } from '../../types/userProfile'
-import { PmaManagerSideRail } from '../layout/PmaManagerSideRail'
-import { OperativeUserTray } from '../layout/OperativeUserTray'
+import { OperativeShellHeader } from '../layout/OperativeShellHeader'
+import { UnifiedEmojiSidebar } from '../layout/UnifiedEmojiSidebar'
+import { MobileEmojiNavOverlay, MobileNavHamburgerButton } from '../layout/MobileEmojiNav'
 import { FONT_UI } from '../layout/operativeTokens'
 
 export type PmaManagerShellProps = {
@@ -18,8 +19,8 @@ export type PmaManagerShellProps = {
 
 export function PmaManagerShell({
   user,
-  pmaId,
-  manifestazioneId,
+  pmaId: _pmaId,
+  manifestazioneId: _manifestazioneId,
   pmaDisplayTitle,
   logout,
   topToolbar,
@@ -27,40 +28,39 @@ export function PmaManagerShell({
   children,
   footer,
 }: PmaManagerShellProps) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const hasFooter = footer != null
   const hasToolbar = topToolbar != null
 
   return (
-    <div className={`flex min-h-screen bg-white text-[#111827] ${FONT_UI}`}>
-      <PmaManagerSideRail user={user} pmaId={pmaId} manifestazioneId={manifestazioneId} />
+    <div className={`flex min-h-screen bg-[#f8fafc] text-slate-900 ${FONT_UI}`}>
+      <div className="hidden shrink-0 md:block">
+        <UnifiedEmojiSidebar user={user} variant="rail" />
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+        <OperativeShellHeader
+          user={user}
+          logout={logout}
+          hamburger={<MobileNavHamburgerButton onOpen={() => setMobileNavOpen(true)} />}
+          prepend={
             <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-600"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[#e2e8f0] bg-[#f8fafc] text-[10px] font-bold text-slate-600"
               aria-hidden
             >
               PMA
             </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-sm font-semibold text-[#111827] sm:text-[15px]">
-                PMA Manager - {pmaDisplayTitle}
-              </h1>
-            </div>
-            {triageStrip ? (
-              <div className="ml-2 hidden min-w-0 sm:block">{triageStrip}</div>
-            ) : null}
-          </div>
-          <OperativeUserTray user={user} logout={logout} />
-        </header>
-
-        {triageStrip ? (
-          <div className="border-b border-slate-100 bg-white px-4 py-1.5 sm:hidden">{triageStrip}</div>
-        ) : null}
+          }
+          title={
+            <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-[15px]">
+              PMA Manager - {pmaDisplayTitle}
+            </h1>
+          }
+          afterTitle={triageStrip ?? undefined}
+        />
 
         {hasToolbar ? (
-          <div className="border-b border-slate-100 bg-white px-4 py-2">{topToolbar}</div>
+          <div className="border-b border-[#e2e8f0] bg-white px-4 py-2">{topToolbar}</div>
         ) : null}
 
         <main
@@ -70,13 +70,19 @@ export function PmaManagerShell({
         </main>
 
         {hasFooter ? (
-          <div className="fixed bottom-0 left-16 right-0 z-30 border-t border-slate-200 bg-white">
+          <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#e2e8f0] bg-white md:left-20">
             <div className="mx-auto flex max-w-[1920px] items-center justify-center gap-4 px-4 py-3 sm:gap-10">
               {footer}
             </div>
           </div>
         ) : null}
       </div>
+
+      <MobileEmojiNavOverlay
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+        user={user}
+      />
     </div>
   )
 }

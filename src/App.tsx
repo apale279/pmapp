@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { RankGuard } from './components/routes/RankGuard'
 import { AppLayout } from './layouts/AppLayout'
 import { HomePage } from './pages/HomePage'
 import { Login } from './pages/Login'
@@ -17,14 +18,29 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route index element={<HomePage />} />
-          <Route path="utenti" element={<GestioneUtentiPage />} />
+          <Route
+            path="utenti"
+            element={
+              <RankGuard allow={['Superadmin']}>
+                <GestioneUtentiPage />
+              </RankGuard>
+            }
+          />
           <Route
             path="manifestazione/:id"
-            element={<ManifestazioneDashboardPage />}
+            element={
+              <RankGuard allow={['Superadmin', 'Centrale']}>
+                <ManifestazioneDashboardPage />
+              </RankGuard>
+            }
           />
           <Route
             path="manifestazione/:id/impostazioni"
-            element={<ManifestazioneImpostazioniPage />}
+            element={
+              <RankGuard allow={['Superadmin']}>
+                <ManifestazioneImpostazioniPage />
+              </RankGuard>
+            }
           />
           <Route path="pma/:id/paziente/:pazienteId" element={<SchedaPazientePage />} />
           <Route path="pma/:id/impostazioni" element={<PMAImpostazioniPage />} />

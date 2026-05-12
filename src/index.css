@@ -11,7 +11,7 @@
 
 @layer base {
   body {
-    @apply m-0 min-h-screen antialiased bg-[#f8fafc] text-[13px] leading-snug text-slate-800;
+    @apply m-0 min-h-screen antialiased bg-[#f8fafc] text-[14px] leading-snug text-slate-900;
     font-family:
       'Inter',
       ui-sans-serif,
