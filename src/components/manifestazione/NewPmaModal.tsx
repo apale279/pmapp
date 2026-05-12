@@ -1,0 +1,154 @@
+import { useEffect, useId, useState, type FormEvent } from 'react'
+import { createPmaDocument, PmaNomeDuplicatoError, PmaNomeInvalidoError } from '../../lib/createPmaDocument'
+import { db } from '../../lib/firebase'
+
+type Props = {
+  open: boolean
+  manifestazioneId: string
+  onClose: () => void
+}
+
+export function NewPmaModal({ open, manifestazioneId, onClose }: Props) {
+  const titleId = useId()
+  const [nome, setNome] = useState('')
+  const [luogo, setLuogo] = useState('')
+  const [posti, setPosti] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  if (!open) return null
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setSuccess(null)
+    if (!db) {
+      setError('Firestore non disponibile.')
+      return
+    }
+    const n = Number(posti)
+    setSubmitting(true)
+    try {
+      const id = await createPmaDocument(db, manifestazioneId, nome, luogo, n)
+      setSuccess(`PMA creato con ID “${id}”.`)
+    } catch (err: unknown) {
+      if (err instanceof PmaNomeDuplicatoError || err instanceof PmaNomeInvalidoError) {
+        setError(err.message)
+      } else {
+        setError(err instanceof Error ? err.message : 'Creazione non riuscita.')
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+      role="presentation"
+      onMouseDown={(ev) => {
+        if (ev.target === ev.currentTarget) onClose()
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
+      >
+        <h2 id={titleId} className="text-lg font-semibold text-slate-900">
+          Crea nuovo PMA
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          L’ID documento sarà il nome in <strong>minuscolo</strong>, <strong>senza spazi</strong>{' '}
+          (come da PRD).
+        </p>
+
+        <form className="mt-6 space-y-4" onSubmit={(e) => void handleSubmit(e)}>
+          <div>
+            <label htmlFor="pma-nome" className="block text-sm font-medium text-slate-700">
+              Nome PMA
+            </label>
+            <input
+              id="pma-nome"
+              type="text"
+              required
+              value={nome}
+              onChange={(ev) => setNome(ev.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+              placeholder="es. pma_nord"
+            />
+          </div>
+          <div>
+            <label htmlFor="pma-luogo" className="block text-sm font-medium text-slate-700">
+              Luogo
+            </label>
+            <input
+              id="pma-luogo"
+              type="text"
+              required
+              value={luogo}
+              onChange={(ev) => setLuogo(ev.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+            />
+          </div>
+          <div>
+            <label htmlFor="pma-posti" className="block text-sm font-medium text-slate-700">
+              Numero posti letto
+            </label>
+            <input
+              id="pma-posti"
+              type="number"
+              min={0}
+              step={1}
+              required
+              value={posti}
+              onChange={(ev) => setPosti(ev.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+            />
+          </div>
+
+          {error ? (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          ) : null}
+          {success ? (
+            <p className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
+              {success}
+            </p>
+          ) : null}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+              onClick={onClose}
+            >
+              {success ? 'Chiudi' : 'Annulla'}
+            </button>
+            {!success ? (
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+              >
+                {submitting ? 'Salvataggio…' : 'Crea PMA'}
+              </button>
+            ) : null}
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}

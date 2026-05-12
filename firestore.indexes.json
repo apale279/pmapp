@@ -1,0 +1,25 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "pma",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "id_manifestazione",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pazienti",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "id_pma",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

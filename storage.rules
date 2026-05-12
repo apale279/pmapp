@@ -1,0 +1,22 @@
+rules_version = '2';
+
+/**
+ * Firme mediche: path `firme/{userId}/firma` (file immagine).
+ *
+ * Lettura: `allow read: if true` così l’URL restituito da getDownloadURL
+ * funziona in `<img src="…">` senza passare il token Firebase Auth (il token
+ * di download è già incluso nell’URL generato da Firebase).
+ *
+ * Scrittura: utenti autenticati (in questa app solo il Superadmin arriva a
+ * questo flusso). In produzione restringere con custom claims o backend.
+ */
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /firme/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png)');
+    }
+  }
+}

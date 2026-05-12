@@ -1,0 +1,146 @@
+import type { Timestamp } from 'firebase/firestore'
+import type { DimissioneEsito } from './dimissione'
+import type { LesioneMarker } from './lesioni'
+import type {
+  FarmacoSomministrato,
+  ParametroVitaleRilevazione,
+  RivalutazioneVoce,
+} from './cartellaClinica'
+
+/** Sezione 1 — Tipo paziente (scelta rapida). */
+export type TipoPaziente = 'trasportato' | 'autopresentato'
+
+/** Sezione 1 — Codice colore triage. */
+export type CodiceColorePaziente = 'bianco' | 'verde' | 'giallo' | 'rosso'
+
+/**
+ * Sezione 1 — STATO scheda.
+ * Default creazione: `in_arrivo` se creatore Centrale, `in_carico` se Medico/Infermiere/Triage/Soccorritore.
+ */
+export type PazienteStato = 'in_arrivo' | 'in_attesa' | 'in_carico' | 'errore' | 'dimesso'
+
+/**
+ * Modello documento `pazienti/{id}` (UUID documento nascosto in UI).
+ * Campi snake_case allineati a Firestore / PRD Sezioni 1–2.
+ */
+export interface Paziente {
+  /** Uguale all’ID documento Firestore. */
+  id: string
+  id_manifestazione: string
+  /** PMA di competenza (opzionale se creato da Centrale su tutta manifestazione). */
+  id_pma?: string
+
+  /** Sezione 1 — APERTO?: scheda modificabile. */
+  aperto: boolean
+  /** Sezione 1 — ID Paziente visibile (es. P_1, P_2). */
+  id_paziente_visibile: string
+  /** Sezione 1 — Apertura scheda (modificabile). */
+  apertura_scheda: Timestamp
+  tipo_paziente: TipoPaziente
+  breve_descrizione: string
+  codice_colore: CodiceColorePaziente
+
+  /** Solo Centrale (+ Trasportato per ETA). */
+  trasportato_da?: string | null
+  note_centrale?: string | null
+  /** Minuti ETA inseriti (Centrale + Trasportato). */
+  eta_pma_minuti?: number | null
+  /** Scadenza calcolata alla conferma/salvataggio ETA (ora corrente + minuti). */
+  eta_pma_deadline?: Timestamp | null
+
+  stato: PazienteStato
+
+  /** Sezione 2 — Dati anagrafici */
+  pettorale?: number | null
+  nome: string
+  cognome: string
+  data_nascita?: Timestamp | null
+  /** Calcolata dalla data di nascita. */
+  eta?: number | null
+  /** Email (campo dedicato v4). */
+  email: string
+  /** Telefono (campo dedicato v4). */
+  telefono: string
+  /** Legacy: combinato email/telefono (lettura migrazione). */
+  email_tel: string
+
+  /** Sezione 3 — Cartella clinica (valori sempre normalizzati dal parser). */
+  apr: string
+  allergie: string
+  app: string
+  eo_quick: string[]
+  eo_note: string
+  parametri_vitali: ParametroVitaleRilevazione[]
+  prestazioni_sel: string[]
+  farmaci: FarmacoSomministrato[]
+  rivalutazioni: RivalutazioneVoce[]
+  /** Lesioni (marker su omino SVG + descrizioni). Core v3. */
+  lesioni: LesioneMarker[]
+
+  /** Dati generali — liste da IMP_GENERALI manifestazione. */
+  tipo_evento: string
+  dettaglio_evento: string
+
+  /** Sezione 5 — solo se esito dimissione = invio_ps; modificabile anche con scheda chiusa. */
+  invio_ps_missione_areu: number | null
+  invio_ps_data_ora: Timestamp | null
+  invio_ps_mezzo: string
+  invio_ps_ospedale: string
+  invio_ps_codice_trasporto: 'verde' | 'giallo' | 'rosso' | null
+  invio_ps_note: string
+
+  /** Sezione 4 — Dimissione (SchedaPaziente v2). */
+  dimissione_esito: DimissioneEsito | null
+  dimissione_note: string
+  affidatario_nome: string
+  affidatario_cognome: string
+  affidatario_legame: string
+  /** Data URL / Base64 o (documenti legacy) URL immagine firma paziente. */
+  firma_paziente_base64: string | null
+  /** Copia firma medico alla dimissione: data URL/Base64 o URL legacy. */
+  dimissione_firma_medico_base64: string | null
+  dimesso_at: Timestamp | null
+
+  /** Riferimento soft: chi ha preso per primo in carico come infermiere (solo informativo). */
+  infermiere_rif: string
+  /** Riferimento soft: chi ha preso per primo in carico come medico (solo informativo). */
+  medico_rif: string
+}
+
+export const TIPO_PAZIENTE_LABEL: Record<TipoPaziente, string> = {
+  trasportato: 'Trasportato',
+  autopresentato: 'Autopresentato',
+}
+
+export const CODICE_COLORE_LABEL: Record<CodiceColorePaziente, string> = {
+  bianco: 'Bianco',
+  verde: 'Verde',
+  giallo: 'Giallo',
+  rosso: 'Rosso',
+}
+
+export const PAZIENTE_STATO_LABEL: Record<PazienteStato, string> = {
+  in_arrivo: 'In arrivo',
+  in_attesa: 'In attesa',
+  in_carico: 'In carico',
+  errore: 'Errore',
+  dimesso: 'Dimesso',
+}
+
+export function isTipoPaziente(v: unknown): v is TipoPaziente {
+  return v === 'trasportato' || v === 'autopresentato'
+}
+
+export function isCodiceColorePaziente(v: unknown): v is CodiceColorePaziente {
+  return v === 'bianco' || v === 'verde' || v === 'giallo' || v === 'rosso'
+}
+
+export function isPazienteStato(v: unknown): v is PazienteStato {
+  return (
+    v === 'in_arrivo' ||
+    v === 'in_attesa' ||
+    v === 'in_carico' ||
+    v === 'errore' ||
+    v === 'dimesso'
+  )
+}
