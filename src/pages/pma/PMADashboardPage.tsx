@@ -21,21 +21,13 @@ import {
   sanitizeFilePart,
 } from '../../lib/pdf/pazientePdfReport'
 import { CodiciMinoriModal } from '../../components/pma/CodiciMinoriModal'
+import { PmaManagerShell } from '../../components/pma/PmaManagerShell'
 import type { CodiceColorePaziente } from '../../types/paziente'
 import { CODICE_COLORE_LABEL, PAZIENTE_STATO_LABEL } from '../../types/paziente'
 import type { PazienteListItem } from '../../hooks/usePazientiForPma'
 
 /** Ordine triage per elenchi (rosso in cima). */
 const CODICI_ORDINE_TRIAGE: CodiceColorePaziente[] = ['rosso', 'giallo', 'verde', 'bianco']
-/** Ordine pallini conteggio in UI (bianco → rosso, come da specifica). */
-const CODICI_ORDINE_PILLS: CodiceColorePaziente[] = ['bianco', 'verde', 'giallo', 'rosso']
-
-const COLORE_BADGE: Record<CodiceColorePaziente, string> = {
-  rosso: 'bg-red-600 text-white ring-red-700/30',
-  giallo: 'bg-amber-400 text-slate-900 ring-amber-600/25',
-  verde: 'bg-emerald-600 text-white ring-emerald-700/30',
-  bianco: 'bg-slate-200 text-slate-800 ring-slate-400/30',
-}
 
 const DOT_BG: Record<CodiceColorePaziente, string> = {
   rosso: 'bg-red-600',
@@ -44,9 +36,9 @@ const DOT_BG: Record<CodiceColorePaziente, string> = {
   bianco: 'bg-slate-300',
 }
 
-/** Pulsanti toolbar PMA: uniformi, maiuscolo, outline. */
-const BTN_DASH =
-  'inline-flex h-9 min-h-9 w-full flex-1 touch-manipulation items-center justify-center rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold uppercase tracking-wide text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40 lg:min-w-[7.5rem]'
+/** Pulsanti toolbar sotto header PMA Manager. */
+const BTN_TOOLBAR_SM =
+  'inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-[11px] font-semibold uppercase tracking-wide text-[#111827] transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40'
 
 function formatPermanenza(apertura: Timestamp | null, nowMs: number): string {
   if (!apertura?.toMillis) return '—'
@@ -72,227 +64,56 @@ function countByColor(list: PazienteListItem[], col: CodiceColorePaziente) {
   return list.filter((p) => p.codice_colore === col).length
 }
 
-function ConteggioPallini({
+/** Colonna destra mock: box bianco, titolo su due righe (es. Pazienti / IN ARRIVO). */
+function ManagerQueueBox({
+  titleLine1,
+  titleLine2,
   lista,
-  policy,
-  compact,
-  dense,
-  variant = 'default',
-  align = 'end',
-}: {
-  lista: PazienteListItem[]
-  policy: 'nonzero' | 'all'
-  compact?: boolean
-  /** Sidebar: pallini ancora più piccoli (solo se variant default). */
-  dense?: boolean
-  /** `dashboardMain`: contatori area PMA; `sidebarTab`: tab In arrivo / In attesa con numeri più leggibili. */
-  variant?: 'default' | 'dashboardMain' | 'sidebarTab'
-  align?: 'start' | 'center' | 'end'
-}) {
-  const size =
-    variant === 'dashboardMain'
-      ? 'h-7 min-w-[1.75rem] px-1 text-xs font-bold leading-none tabular-nums'
-      : variant === 'sidebarTab'
-        ? 'h-7 min-w-[1.85rem] px-1 text-sm font-bold leading-none tabular-nums'
-        : dense
-          ? 'h-4 min-w-[1rem] px-0.5 text-[8px] leading-none'
-          : compact
-            ? 'h-5 min-w-[1.25rem] px-1 text-[9px] leading-none'
-            : 'h-6 min-w-[1.35rem] px-1 text-[10px] leading-none'
-  const justify =
-    align === 'center'
-      ? 'justify-center sm:justify-start'
-      : align === 'start'
-        ? 'justify-start'
-        : 'justify-end'
-  return (
-    <div className={`flex flex-wrap items-center gap-1 ${justify}`}>
-      {CODICI_ORDINE_PILLS.map((c) => {
-        const n = countByColor(lista, c)
-        if (policy === 'nonzero' && n === 0) return null
-        return (
-          <span
-            key={c}
-            title={CODICE_COLORE_LABEL[c]}
-            className={`inline-flex items-center justify-center rounded-full font-bold tabular-nums ring-1 ring-black/10 ${size} ${COLORE_BADGE[c]}`}
-          >
-            {n}
-          </span>
-        )
-      })}
-    </div>
-  )
-}
-
-function RigaPaziente({
-  pz,
   pmaId,
   isTriage,
   onInCarico,
-  canDelete,
-  onDeleteClick,
-  showStatoBadge = true,
-  compact = false,
-  dense = false,
 }: {
-  pz: PazienteListItem
-  pmaId: string
-  isTriage: boolean
-  onInCarico: (id: string) => void
-  canDelete: boolean
-  onDeleteClick: (id: string, label: string) => void
-  showStatoBadge?: boolean
-  compact?: boolean
-  dense?: boolean
-}) {
-  const rowPad = dense ? 'py-1 first:pt-0' : compact ? 'py-1.5 first:pt-0' : 'py-2.5 first:pt-0'
-  const textSize = dense ? 'text-[11px]' : compact ? 'text-xs' : 'text-sm'
-  const isDense = dense || compact
-  return (
-    <li
-      className={
-        isDense
-          ? `flex flex-col gap-0.5 ${rowPad} sm:flex-row sm:items-center sm:justify-between`
-          : 'flex flex-col gap-2 py-2.5 first:pt-0 sm:flex-row sm:items-center sm:justify-between'
-      }
-    >
-      <Link
-        to={`/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}`}
-        className={
-          isDense
-            ? `min-w-0 flex-1 ${textSize} font-medium text-slate-900 hover:text-blue-800 hover:underline`
-            : 'min-w-0 flex-1 text-sm font-medium text-slate-900 hover:text-blue-800 hover:underline'
-        }
-      >
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            className={`${dense ? 'h-1.5 w-1.5 ring-1' : 'h-2 w-2 ring-2'} shrink-0 rounded-full ring-white ${DOT_BG[pz.codice_colore]}`}
-            aria-hidden
-          />
-          <span className="font-mono text-slate-700">{pz.id_paziente_visibile}</span>
-        </span>
-        <span className="mx-1.5 text-slate-300">·</span>
-        <span>{[pz.cognome, pz.nome].filter(Boolean).join(' ') || '—'}</span>
-      </Link>
-      <div className="flex flex-wrap items-center gap-1">
-        {showStatoBadge ? (
-          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700">
-            {PAZIENTE_STATO_LABEL[pz.stato]}
-          </span>
-        ) : null}
-        <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ring-1 ${COLORE_BADGE[pz.codice_colore]}`}>
-          {CODICE_COLORE_LABEL[pz.codice_colore]}
-        </span>
-        {isTriage && pz.stato === 'in_arrivo' ? (
-          <button
-            type="button"
-            onClick={() => onInCarico(pz.id)}
-            className="rounded border border-slate-600 bg-white px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-800 hover:bg-slate-100"
-          >
-            Arrivato
-          </button>
-        ) : null}
-        {canDelete ? (
-          <button
-            type="button"
-            onClick={() => onDeleteClick(pz.id, pz.id_paziente_visibile)}
-            className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-800 hover:bg-red-100"
-          >
-            Elimina
-          </button>
-        ) : null}
-      </div>
-    </li>
-  )
-}
-
-function ListaColonna({
-  titolo,
-  lista,
-  pmaId,
-  empty,
-  isTriage,
-  onInCarico,
-  canDelete,
-  onDeleteClick,
-  showStatoBadge,
-  highlight,
-  compact,
-  dotPolicy = 'nonzero',
-  omitEmptyMessage = false,
-  sidebarDense = false,
-}: {
-  titolo: string
+  titleLine1: string
+  titleLine2: string
   lista: PazienteListItem[]
   pmaId: string
-  empty: string
   isTriage: boolean
   onInCarico: (id: string) => void
-  canDelete: boolean
-  onDeleteClick: (id: string, label: string) => void
-  showStatoBadge?: boolean
-  highlight?: boolean
-  compact?: boolean
-  dotPolicy?: 'nonzero' | 'all'
-  /** Se true e lista vuota: niente testo sotto il titolo. */
-  omitEmptyMessage?: boolean
-  /** Elenco sidebar ancora più compatto. */
-  sidebarDense?: boolean
 }) {
-  const h2Class = sidebarDense
-    ? 'text-[10px] font-bold uppercase tracking-widest text-slate-500'
-    : compact
-      ? 'text-[10px] font-bold uppercase tracking-widest text-slate-500'
-      : 'text-[11px] font-bold uppercase tracking-widest text-slate-500'
-
+  const preview = lista.slice(0, 2)
   return (
-    <section
-      className={`rounded-lg border bg-white shadow-sm ${
-        compact ? (sidebarDense ? 'p-1.5' : 'p-2') : 'p-4 sm:p-4'
-      } ${highlight ? 'border-blue-300 ring-1 ring-blue-100' : 'border-slate-200'}`}
-    >
-      <div
-        className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${
-          compact ? 'sm:flex-row sm:items-center sm:justify-between' : ''
-        }`}
-      >
-        <h2 className={`shrink-0 ${h2Class}`}>
-          {titolo}{' '}
-          <span className="tabular-nums font-bold text-slate-400">({lista.length})</span>
-        </h2>
-        <ConteggioPallini
-          lista={lista}
-          policy={dotPolicy}
-          compact={compact}
-          dense={sidebarDense}
-          variant={sidebarDense ? 'sidebarTab' : 'default'}
-          align="start"
-        />
-      </div>
-      {lista.length === 0 ? (
-        omitEmptyMessage ? null : (
-          <p className={compact ? 'mt-1.5 text-xs text-slate-500' : 'mt-3 text-sm text-slate-500'}>{empty}</p>
-        )
+    <section className="rounded border border-slate-200 bg-white p-3">
+      <h3 className="border-b border-slate-200 pb-2 text-center text-[11px] font-bold leading-tight text-[#111827]">
+        <span className="block font-medium">{titleLine1}</span>
+        <span className="mt-0.5 block text-[10px] font-extrabold uppercase tracking-widest">{titleLine2}</span>
+      </h3>
+      {preview.length === 0 ? (
+        <p className="mt-2 text-center text-[12px] text-slate-400">—</p>
       ) : (
-        <ul
-          className={`mt-1.5 divide-y divide-slate-100 ${
-            compact ? (sidebarDense ? 'max-h-40 overflow-y-auto pr-0.5' : 'max-h-52 overflow-y-auto pr-0.5') : ''
-          }`}
-        >
-          {lista.map((pz) => (
-            <RigaPaziente
-              key={pz.id}
-              pz={pz}
-              pmaId={pmaId}
-              isTriage={isTriage}
-              onInCarico={onInCarico}
-              canDelete={canDelete}
-              onDeleteClick={onDeleteClick}
-              showStatoBadge={showStatoBadge}
-              compact={compact}
-              dense={sidebarDense}
-            />
-          ))}
+        <ul className="mt-2 space-y-2">
+          {preview.map((pz) => {
+            const nome = [pz.cognome, pz.nome].filter(Boolean).join(' ') || '—'
+            return (
+              <li key={pz.id} className="text-[12px] leading-snug">
+                <Link
+                  to={`/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`}
+                  className="font-medium text-[#111827] hover:underline"
+                >
+                  {nome}
+                </Link>
+                <div className="mt-0.5 font-mono text-[10px] text-slate-600">{pz.id_paziente_visibile}</div>
+                {isTriage && pz.stato === 'in_arrivo' ? (
+                  <button
+                    type="button"
+                    onClick={() => onInCarico(pz.id)}
+                    className="mt-1 rounded border border-slate-300 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-800 hover:bg-slate-50"
+                  >
+                    Arrivato
+                  </button>
+                ) : null}
+              </li>
+            )
+          })}
         </ul>
       )}
     </section>
@@ -307,6 +128,7 @@ function ListaPazientiInCarico({
   onDeleteClick,
   emptyMessage = 'Nessun paziente in carico.',
   evidenzaIds,
+  visualVariant = 'default',
 }: {
   lista: PazienteListItem[]
   pmaId: string
@@ -315,54 +137,80 @@ function ListaPazientiInCarico({
   onDeleteClick: (id: string, label: string) => void
   emptyMessage?: string
   evidenzaIds?: Set<string>
+  /** Layout allineato al mock PMA Manager (desktop). */
+  visualVariant?: 'default' | 'manager'
 }) {
+  const manager = visualVariant === 'manager'
+  const dotTri: Record<CodiceColorePaziente, string> = manager
+    ? {
+        rosso: 'bg-[#ef4444]',
+        giallo: 'bg-[#eab308]',
+        verde: 'bg-[#22c55e]',
+        bianco: 'bg-slate-300 ring-1 ring-slate-400',
+      }
+    : DOT_BG
+
   if (lista.length === 0) {
-    return <p className="py-6 text-center text-xs text-slate-500">{emptyMessage}</p>
+    return (
+      <p className={`py-6 text-center text-slate-500 ${manager ? 'text-[13px]' : 'text-xs'}`}>{emptyMessage}</p>
+    )
   }
 
   return (
-    <div className="mt-1.5 max-h-[min(82vh,44rem)] overflow-auto rounded border border-slate-200 bg-white">
-      <table className="w-full border-collapse text-left text-[12px] leading-tight">
-        <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+    <div
+      className={
+        manager
+          ? 'mt-2 overflow-auto border border-slate-200 bg-white'
+          : 'mt-1.5 max-h-[min(82vh,44rem)] overflow-auto rounded border border-slate-200 bg-white'
+      }
+    >
+      <table className="w-full border-collapse text-left text-[13px] leading-snug">
+        <thead
+          className={
+            manager
+              ? 'border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-[#111827]'
+              : 'sticky top-0 z-[1] border-b border-slate-200 bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-600'
+          }
+        >
           <tr>
-            <th scope="col" className="w-9 whitespace-nowrap px-1.5 py-1.5">
-              Tr
+            <th scope="col" className="w-10 whitespace-nowrap px-2 py-2.5">
+              {manager ? 'TR' : 'Tr'}
             </th>
-            <th scope="col" className="min-w-0 px-2 py-1.5">
-              Paziente
+            <th scope="col" className="min-w-0 px-2 py-2.5">
+              {manager ? 'PAZIENTE' : 'Paziente'}
             </th>
-            <th scope="col" className="hidden w-11 whitespace-nowrap px-1 py-1.5 lg:table-cell">
-              Età
+            <th scope="col" className={`w-11 whitespace-nowrap px-2 py-2.5 ${manager ? 'table-cell' : 'hidden lg:table-cell'}`}>
+              {manager ? 'ETÀ' : 'Età'}
             </th>
-            <th scope="col" className="hidden max-w-[10rem] px-1 py-1.5 xl:table-cell">
-              Motivo
+            <th scope="col" className={`min-w-0 max-w-[11rem] px-2 py-2.5 ${manager ? 'table-cell' : 'hidden xl:table-cell'}`}>
+              {manager ? 'MOTIVO' : 'Motivo'}
             </th>
-            <th scope="col" className="hidden min-w-0 max-w-[9rem] px-1 py-1.5 md:table-cell">
-              Rif.
+            <th scope="col" className={`min-w-0 max-w-[8rem] px-2 py-2.5 ${manager ? 'table-cell' : 'hidden md:table-cell'}`}>
+              {manager ? 'RIF.' : 'Rif.'}
             </th>
-            <th scope="col" className="w-[4.5rem] whitespace-nowrap px-1 py-1.5">
-              Perm.
+            <th scope="col" className="w-[4.75rem] whitespace-nowrap px-2 py-2.5">
+              {manager ? 'PERM.' : 'Perm.'}
             </th>
-            <th scope="col" className="hidden w-[5.5rem] whitespace-nowrap px-1 py-1.5 sm:table-cell">
-              Stato
+            <th scope="col" className={`w-[5.5rem] whitespace-nowrap px-2 py-2.5 ${manager ? 'table-cell' : 'hidden sm:table-cell'}`}>
+              {manager ? 'STATO' : 'Stato'}
             </th>
-            <th scope="col" className="w-8 px-1 py-1.5 text-right">
+            <th scope="col" className="w-10 px-2 py-2.5 text-right">
               <span className="sr-only">Azioni</span>
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 text-slate-800">
+        <tbody className="divide-y divide-slate-100 text-[#111827]">
           {lista.map((pz) => {
             const nome = [pz.cognome, pz.nome].filter(Boolean).join(' ') || 'Senza nome'
             const err = pz.stato === 'errore'
-            const inEvidenza = evidenzaIds?.has(pz.id) ?? false
+            const inEvidenza = !manager && (evidenzaIds?.has(pz.id) ?? false)
             const etaDisp = pz.eta !== null && pz.eta !== undefined ? `${pz.eta}a` : '—'
             const rawMotivo = pz.breve_descrizione?.trim() ?? ''
             const motivo =
               rawMotivo === ''
                 ? '—'
-                : rawMotivo.length > 56
-                  ? `${rawMotivo.slice(0, 56)}…`
+                : rawMotivo.length > (manager ? 80 : 56)
+                  ? `${rawMotivo.slice(0, manager ? 80 : 56)}…`
                   : rawMotivo
             const refParts: string[] = []
             if (pz.infermiere_rif.trim()) refParts.push(`I:${pz.infermiere_rif.trim()}`)
@@ -371,57 +219,87 @@ function ListaPazientiInCarico({
             return (
               <tr
                 key={pz.id}
-                className={`align-middle transition-colors hover:bg-slate-50/80 ${
-                  inEvidenza ? 'border-l-[3px] border-l-slate-900 bg-slate-100/60' : ''
-                } ${err ? 'bg-red-50/70' : ''}`}
+                className={`align-middle transition-colors ${
+                  manager
+                    ? 'hover:bg-[#f1f5f9]'
+                    : `hover:bg-slate-50/80 ${inEvidenza ? 'border-l-[3px] border-l-slate-900 bg-slate-100/60' : ''} ${err ? 'bg-red-50/70' : ''}`
+                } ${manager && err ? 'bg-red-50/50' : ''}`}
               >
-                <td className="whitespace-nowrap px-1.5 py-1">
+                <td className="whitespace-nowrap px-2 py-2.5">
                   <span className="inline-flex items-center gap-1" title={CODICE_COLORE_LABEL[pz.codice_colore]}>
-                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${DOT_BG[pz.codice_colore]}`} aria-hidden />
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dotTri[pz.codice_colore]}`} aria-hidden />
                     <span className="sr-only">{CODICE_COLORE_LABEL[pz.codice_colore]}</span>
                   </span>
                 </td>
-                <td className="max-w-0 min-w-0 px-2 py-1">
+                <td className="max-w-0 min-w-0 px-2 py-2.5">
                   <Link
                     to={`/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`}
-                    className="block truncate font-semibold text-slate-900 hover:text-slate-950 hover:underline"
+                    className={`block truncate font-semibold hover:underline ${manager ? 'text-[#111827]' : 'text-slate-900 hover:text-slate-950'}`}
                   >
                     {nome}
                   </Link>
-                  <div className="mt-0.5 truncate font-mono text-[11px] text-slate-600">{pz.id_paziente_visibile}</div>
+                  <div className={`mt-0.5 truncate font-mono ${manager ? 'text-[11px] text-slate-600' : 'text-[11px] text-slate-600'}`}>
+                    {pz.id_paziente_visibile}
+                  </div>
                 </td>
-                <td className="hidden whitespace-nowrap px-1 py-1 tabular-nums text-slate-700 lg:table-cell">
+                <td className={`whitespace-nowrap px-2 py-2.5 tabular-nums text-slate-700 ${manager ? 'table-cell' : 'hidden lg:table-cell'}`}>
                   {etaDisp}
                 </td>
-                <td className="hidden max-w-[10rem] truncate px-1 py-1 text-slate-600 xl:table-cell" title={motivo}>
+                <td
+                  className={`max-w-[11rem] truncate px-2 py-2.5 text-slate-600 ${manager ? 'table-cell' : 'hidden xl:table-cell'}`}
+                  title={motivo}
+                >
                   {motivo}
                 </td>
-                <td className="hidden max-w-[9rem] truncate px-1 py-1 text-[11px] text-slate-600 md:table-cell" title={ref}>
+                <td
+                  className={`max-w-[8rem] truncate px-2 py-2.5 font-mono text-[11px] text-slate-600 ${manager ? 'table-cell' : 'hidden md:table-cell'}`}
+                  title={ref}
+                >
                   {ref}
                 </td>
-                <td className="whitespace-nowrap px-1 py-1 tabular-nums text-slate-700">
+                <td className="whitespace-nowrap px-2 py-2.5 tabular-nums text-slate-700">
                   {formatPermanenza(pz.apertura_scheda, nowMs)}
                 </td>
-                <td className="hidden whitespace-nowrap px-1 py-1 sm:table-cell">
+                <td className={`whitespace-nowrap px-2 py-2.5 ${manager ? 'table-cell' : 'hidden sm:table-cell'}`}>
                   <span
-                    className={`inline-flex rounded border px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                    className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                       err
-                        ? 'border-red-300 bg-red-100 text-red-900'
+                        ? 'border-red-200 bg-red-50 text-red-800'
                         : 'border-slate-200 bg-white text-slate-700'
                     }`}
                   >
                     {PAZIENTE_STATO_LABEL[pz.stato]}
                   </span>
                 </td>
-                <td className="whitespace-nowrap px-1 py-1 text-right">
+                <td className="whitespace-nowrap px-2 py-2.5 text-right">
                   {canDelete ? (
-                    <button
-                      type="button"
-                      onClick={() => onDeleteClick(pz.id, pz.id_paziente_visibile)}
-                      className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-semibold uppercase text-slate-700 hover:bg-slate-100"
-                    >
-                      Del
-                    </button>
+                    manager ? (
+                      <button
+                        type="button"
+                        title="Elimina"
+                        aria-label="Elimina"
+                        onClick={() => onDeleteClick(pz.id, pz.id_paziente_visibile)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded border border-transparent text-slate-500 transition-colors hover:border-slate-200 hover:bg-slate-50 hover:text-red-600"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                          <path
+                            d="M9 3h6M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteClick(pz.id, pz.id_paziente_visibile)}
+                        className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-semibold uppercase text-slate-700 hover:bg-slate-100"
+                      >
+                        Del
+                      </button>
+                    )
                   ) : (
                     <span className="text-slate-300">—</span>
                   )}
@@ -439,7 +317,7 @@ export function PMADashboardPage() {
   const { id } = useParams<{ id: string }>()
   const pmaId = id ? decodeURIComponent(id) : ''
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const theme = useRankTheme()
   const pmaSnap = usePmaDocSnapshot(pmaId || undefined)
   const { data: manZipMeta } = useManifestazioneDoc(pmaSnap.idManifestazione || undefined)
@@ -487,8 +365,6 @@ export function PMADashboardPage() {
       }),
     )
   }, [inCarico, user?.rank, staffRefCorrente])
-
-  const idsCaricoAMe = useMemo(() => new Set(inCaricoAMie.map((p) => p.id)), [inCaricoAMie])
 
   /** Pazienti “a me” in cima, poi gli altri in carico ordinati per triage. */
   const inCaricoListaDisplay = useMemo(() => {
@@ -555,9 +431,6 @@ export function PMADashboardPage() {
     })
   }, [dimessiModalListaCompleta, dimessiModalSearch])
 
-  const ultimi5Dimessi = useMemo(() => dimessi.slice(0, 5), [dimessi])
-
-  const isTriage = user?.rank === 'Triage'
   const canDeletePaziente =
     Boolean(user && (user.rank === 'Centrale' || user.rank === 'Medico')) && Boolean(db)
 
@@ -586,6 +459,8 @@ export function PMADashboardPage() {
           user.rank === 'Triage' ||
           user.rank === 'Soccorritore'),
     )
+
+  const isTriage = user?.rank === 'Triage'
 
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
@@ -716,209 +591,239 @@ export function PMADashboardPage() {
     }
   }
 
-  return (
-    <div className="mx-auto max-w-[1600px] space-y-1.5 pb-4">
-      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-2 py-2 shadow-sm">
-        <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">PMA</span>
-          <h1 className="truncate text-sm font-semibold tracking-tight text-slate-900">
-            {pmaSnap.nome ?? (pmaId || '—')}
-          </h1>
-          <code className="hidden max-w-[9rem] truncate text-[11px] text-slate-500 lg:inline">{pmaId || '—'}</code>
-        </div>
-        <div className="flex w-full min-w-0 flex-col gap-1.5 lg:max-w-[48rem] lg:flex-1 lg:flex-row lg:items-center lg:justify-end">
-          <div className="flex w-full min-w-0 flex-wrap gap-1.5 lg:flex-nowrap lg:justify-end">
-            <button
-              type="button"
-              disabled={!canCreatePaziente || !manifestazioneForCreate || creating || !pmaId.trim()}
-              title={
-                !canCreatePaziente
-                  ? 'Permessi insufficienti per creare una nuova scheda.'
-                  : !manifestazioneForCreate
-                    ? 'Manifestazione non disponibile.'
-                    : undefined
-              }
-              onClick={() => void handleNuovoPazienteImmediato()}
-              className={`${BTN_DASH} ${
-                canCreatePaziente && manifestazioneForCreate
-                  ? 'border-slate-800 text-slate-900 hover:bg-slate-100'
-                  : ''
-              }`}
-            >
-              {creating ? '…' : 'NUOVO PAZIENTE'}
-            </button>
-            <button
-              type="button"
-              disabled={!canOpenCodiciMinori}
-              title={
-                !manifestazioneForCodiciMinori
-                  ? 'Manifestazione non disponibile per i codici minori.'
-                  : !canOpenCodiciMinori
-                    ? 'Permessi insufficienti.'
-                    : undefined
-              }
-              onClick={() => setCodiciMinoriOpen(true)}
-              className={BTN_DASH}
-            >
-              CODICI MINORI
-            </button>
-            <button
-              type="button"
-              disabled={!pmaId.trim()}
-              onClick={() => {
-                setDimessiModalOpen(true)
-                setDimessiModalSearch('')
-                setDimessiModalErr(null)
-              }}
-              className={BTN_DASH}
-            >
-              PAZIENTI DIMESSI
-            </button>
-            <Link
-              to={`/pma/${encodeURIComponent(pmaId)}/impostazioni`}
-              aria-disabled={!pmaId.trim()}
-              onClick={(e) => {
-                if (!pmaId.trim()) e.preventDefault()
-              }}
-              className={`${BTN_DASH} ${!pmaId.trim() ? 'pointer-events-none opacity-40' : ''}`}
-            >
-              IMPOSTAZIONI PMA
-            </Link>
-          </div>
-          {user?.rank === 'Centrale' && dimessi.length > 0 ? (
-            <button
-              type="button"
-              disabled={zipBusy || !db}
-              onClick={() => void handleZipDimessi()}
-              className={`${BTN_DASH} max-w-[8rem] shrink-0 lg:w-auto`}
-            >
-              {zipBusy ? (
-                <>
-                  <span
-                    className={`mr-1 h-3 w-3 shrink-0 animate-spin rounded-full border-2 ${theme.spinnerAccent}`}
-                    aria-hidden
-                  />
-                  ZIP
-                </>
-              ) : (
-                `ZIP (${dimessi.length})`
-              )}
-            </button>
-          ) : null}
-        </div>
-        {canCreatePaziente && !manifestazioneForCreate ? (
-          <p className="mt-1.5 text-[10px] text-amber-800">Manifestazione non disponibile: creazione disabilitata.</p>
-        ) : null}
-        {createErr ? (
-          <p className="mt-1 text-[11px] text-red-700" role="alert">
-            {createErr}
-          </p>
-        ) : null}
-        {zipErr ? (
-          <p className="mt-1 text-[11px] text-red-700" role="alert">
-            {zipErr}
-          </p>
-        ) : null}
-      </header>
+  if (!user) {
+    return null
+  }
 
-      {!pmaId.trim() ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          URL PMA non valido.
-        </p>
+  if (!pmaId.trim()) {
+    return (
+      <div className="min-h-screen bg-white p-6 font-[system-ui,-apple-system,sans-serif] text-[#111827]">
+        <p className="text-sm">URL PMA non valido.</p>
+      </div>
+    )
+  }
+
+  const manIdForNav = (manifestazioneForCreate || pmaSnap.idManifestazione || '').trim()
+
+  const triageStripEl = (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] font-medium text-[#111827]">
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ef4444]" aria-hidden />
+        Rosso {countByColor(inCarico, 'rosso')}
+      </span>
+      <span className="text-slate-300" aria-hidden>
+        •
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#eab308]" aria-hidden />
+        Giallo {countByColor(inCarico, 'giallo')}
+      </span>
+      <span className="text-slate-300" aria-hidden>
+        •
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" aria-hidden />
+        Verde {countByColor(inCarico, 'verde')}
+      </span>
+    </div>
+  )
+
+  const topToolbarEl = (
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <button
+        type="button"
+        disabled={!canCreatePaziente || !manifestazioneForCreate || creating || !pmaId.trim()}
+        title={
+          !canCreatePaziente
+            ? 'Permessi insufficienti per creare una nuova scheda.'
+            : !manifestazioneForCreate
+              ? 'Manifestazione non disponibile.'
+              : undefined
+        }
+        onClick={() => void handleNuovoPazienteImmediato()}
+        className={BTN_TOOLBAR_SM}
+      >
+        {creating ? '…' : 'NUOVO PAZIENTE'}
+      </button>
+      <button
+        type="button"
+        disabled={!canOpenCodiciMinori}
+        title={
+          !manifestazioneForCodiciMinori
+            ? 'Manifestazione non disponibile per i codici minori.'
+            : !canOpenCodiciMinori
+              ? 'Permessi insufficienti.'
+              : undefined
+        }
+        onClick={() => setCodiciMinoriOpen(true)}
+        className={BTN_TOOLBAR_SM}
+      >
+        CODICI MINORI
+      </button>
+      <button
+        type="button"
+        disabled={!pmaId.trim()}
+        onClick={() => {
+          setDimessiModalOpen(true)
+          setDimessiModalSearch('')
+          setDimessiModalErr(null)
+        }}
+        className={BTN_TOOLBAR_SM}
+      >
+        PAZIENTI DIMESSI
+      </button>
+      <Link
+        to={`/pma/${encodeURIComponent(pmaId)}/impostazioni`}
+        aria-disabled={!pmaId.trim()}
+        onClick={(e) => {
+          if (!pmaId.trim()) e.preventDefault()
+        }}
+        className={`${BTN_TOOLBAR_SM} ${!pmaId.trim() ? 'pointer-events-none opacity-40' : ''}`}
+      >
+        IMPOSTAZIONI PMA
+      </Link>
+      {user.rank === 'Centrale' && dimessi.length > 0 ? (
+        <button
+          type="button"
+          disabled={zipBusy || !db}
+          onClick={() => void handleZipDimessi()}
+          className={`${BTN_TOOLBAR_SM} shrink-0`}
+        >
+          {zipBusy ? (
+            <>
+              <span
+                className={`mr-1 h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-slate-400 border-t-transparent`}
+                aria-hidden
+              />
+              ZIP
+            </>
+          ) : (
+            `ZIP (${dimessi.length})`
+          )}
+        </button>
       ) : null}
+    </div>
+  )
 
-      {listaError ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {listaError}
-        </div>
-      ) : null}
-
-      {listaLoading ? (
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <span
-            className={`h-5 w-5 animate-spin rounded-full border-2 ${theme.spinnerAccent}`}
-            aria-hidden
+  const footerEl = (
+    <>
+      <button
+        type="button"
+        disabled={!canCreatePaziente || !manifestazioneForCreate || creating || !pmaId.trim()}
+        onClick={() => void handleNuovoPazienteImmediato()}
+        className="rounded-full bg-[#2563eb] px-8 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
+      >
+        {creating ? '…' : '+ Nuovo paziente'}
+      </button>
+      <button
+        type="button"
+        disabled={!pmaId.trim()}
+        onClick={() => {
+          setDimessiModalOpen(true)
+          setDimessiModalSearch('')
+          setDimessiModalErr(null)
+        }}
+        className="rounded-full border border-slate-200 bg-slate-100 px-8 py-3 text-sm font-semibold text-[#111827] transition-colors hover:bg-slate-200"
+      >
+        Pazienti dimessi
+      </button>
+      <Link
+        to={`/pma/${encodeURIComponent(pmaId)}/impostazioni`}
+        className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-8 py-3 text-sm font-semibold text-[#111827] transition-colors hover:bg-slate-200"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
+          <path
+            d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
           />
-          Caricamento pazienti…
-        </div>
-      ) : (
-        <>
-          <div className="flex flex-col gap-2 lg:grid lg:grid-cols-12 lg:items-start lg:gap-2">
-            <main className="min-w-0 lg:col-span-9">
-              <section className="rounded-md border border-slate-200 bg-white p-2 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
-                  <h2 className="text-[10px] font-bold uppercase tracking-widest text-slate-600">
-                    Pazienti in carico{' '}
-                    <span className="tabular-nums text-slate-500">({inCarico.length})</span>
-                  </h2>
-                  <ConteggioPallini lista={inCarico} policy="all" align="end" variant="dashboardMain" />
-                </div>
-                <ListaPazientiInCarico
-                  lista={inCaricoListaDisplay}
-                  pmaId={pmaId}
-                  nowMs={nowMs}
-                  canDelete={canDeletePaziente}
-                  onDeleteClick={(pid, label) => setDeleteModal({ id: pid, label, step: 1 })}
-                  evidenzaIds={idsCaricoAMe}
-                />
-              </section>
-            </main>
+        </svg>
+        Impostazioni PMA
+      </Link>
+    </>
+  )
 
-            <aside className="w-full shrink-0 space-y-1.5 lg:col-span-3">
-              <ListaColonna
-                titolo="In arrivo"
+  return (
+    <>
+      <PmaManagerShell
+        user={user}
+        pmaId={pmaId}
+        manifestazioneId={manIdForNav}
+        pmaDisplayTitle={pmaSnap.nome ?? pmaId}
+        logout={logout}
+        triageStrip={triageStripEl}
+        topToolbar={
+          <div className="flex w-full flex-col gap-1.5">
+            {topToolbarEl}
+            {canCreatePaziente && !manifestazioneForCreate ? (
+              <p className="text-[10px] text-amber-800">Manifestazione non disponibile: creazione disabilitata.</p>
+            ) : null}
+            {createErr ? (
+              <p className="text-[11px] text-red-700" role="alert">
+                {createErr}
+              </p>
+            ) : null}
+            {zipErr ? (
+              <p className="text-[11px] text-red-700" role="alert">
+                {zipErr}
+              </p>
+            ) : null}
+          </div>
+        }
+        footer={footerEl}
+      >
+        {listaError ? (
+          <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+            {listaError}
+          </div>
+        ) : null}
+
+        {listaLoading ? (
+          <div className="flex items-center gap-2 text-sm text-slate-600">
+            <span
+              className={`h-5 w-5 animate-spin rounded-full border-2 ${theme.spinnerAccent}`}
+              aria-hidden
+            />
+            Caricamento pazienti…
+          </div>
+        ) : (
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
+            <div className="min-w-0 lg:w-[68%] lg:max-w-[70%] lg:flex-none">
+              <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Pazienti in Carico</h2>
+              <ListaPazientiInCarico
+                lista={inCaricoListaDisplay}
+                pmaId={pmaId}
+                nowMs={nowMs}
+                canDelete={canDeletePaziente}
+                onDeleteClick={(pid, label) => setDeleteModal({ id: pid, label, step: 1 })}
+                evidenzaIds={undefined}
+                visualVariant="manager"
+              />
+            </div>
+
+            <div className="w-full shrink-0 space-y-4 lg:min-w-[16rem] lg:max-w-[28%] lg:flex-1">
+              <ManagerQueueBox
+                titleLine1="Pazienti"
+                titleLine2="IN ARRIVO"
                 lista={inArrivo}
                 pmaId={pmaId}
-                empty="Nessuno."
                 isTriage={isTriage}
                 onInCarico={handleInCarico}
-                canDelete={canDeletePaziente}
-                onDeleteClick={(pid, label) => setDeleteModal({ id: pid, label, step: 1 })}
-                compact
-                omitEmptyMessage
-                sidebarDense
               />
-              <ListaColonna
-                titolo="In attesa"
+              <ManagerQueueBox
+                titleLine1="Pazienti"
+                titleLine2="IN ATTESA"
                 lista={inAttesa}
                 pmaId={pmaId}
-                empty="Nessuno."
                 isTriage={isTriage}
                 onInCarico={handleInCarico}
-                canDelete={canDeletePaziente}
-                onDeleteClick={(pid, label) => setDeleteModal({ id: pid, label, step: 1 })}
-                compact
-                omitEmptyMessage
-                sidebarDense
               />
-
-              <div className="rounded-lg border border-slate-200 bg-slate-50/90 p-1.5 shadow-sm sm:p-2">
-                <h2 className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
-                  Ultimi 5 dimessi ({ultimi5Dimessi.length})
-                </h2>
-                {ultimi5Dimessi.length > 0 ? (
-                  <ul className="mt-1.5 max-h-40 divide-y divide-slate-200 overflow-y-auto rounded border border-slate-200 bg-white">
-                    {ultimi5Dimessi.map((pz) => (
-                      <RigaPaziente
-                        key={pz.id}
-                        pz={pz}
-                        pmaId={pmaId}
-                        isTriage={false}
-                        onInCarico={() => {}}
-                        canDelete={canDeletePaziente}
-                        onDeleteClick={(pid, label) => setDeleteModal({ id: pid, label, step: 1 })}
-                        showStatoBadge={false}
-                        compact
-                        dense
-                      />
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-            </aside>
+            </div>
           </div>
-        </>
-      )}
+        )}
+      </PmaManagerShell>
 
       {dimessiModalOpen ? (
         <div
@@ -1093,6 +998,6 @@ export function PMADashboardPage() {
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   )
 }

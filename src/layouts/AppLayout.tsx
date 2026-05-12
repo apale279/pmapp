@@ -41,6 +41,17 @@ function AppLayoutShell({ user, logout }: { user: UserProfile; logout: () => Pro
   const theme = useRankTheme()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
+  /** Dashboard PMA “manager”: chrome dedicato nella pagina, niente shell standard. */
+  const isPmaManagerDashboard = /^\/pma\/[^/]+$/.test(location.pathname)
+
+  if (isPmaManagerDashboard) {
+    return (
+      <div className="min-h-screen bg-white">
+        <Outlet />
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-screen bg-slate-50">
       <div className="hidden shrink-0 md:flex">
