@@ -23,13 +23,13 @@ function displayNomeCognome(p: Paziente): string {
 export function DettaglioPaziente({ p, tabs, activeTab, onTabChange, saveError, panels }: DettaglioPazienteProps) {
   return (
     <div className="flex w-full min-w-0 flex-col">
-      <div className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-md">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6">
+      <div className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-sm">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+            <p className="truncate text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
               {displayNomeCognome(p)}
             </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[12px] text-slate-600">
               <span className="font-mono font-semibold text-slate-800">{p.id_paziente_visibile}</span>
               <span className="text-slate-300" aria-hidden>
                 ·
@@ -51,8 +51,8 @@ export function DettaglioPaziente({ p, tabs, activeTab, onTabChange, saveError, 
               ) : null}
             </div>
           </div>
-          <div className="hidden shrink-0 text-right text-xs text-slate-500 sm:block">
-            <span className="font-mono text-[11px] text-slate-400">ID {p.id}</span>
+          <div className="hidden shrink-0 text-right text-[11px] text-slate-500 sm:block">
+            <span className="font-mono text-[10px] text-slate-400">ID {p.id}</span>
           </div>
         </div>
 
@@ -61,8 +61,8 @@ export function DettaglioPaziente({ p, tabs, activeTab, onTabChange, saveError, 
           aria-label="Sezioni scheda paziente"
           role="tablist"
         >
-          <div className="mx-auto flex max-w-6xl overflow-x-auto overscroll-x-contain px-2 sm:px-4">
-            <div className="flex min-w-min gap-1 pb-0 pt-1">
+          <div className="mx-auto flex max-w-7xl overflow-x-auto overscroll-x-contain px-2 sm:px-4">
+            <div className="flex min-w-min gap-0.5 pb-0 pt-0.5">
               {tabs.map((tab) => {
                 const selected = activeTab === tab.id
                 return (
@@ -76,7 +76,7 @@ export function DettaglioPaziente({ p, tabs, activeTab, onTabChange, saveError, 
                     tabIndex={selected ? 0 : -1}
                     onClick={() => onTabChange(tab.id)}
                     className={[
-                      'shrink-0 rounded-t-md border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
+                      'shrink-0 rounded-t-md border-b-2 px-2.5 py-2 text-xs font-semibold transition-colors sm:px-3 sm:text-[13px]',
                       selected
                         ? 'border-slate-900 bg-slate-50 text-slate-900'
                         : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800',
@@ -91,7 +91,7 @@ export function DettaglioPaziente({ p, tabs, activeTab, onTabChange, saveError, 
         </nav>
       </div>
 
-      <div className="mx-auto w-full min-w-0 max-w-6xl flex-1 px-4 py-4 sm:px-6 sm:py-6">
+      <div className="mx-auto w-full min-w-0 max-w-7xl flex-1 px-3 py-3 sm:px-5 sm:py-4">
         {saveError}
         {tabs.map((tab) => {
           const visible = activeTab === tab.id

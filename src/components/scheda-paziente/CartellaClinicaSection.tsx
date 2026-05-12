@@ -499,36 +499,36 @@ export function CartellaClinicaSection({
     <section
       className={
         embedded
-          ? 'min-w-0 space-y-8'
-          : 'min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm'
+          ? 'min-w-0 space-y-6'
+          : 'min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm'
       }
     >
       <h2
         className={
           embedded
-            ? 'border-b border-slate-200 pb-2 text-lg font-semibold text-slate-900'
-            : 'text-sm font-semibold uppercase tracking-wide text-slate-500'
+            ? 'border-b border-slate-200 pb-1.5 text-base font-semibold text-slate-900'
+            : 'text-[11px] font-semibold uppercase tracking-wide text-slate-500'
         }
       >
         {embedded ? 'Cartella clinica' : 'Sezione 3 — Cartella clinica'}
       </h2>
 
-      <div className={embedded ? 'space-y-10' : 'mt-6 space-y-10'}>
+      <div className={embedded ? 'space-y-6' : 'mt-4 space-y-6'}>
         <div>
-          <h3 className="text-base font-semibold text-slate-900">4.1 Valutazione e anamnesi</h3>
-          <div className="mt-4 space-y-4">
-            <label className="block text-sm">
+          <h3 className="text-sm font-semibold text-slate-900">4.1 Valutazione e anamnesi</h3>
+          <div className="mt-3 space-y-3">
+            <label className="block text-[13px]">
               <span className="font-medium text-slate-700">APR (anamnesi patologica remota)</span>
               <textarea
                 key={`apr-${pazienteId}-${p.apr}`}
                 disabled={!canEdit}
-                rows={4}
+                rows={3}
                 defaultValue={p.apr}
                 onBlur={(e) => void write({ apr: e.target.value })}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"
+                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-[13px] leading-snug disabled:bg-slate-50"
               />
             </label>
-            <label className="block text-sm">
+            <label className="block text-[13px]">
               <span className="font-medium text-slate-700">Allergie</span>
               <textarea
                 key={`all-${pazienteId}-${p.allergie}`}
@@ -536,25 +536,29 @@ export function CartellaClinicaSection({
                 rows={2}
                 defaultValue={p.allergie}
                 onBlur={(e) => void write({ allergie: e.target.value })}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"
+                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-[13px] leading-snug disabled:bg-slate-50"
               />
             </label>
-            <label className="block text-sm">
+            <label className="block text-[13px]">
               <span className="font-medium text-slate-700">APP (anamnesi patologica prossima)</span>
               <textarea
                 key={`app-${pazienteId}-${p.app}`}
                 disabled={!canEdit}
-                rows={4}
+                rows={3}
                 defaultValue={p.app}
                 onBlur={(e) => void write({ app: e.target.value })}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"
+                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-[13px] leading-snug disabled:bg-slate-50"
               />
             </label>
             {!hideClinicalBlocks ? (
               <>
                 <div>
-                  <span className="font-medium text-slate-700 text-sm">Esame obiettivo (EO)</span>
-                  <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/50 p-4">
+                  <span className="text-[13px] font-medium text-slate-700">Esame obiettivo (EO)</span>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    Sei colonne per categoria (GENERALE, NEUROLOGICO, CUTE, TORACE, ADDOME, CAPO/COLLO). Su schermi
+                    piccoli scorri in orizzontale.
+                  </p>
+                  <div className="mt-2 rounded-md border border-slate-200 bg-slate-50/80 p-2">
                     <QuickExamField
                       key={`qe-${pazienteId}-${p.eo_note}\0${p.eo_quick.join('\0')}\0${eoQuickGroups.map((g) => g.title + g.labels.join(',')).join('|')}\0${eoQuickDefaultLabel ?? ''}`}
                       selected={p.eo_quick}
@@ -568,12 +572,11 @@ export function CartellaClinicaSection({
                   </div>
                 </div>
                 <div>
-                  <span className="text-sm font-medium text-slate-700">Lesioni</span>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Vista frontale e posteriore: clic sul corpo per aggiungere marker numerati; compila la
-                    descrizione per ciascun punto (salvataggio al blur o al cambio elenco).
+                  <span className="text-[13px] font-medium text-slate-700">Lesioni</span>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    Vista frontale e posteriore: clic sul corpo per marker numerati; descrizione al blur.
                   </p>
-                  <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/50 p-4">
+                  <div className="mt-2 rounded-md border border-slate-200 bg-slate-50/80 p-2">
                     <LesioniBodyMap
                       lesioni={p.lesioni}
                       disabled={!canEdit}
@@ -594,21 +597,20 @@ export function CartellaClinicaSection({
         {!hideClinicalBlocks ? (
           <>
             <div>
-              <h3 className="text-base font-semibold text-slate-900">4.2 Parametri vitali</h3>
-          <p className="mt-1 text-xs text-slate-500">
-            Ogni rilievo su una riga orizzontale (scroll su tablet). Elenco sotto ordinato dal più recente;
-            salvataggio in uscita dai campi (onBlur).
+              <h3 className="text-sm font-semibold text-slate-900">4.2 Parametri vitali</h3>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            Blocchi tipo monitor: valori critici evidenziati in colore. Salvataggio in uscita dai campi (onBlur).
           </p>
           {canEdit ? (
             <button
               type="button"
               onClick={() => void aggiungiPv()}
-              className="mt-3 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+              className="mt-2 rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-slate-800"
             >
               Aggiungi parametri
             </button>
           ) : null}
-          <div className="mt-3 space-y-2">
+          <div className="mt-2 space-y-2">
             {pvSorted.map((row) => (
               <ParametriVitaliBlock
                 key={row.id}
@@ -624,7 +626,7 @@ export function CartellaClinicaSection({
         </div>
 
         <div>
-          <h3 className="text-base font-semibold text-slate-900">4.3 Terapie e prestazioni</h3>
+          <h3 className="text-sm font-semibold text-slate-900">4.3 Terapie e prestazioni</h3>
           <div className="mt-4">
             <span className="text-sm font-medium text-slate-700">Prestazioni</span>
             <p className="mt-1 text-xs text-slate-500">Selezione multipla dall&apos;elenco manifestazione.</p>
@@ -746,7 +748,7 @@ export function CartellaClinicaSection({
         ) : null}
 
         <div>
-          <h3 className="text-base font-semibold text-slate-900">4.4 Rivalutazione</h3>
+          <h3 className="text-sm font-semibold text-slate-900">4.4 Rivalutazione</h3>
           <div className="mt-4 space-y-3">
             {rivSorted.map((r) => (
               <div key={r.id} className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm">
