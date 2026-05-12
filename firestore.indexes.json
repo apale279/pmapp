@@ -19,6 +19,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "codici_minori",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "id_pma",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ora_accesso",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

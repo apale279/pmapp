@@ -20,6 +20,7 @@ import {
   defaultPdfFilename,
   sanitizeFilePart,
 } from '../../lib/pdf/pazientePdfReport'
+import { CodiciMinoriModal } from '../../components/pma/CodiciMinoriModal'
 import type { CodiceColorePaziente } from '../../types/paziente'
 import { CODICE_COLORE_LABEL, PAZIENTE_STATO_LABEL } from '../../types/paziente'
 import type { PazienteListItem } from '../../hooks/usePazientiForPma'
@@ -235,7 +236,7 @@ function ListaColonna({
   sidebarDense?: boolean
 }) {
   const h2Class = sidebarDense
-    ? 'text-[9px] font-bold uppercase tracking-widest text-slate-500'
+    ? 'text-[10px] font-bold uppercase tracking-widest text-slate-500'
     : compact
       ? 'text-[10px] font-bold uppercase tracking-widest text-slate-500'
       : 'text-[11px] font-bold uppercase tracking-widest text-slate-500'
@@ -243,16 +244,17 @@ function ListaColonna({
   return (
     <section
       className={`rounded-lg border bg-white shadow-sm ${
-        compact ? (sidebarDense ? 'p-2' : 'p-2') : 'p-4 sm:p-4'
+        compact ? (sidebarDense ? 'p-1.5' : 'p-2') : 'p-4 sm:p-4'
       } ${highlight ? 'border-blue-300 ring-1 ring-blue-100' : 'border-slate-200'}`}
     >
       <div
-        className={`flex min-w-0 flex-col gap-1 ${
-          compact ? 'sm:flex-row sm:flex-wrap sm:items-center sm:justify-between' : ''
+        className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${
+          compact ? 'sm:flex-row sm:items-center sm:justify-between' : ''
         }`}
       >
         <h2 className={`shrink-0 ${h2Class}`}>
-          {titolo} ({lista.length})
+          {titolo}{' '}
+          <span className="tabular-nums font-bold text-slate-400">({lista.length})</span>
         </h2>
         <ConteggioPallini
           lista={lista}
@@ -260,6 +262,7 @@ function ListaColonna({
           compact={compact}
           dense={sidebarDense}
           variant={sidebarDense ? 'sidebarTab' : 'default'}
+          align="start"
         />
       </div>
       {lista.length === 0 ? (
@@ -317,7 +320,7 @@ function ListaPazientiInCarico({
   return (
     <div className="mt-2 max-h-[min(78vh,34rem)] overflow-auto rounded-md border border-slate-200 bg-white">
       <table className="w-full border-collapse text-left text-sm">
-        <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+        <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
           <tr>
             <th scope="col" className="px-2.5 py-1.5">
               Paziente
@@ -348,11 +351,11 @@ function ListaPazientiInCarico({
                 <td className={`max-w-0 px-2.5 py-1.5 ${inEvidenza ? 'pl-2' : ''}`}>
                   <Link
                     to={`/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`}
-                    className="block min-w-0 text-base font-semibold leading-snug text-slate-900 hover:text-blue-800 hover:underline sm:text-lg"
+                    className="block min-w-0 text-lg font-semibold leading-snug text-slate-900 hover:text-blue-800 hover:underline sm:text-xl md:text-2xl"
                   >
                     {nome}
                   </Link>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-sm text-slate-600">
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-sm text-slate-600 sm:text-base">
                     <span className="font-medium">{pz.id_paziente_visibile}</span>
                     {pz.infermiere_rif.trim() || pz.medico_rif.trim() ? (
                       <span className="block w-full max-w-prose font-sans text-sm font-normal leading-snug text-slate-700">
@@ -401,7 +404,7 @@ function ListaPazientiInCarico({
                     </span>
                   ) : null}
                 </td>
-                <td className="whitespace-nowrap px-2.5 py-1.5 text-sm tabular-nums text-slate-800">
+                <td className="whitespace-nowrap px-2.5 py-1.5 text-base font-semibold tabular-nums text-slate-800 sm:text-lg">
                   {formatPermanenza(pz.apertura_scheda, nowMs)}
                 </td>
                 <td className="whitespace-nowrap px-2 py-1.5 text-right">
@@ -451,6 +454,7 @@ export function PMADashboardPage() {
   const [deleteErr, setDeleteErr] = useState<string | null>(null)
   const [zipBusy, setZipBusy] = useState(false)
   const [zipErr, setZipErr] = useState<string | null>(null)
+  const [codiciMinoriOpen, setCodiciMinoriOpen] = useState(false)
 
   const manifestazioneForCreate =
     user?.id_manifestazione?.trim() || pmaSnap.idManifestazione?.trim() || ''
@@ -557,6 +561,23 @@ export function PMADashboardPage() {
       user?.rank === 'Infermiere' ||
       user?.rank === 'Triage' ||
       user?.rank === 'Soccorritore')
+
+  const manifestazioneForCodiciMinori = useMemo(
+    () => (manifestazioneForCreate || pmaSnap.idManifestazione?.trim() || '').trim(),
+    [manifestazioneForCreate, pmaSnap.idManifestazione],
+  )
+
+  const canOpenCodiciMinori =
+    Boolean(db && pmaId.trim() && manifestazioneForCodiciMinori) &&
+    Boolean(
+      user &&
+        (user.rank === 'Superadmin' ||
+          user.rank === 'Centrale' ||
+          user.rank === 'Medico' ||
+          user.rank === 'Infermiere' ||
+          user.rank === 'Triage' ||
+          user.rank === 'Soccorritore'),
+    )
 
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
@@ -689,7 +710,7 @@ export function PMADashboardPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-2 pb-5">
-      <header className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+      <header className="rounded-lg border border-slate-200 bg-white px-2 py-2 shadow-sm sm:px-3">
         <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
           <div className="min-w-0 flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0">
             <span className="shrink-0 text-[9px] font-bold uppercase tracking-widest text-slate-500">PMA</span>
@@ -698,8 +719,8 @@ export function PMADashboardPage() {
             </h1>
             <code className="hidden max-w-[10rem] truncate text-xs text-slate-500 sm:inline">{pmaId || '—'}</code>
           </div>
-          <div className="flex min-w-0 flex-1 basis-[min(100%,28rem)] flex-col items-stretch justify-end gap-2 sm:max-w-2xl sm:flex-row sm:items-center">
-            <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-1 sm:flex-row sm:gap-2">
+          <div className="flex min-w-0 flex-1 basis-[min(100%,28rem)] flex-col items-stretch justify-end gap-2 lg:max-w-2xl lg:flex-row lg:items-center">
+            <div className="flex w-full min-w-0 flex-col gap-2 lg:flex-1 lg:flex-row lg:gap-2">
               <button
                 type="button"
                 disabled={!canCreatePaziente || !manifestazioneForCreate || creating || !pmaId.trim()}
@@ -711,13 +732,28 @@ export function PMADashboardPage() {
                       : undefined
                 }
                 onClick={() => void handleNuovoPazienteImmediato()}
-                className={`min-h-[2.75rem] w-full rounded-md border px-2 text-sm font-bold uppercase tracking-wide transition disabled:opacity-50 sm:min-w-[9.5rem] sm:flex-1 ${
+                className={`min-h-12 w-full touch-manipulation rounded-md border px-2 py-3 text-sm font-extrabold uppercase tracking-wide transition disabled:opacity-50 sm:min-h-[2.75rem] sm:py-2 lg:min-w-[9.5rem] lg:flex-1 ${
                   canCreatePaziente && manifestazioneForCreate
                     ? 'border-blue-400 bg-white text-blue-900 hover:bg-blue-50'
                     : 'border-slate-200 bg-slate-50 text-slate-500'
                 }`}
               >
-                {creating ? '…' : 'Nuovo paziente'}
+                {creating ? '…' : 'NUOVO PAZIENTE'}
+              </button>
+              <button
+                type="button"
+                disabled={!canOpenCodiciMinori}
+                title={
+                  !manifestazioneForCodiciMinori
+                    ? 'Manifestazione non disponibile per i codici minori.'
+                    : !canOpenCodiciMinori
+                      ? 'Permessi insufficienti.'
+                      : undefined
+                }
+                onClick={() => setCodiciMinoriOpen(true)}
+                className="min-h-12 w-full touch-manipulation rounded-md border border-slate-300 bg-white px-2 py-3 text-sm font-extrabold uppercase tracking-wide text-slate-800 hover:bg-slate-50 disabled:opacity-50 sm:min-h-[2.75rem] sm:py-2 lg:min-w-[9.5rem] lg:flex-1"
+              >
+                CODICI MINORI
               </button>
               <button
                 type="button"
@@ -727,9 +763,9 @@ export function PMADashboardPage() {
                   setDimessiModalSearch('')
                   setDimessiModalErr(null)
                 }}
-                className="min-h-[2.75rem] w-full rounded-md border border-slate-300 bg-white px-2 text-sm font-bold uppercase tracking-wide text-slate-800 hover:bg-slate-50 disabled:opacity-50 sm:min-w-[9.5rem] sm:flex-1"
+                className="min-h-12 w-full touch-manipulation rounded-md border border-slate-300 bg-white px-2 py-3 text-sm font-extrabold uppercase tracking-wide text-slate-800 hover:bg-slate-50 disabled:opacity-50 sm:min-h-[2.75rem] sm:py-2 lg:min-w-[9.5rem] lg:flex-1"
               >
-                Pazienti dimessi
+                PAZIENTI DIMESSI
               </button>
               <Link
                 to={`/pma/${encodeURIComponent(pmaId)}/impostazioni`}
@@ -737,9 +773,9 @@ export function PMADashboardPage() {
                 onClick={(e) => {
                   if (!pmaId.trim()) e.preventDefault()
                 }}
-                className={`flex min-h-[2.75rem] w-full items-center justify-center rounded-md border border-slate-300 bg-white px-2 text-center text-sm font-bold uppercase tracking-wide text-slate-800 hover:bg-slate-50 sm:min-w-[9.5rem] sm:flex-1 ${!pmaId.trim() ? 'pointer-events-none opacity-50' : ''}`}
+                className={`flex min-h-12 w-full touch-manipulation items-center justify-center rounded-md border border-slate-300 bg-white px-2 py-3 text-center text-sm font-extrabold uppercase tracking-wide text-slate-800 hover:bg-slate-50 sm:min-h-[2.75rem] sm:py-2 lg:min-w-[9.5rem] lg:flex-1 ${!pmaId.trim() ? 'pointer-events-none opacity-50' : ''}`}
               >
-                Impostazioni PMA
+                IMPOSTAZIONI PMA
               </Link>
             </div>
             {user?.rank === 'Centrale' && dimessi.length > 0 ? (
@@ -803,11 +839,16 @@ export function PMADashboardPage() {
         <>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-start">
             <main className="min-w-0 flex-1 lg:max-w-[calc(100%-13rem)] lg:flex-[1.25]">
-              <section className="rounded-lg border border-blue-200 bg-gradient-to-b from-white to-slate-50/90 p-3 shadow-sm">
-                <ConteggioPallini lista={inCarico} policy="all" align="center" variant="dashboardMain" />
-                <h2 className="mt-1.5 text-[11px] font-bold uppercase tracking-widest text-blue-900">
-                  Pazienti in carico ({inCarico.length})
-                </h2>
+              <section className="rounded-lg border border-blue-200 bg-gradient-to-b from-white to-slate-50/90 p-2 shadow-sm sm:p-2.5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                    <h2 className="text-center text-xs font-bold uppercase tracking-widest text-blue-900 sm:text-left sm:text-[11px]">
+                      Pazienti in carico{' '}
+                      <span className="tabular-nums text-blue-800/85">({inCarico.length})</span>
+                    </h2>
+                    <ConteggioPallini lista={inCarico} policy="all" align="start" variant="dashboardMain" />
+                  </div>
+                </div>
                 <ListaPazientiInCarico
                   lista={inCaricoListaDisplay}
                   pmaId={pmaId}
@@ -847,7 +888,7 @@ export function PMADashboardPage() {
                 sidebarDense
               />
 
-              <div className="rounded-lg border border-slate-200 bg-slate-50/90 p-2 shadow-sm">
+              <div className="rounded-lg border border-slate-200 bg-slate-50/90 p-1.5 shadow-sm sm:p-2">
                 <h2 className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
                   Ultimi 5 dimessi ({ultimi5Dimessi.length})
                 </h2>
@@ -983,6 +1024,16 @@ export function PMADashboardPage() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {codiciMinoriOpen && manifestazioneForCodiciMinori ? (
+        <CodiciMinoriModal
+          open={codiciMinoriOpen}
+          onClose={() => setCodiciMinoriOpen(false)}
+          idManifestazione={manifestazioneForCodiciMinori}
+          pmaId={pmaId}
+          spinnerClass={theme.spinnerAccent}
+        />
       ) : null}
 
       {deleteModal ? (

@@ -57,7 +57,8 @@ function buildEoQuickGroups(
   imp: Record<string, unknown>,
 ): EoQuickGroupRow[] {
   const raw = d.dettaglio_eo_rapido ?? imp.dettaglio_eo_rapido ?? imp.eo_quick_imp ?? imp.EO_QUICK_IMP
-  const fallback = sortStringsIt([...EO_OPZIONI_RAPIDE])
+  /** Ordine clinico da default: stesso ordine del codice, mai alfabetico. */
+  const fallback = [...EO_OPZIONI_RAPIDE]
   if (!raw || typeof raw !== 'object') {
     return EO_CLINICAL_TABS.map((title, i) =>
       i === 0 ? { title, labels: fallback } : { title, labels: [] as string[] },
@@ -66,7 +67,7 @@ function buildEoQuickGroups(
   const o = raw as Record<string, unknown>
   return EO_CLINICAL_TABS.map((title) => {
     const arr = asStringArray(o[title])
-    return { title, labels: arr ? sortStringsIt(arr) : [] }
+    return { title, labels: arr ? [...arr] : [] }
   })
 }
 
@@ -81,11 +82,11 @@ function flattenLabelsFromGroups(groups: EoQuickGroupRow[]): string[] {
       }
     }
   }
-  return flat.length ? flat : sortStringsIt([...EO_OPZIONI_RAPIDE])
+  return flat.length ? flat : [...EO_OPZIONI_RAPIDE]
 }
 
 function defaultEoQuickGroups(): EoQuickGroupRow[] {
-  const fallback = sortStringsIt([...EO_OPZIONI_RAPIDE])
+  const fallback = [...EO_OPZIONI_RAPIDE]
   return EO_CLINICAL_TABS.map((title, i) =>
     i === 0 ? { title, labels: fallback } : { title, labels: [] as string[] },
   )

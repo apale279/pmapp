@@ -27,7 +27,7 @@ export const EO_CLINICAL_TABS = [
 
 export type EoTabKey = (typeof EO_CLINICAL_TABS)[number]
 
-/** Primo valore non vuoto seguendo l'ordine delle tab cliniche (testo grezzo, prima del sort alfabetico). */
+/** Primo valore non vuoto seguendo l'ordine delle tab cliniche (GENERALE → …), senza riordinamento alfabetico. */
 export function firstEoRapidoDefaultFromDrafts(drafts: Record<string, string>): string | null {
   for (const tab of EO_CLINICAL_TABS) {
     const parsed = parseLinesToValues(drafts[tab] ?? '')

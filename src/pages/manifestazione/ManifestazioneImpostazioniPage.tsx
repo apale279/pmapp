@@ -198,7 +198,7 @@ export function ManifestazioneImpostazioniPage() {
       }
       const eoPayload: Record<string, string[]> = {}
       for (const k of EO_CLINICAL_TABS) {
-        eoPayload[k] = sortStringsIt(parseLinesToValues(eoDraft[k] ?? ''))
+        eoPayload[k] = parseLinesToValues(eoDraft[k] ?? '')
       }
       const defaultPrim = firstEoRapidoDefaultFromDrafts(eoDraft)
 
@@ -256,10 +256,11 @@ export function ManifestazioneImpostazioniPage() {
         <p className="mt-1 text-sm text-slate-500">Documento: manifestazioni/{manifestazioneId || '—'}</p>
         <p className="mt-2 text-sm text-slate-600">
           Prestazioni e farmaci: una riga per voce; usa &quot;Ordina Alfabeticamente&quot; per pulire e
-          ordinare. Tipo evento = evento lesivo (es. trauma). Dettaglio evento ed EO: stessa logica a righe.
-          Il primo valore EO non vuoto per tab definisce{' '}
-          <code className="rounded bg-slate-100 px-1">dettaglio_eo_rapido_default</code>. Al salvataggio:
-          righe vuote e duplicati rimossi, elenchi ordinati.{' '}
+          ordinare. Tipo evento = evento lesivo (es. trauma).{' '}
+          <strong>Dettaglio evento per tipo</strong>: al salvataggio righe pulite, chiavi e valori ordinati
+          alfabeticamente. <strong>Dettaglio EO rapido</strong>: l&apos;ordine delle righe è clinico — non viene
+          mai riordinato alfabeticamente. Il primo valore EO non vuoto seguendo le tab (GENERALE, poi le altre)
+          definisce <code className="rounded bg-slate-100 px-1">dettaglio_eo_rapido_default</code>.{' '}
           <code className="rounded bg-slate-100 px-1">updateDoc</code> aggiorna solo i campi indicati.
         </p>
         {isReadOnlyTriage ? (
@@ -378,7 +379,8 @@ export function ManifestazioneImpostazioniPage() {
             </h2>
             <p className="mt-1 text-xs text-slate-500">
               Una sezione per ogni tipo. Un valore per riga (andata a capo). Campo:{' '}
-              <code className="rounded bg-slate-100 px-1">dettaglio_evento</code>.
+              <code className="rounded bg-slate-100 px-1">dettaglio_evento</code>. Al salvataggio le righe di ogni
+              tipo sono ordinate alfabeticamente (come richiesto per questo campo).
             </p>
             {tipoEvento.length === 0 ? (
               <p className="mt-4 text-sm text-slate-500">Aggiungi almeno un tipo evento per configurare i dettagli.</p>
@@ -426,8 +428,8 @@ export function ManifestazioneImpostazioniPage() {
               Dettaglio EO rapido (tab clinici)
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Un valore per riga. La prima riga non vuota in ordine di tab (da NEUROLOGICO a CAPO/COLLO)
-              definisce il default in cartella (
+              Un valore per riga; l&apos;ordine delle righe è quello usato in cartella (non alfabetico). La prima
+              riga non vuota seguendo le tab da GENERALE in poi definisce il default in cartella (
               <code className="rounded bg-slate-100 px-1">dettaglio_eo_rapido_default</code>). Campo liste:{' '}
               <code className="rounded bg-slate-100 px-1">dettaglio_eo_rapido</code>.
             </p>
