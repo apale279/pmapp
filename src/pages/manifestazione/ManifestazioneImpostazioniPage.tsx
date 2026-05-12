@@ -247,7 +247,7 @@ export function ManifestazioneImpostazioniPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8 pb-12">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+        <h1 className="text-2xl font-bold tracking-tight text-[#111827]">
           Impostazioni manifestazione
           {isReadOnlyTriage ? (
             <span className="ml-2 text-base font-normal text-slate-500">(sola lettura)</span>
@@ -297,8 +297,8 @@ export function ManifestazioneImpostazioniPage() {
 
       {!loading ? (
         <div className="space-y-10">
-          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Liste cliniche</h2>
+          <section className="rounded-lg border border-slate-200 bg-white px-6 py-6 sm:px-8">
+            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Liste cliniche</h2>
             <div className="mt-4 space-y-8">
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -357,8 +357,8 @@ export function ManifestazioneImpostazioniPage() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Tipo evento</h2>
+          <section className="rounded-lg border border-slate-200 bg-white px-6 py-6 sm:px-8">
+            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Tipo evento</h2>
             <p className="mt-1 text-xs text-slate-500">
               Evento lesivo selezionabile in scheda (es. trauma, caduta). Campo Firestore:{' '}
               <code className="rounded bg-slate-100 px-1">tipo_evento</code>.
@@ -373,8 +373,8 @@ export function ManifestazioneImpostazioniPage() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <section className="rounded-lg border border-slate-200 bg-white px-6 py-6 sm:px-8">
+            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
               Dettaglio evento per tipo
             </h2>
             <p className="mt-1 text-xs text-slate-500">
@@ -423,8 +423,8 @@ export function ManifestazioneImpostazioniPage() {
             )}
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <section className="rounded-lg border border-slate-200 bg-white px-6 py-6 sm:px-8">
+            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
               Dettaglio EO rapido (tab clinici)
             </h2>
             <p className="mt-1 text-xs text-slate-500">

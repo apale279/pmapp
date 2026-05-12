@@ -14,6 +14,7 @@ import { useUtentiRealtime } from '../../hooks/useUtentiRealtime'
 import type { UtenteListRow } from '../../types/utenteList'
 import { AddUserModal } from '../../components/admin/AddUserModal'
 import { EditUserModal } from '../../components/admin/EditUserModal'
+import { opPrimaryBtn } from '../../components/layout/operativeTokens'
 
 function cellMuted(value: string | undefined, emptyLabel: string) {
   if (!value || value.trim() === '') {
@@ -130,7 +131,7 @@ export function GestioneUtentiPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Gestione utenti</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[#111827]">Gestione utenti</h1>
           <p className="mt-1 text-sm text-slate-600">
             Elenco in tempo reale dalla collection <code className="rounded bg-slate-100 px-1">utenti</code>.
             Gli account Superadmin non compaiono in questa vista.
@@ -142,7 +143,7 @@ export function GestioneUtentiPage() {
             setNuovoKey((k) => k + 1)
             setNuovoOpen(true)
           }}
-          className={`shrink-0 rounded-md px-4 py-2.5 text-sm font-medium shadow-sm ${theme.primaryCta} ${theme.primaryCtaHover}`}
+          className={`${opPrimaryBtn} shrink-0 px-5 text-sm`}
         >
           Nuovo operatore
         </button>
@@ -157,9 +158,7 @@ export function GestioneUtentiPage() {
         </div>
       ) : null}
 
-      <div
-        className={`overflow-hidden rounded-xl border border-slate-200 border-l-4 ${theme.cardAccentLeft} bg-white shadow-sm`}
-      >
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
         <div className="overflow-x-auto">
           <table className="min-w-[880px] w-full divide-y divide-slate-200 text-left text-sm">
             <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -213,8 +212,8 @@ export function GestioneUtentiPage() {
                     manId && manLabelById[manId] ? manLabelById[manId] : manId
 
                   return (
-                    <tr key={u.uid} className="hover:bg-slate-50/80">
-                      <td className="px-4 py-3 font-medium text-slate-900 sm:px-5">{u.nome}</td>
+                    <tr key={u.uid} className="hover:bg-slate-50/60">
+                      <td className="px-4 py-3 font-medium text-[#111827] sm:px-5">{u.nome}</td>
                       <td className="max-w-[180px] truncate px-4 py-3 text-slate-700 sm:max-w-xs sm:px-5">
                         {u.email}
                       </td>

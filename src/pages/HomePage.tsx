@@ -7,6 +7,7 @@ import { usePmaDocNome, usePmaDocSnapshot } from '../hooks/usePmaDocNome'
 import { ManifestazioneCard } from '../components/home/ManifestazioneCard'
 import { NewManifestazioneModal } from '../components/home/NewManifestazioneModal'
 import { useManifestazioni } from '../hooks/useManifestazioni'
+import { opPrimaryBtn } from '../components/layout/operativeTokens'
 
 export function HomePage() {
   const { user } = useAuth()
@@ -34,7 +35,7 @@ export function HomePage() {
     <div className="mx-auto max-w-5xl space-y-10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Homepage</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[#111827]">Homepage</h1>
           <p className="mt-1 text-sm text-slate-600">
             Centro PMApp: manifestazioni e accesso rapido in base al tuo ruolo.
           </p>
@@ -46,7 +47,7 @@ export function HomePage() {
               setModalKey((k) => k + 1)
               setModalOpen(true)
             }}
-            className={`inline-flex shrink-0 items-center justify-center rounded-md px-4 py-2.5 text-sm font-medium shadow-sm ${theme.primaryCta} ${theme.primaryCtaHover}`}
+            className={`${opPrimaryBtn} shrink-0 px-5`}
           >
             Nuova manifestazione
           </button>
@@ -56,21 +57,21 @@ export function HomePage() {
       {user && !isSuperadmin && isCentrale ? (
         <section
           aria-labelledby="centrale-hub-heading"
-          className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-6 shadow-sm"
+          className="rounded-lg border border-slate-200 bg-white px-6 py-6 sm:px-8"
         >
-          <h2 id="centrale-hub-heading" className="text-base font-semibold text-emerald-950">
+          <h2 id="centrale-hub-heading" className="text-base font-bold text-[#111827]">
             Centrale operativa
           </h2>
           {centraleManId ? (
             <>
-              <p className="mt-2 text-sm text-emerald-900">
+              <p className="mt-3 text-sm text-slate-600">
                 Sei associato alla manifestazione{' '}
                 <span className="font-medium">{manCentrale?.nome ?? centraleManId}</span>. Apri la
                 dashboard per gestire i PMA e la postazione.
               </p>
               <Link
                 to={`/manifestazione/${encodeURIComponent(centraleManId)}`}
-                className={`mt-4 inline-flex items-center justify-center rounded-md px-4 py-2.5 text-sm font-medium text-white shadow-sm ${theme.primaryCta} ${theme.primaryCtaHover}`}
+                className={`${opPrimaryBtn} mt-4 px-5`}
               >
                 Vai alla dashboard manifestazione
               </Link>
@@ -87,26 +88,26 @@ export function HomePage() {
       {user && !isSuperadmin && staffPmaId ? (
         <section
           aria-labelledby="pma-hub-heading"
-          className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="rounded-lg border border-slate-200 bg-white px-6 py-6 sm:px-8"
         >
-          <h2 id="pma-hub-heading" className="text-base font-semibold text-slate-900">
+          <h2 id="pma-hub-heading" className="text-base font-bold text-[#111827]">
             Il tuo PMA
           </h2>
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="mt-3 text-sm text-slate-600">
             Ruolo {user.rank}: accedi alla dashboard del posto medico avanzato assegnato (
             {pmaNome ?? staffPmaId}).
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
               to={`/pma/${encodeURIComponent(staffPmaId)}`}
-              className={`inline-flex shrink-0 items-center justify-center rounded-md px-4 py-2.5 text-sm font-medium text-white shadow-sm ${theme.primaryCta} ${theme.primaryCtaHover}`}
+              className={`${opPrimaryBtn} shrink-0 px-5`}
             >
               Entra nel PMA
             </Link>
             {pmaManifestazioneId ? (
               <Link
                 to={`/manifestazione/${encodeURIComponent(pmaManifestazioneId)}/impostazioni`}
-                className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+                className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-[#111827] shadow-sm hover:bg-slate-50"
               >
                 Impostazioni generali manifestazione
               </Link>
@@ -117,7 +118,7 @@ export function HomePage() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight text-slate-900">Manifestazioni</h2>
+          <h2 className="text-xl font-bold tracking-tight text-[#111827]">Manifestazioni</h2>
           <p className="mt-1 text-sm text-slate-600">
             Eventi PMApp: stato in tempo reale. Le manifestazioni chiuse sono visibili solo al Superadmin.
           </p>
@@ -146,7 +147,7 @@ export function HomePage() {
       {!loading && !error ? (
         <>
           <section aria-labelledby="aperte-heading">
-            <h2 id="aperte-heading" className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            <h2 id="aperte-heading" className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
               Manifestazioni aperte
             </h2>
             {aperte.length === 0 ? (
@@ -166,7 +167,7 @@ export function HomePage() {
             <section aria-labelledby="chiuse-heading">
               <h2
                 id="chiuse-heading"
-                className="text-sm font-semibold uppercase tracking-wide text-slate-500"
+                className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500"
               >
                 Manifestazioni chiuse
               </h2>

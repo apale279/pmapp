@@ -91,10 +91,10 @@ export function Login() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-100 px-4 py-10">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-white px-4 py-10">
+      <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8">
         <div className="text-center">
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">PMApp</h1>
+          <h1 className="text-xl font-bold tracking-tight text-[#111827]">PMApp</h1>
           <p className="mt-1 text-sm text-slate-500">Accedi con email e password</p>
         </div>
 
@@ -110,7 +110,7 @@ export function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm text-[#111827] focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
             />
           </div>
           <div>
@@ -124,7 +124,7 @@ export function Login() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm text-[#111827] focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
             />
           </div>
           {formError ? (
@@ -135,7 +135,7 @@ export function Login() {
           <button
             type="submit"
             disabled={pending || !isFirebaseReady()}
-            className="w-full rounded-md bg-slate-900 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-full bg-[#2563eb] py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {pending ? 'Accesso in corso…' : 'Accedi'}
           </button>

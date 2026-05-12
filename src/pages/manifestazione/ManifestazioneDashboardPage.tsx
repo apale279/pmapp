@@ -14,6 +14,7 @@ import { PmaCentraleFocusPanel } from '../../components/manifestazione/PmaCentra
 import { PmaCapacityFromPmaId } from '../../components/manifestazione/PmaCapacityGauge'
 import type { CodiceColorePaziente } from '../../types/paziente'
 import { CODICE_COLORE_LABEL } from '../../types/paziente'
+import { opPrimaryBtn } from '../../components/layout/operativeTokens'
 
 function formatDimessoBreve(ts: Timestamp | null): string {
   if (!ts || typeof ts.toDate !== 'function') return '—'
@@ -154,15 +155,13 @@ export function ManifestazioneDashboardPage() {
 
       {man && manExists ? (
         <>
-          <header
-            className={`rounded-xl border border-slate-200 border-l-4 ${theme.cardAccentLeft} bg-white p-6 shadow-sm`}
-          >
+          <header className="rounded-lg border border-slate-200 bg-white px-6 py-6 sm:px-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                   Manifestazione
                 </p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
+                <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#111827]">
                   {man.nome}
                 </h1>
                 <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2 text-sm">
@@ -204,7 +203,7 @@ export function ManifestazioneDashboardPage() {
                       setPmaModalKey((k) => k + 1)
                       setPmaModalOpen(true)
                     }}
-                    className={`rounded-md px-4 py-2.5 text-sm font-medium shadow-sm ${theme.primaryCta} ${theme.primaryCtaHover}`}
+                    className={`${opPrimaryBtn} px-5 text-sm`}
                   >
                     Crea nuovo PMA
                   </button>
@@ -216,7 +215,7 @@ export function ManifestazioneDashboardPage() {
           {showCoordinationBoard && !pmaLoading && !pmaError && pmaList.length > 0 ? (
             <section
               aria-labelledby="coord-heading"
-              className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+              className="rounded-lg border border-slate-200 bg-white px-5 py-5 sm:px-8 sm:py-6"
             >
               <h2
                 id="coord-heading"
