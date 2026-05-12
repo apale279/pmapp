@@ -23,6 +23,7 @@ import {
 } from '../../lib/pdf/pazientePdfReport'
 import { CodiciMinoriModal } from '../../components/pma/CodiciMinoriModal'
 import { PmaManagerShell } from '../../components/pma/PmaManagerShell'
+import { opToolbarBtnSm } from '../../components/layout/operativeTokens'
 import type { CodiceColorePaziente } from '../../types/paziente'
 import { CODICE_COLORE_LABEL, PAZIENTE_STATO_LABEL } from '../../types/paziente'
 import type { PazienteListItem } from '../../hooks/usePazientiForPma'
@@ -36,10 +37,6 @@ const DOT_BG: Record<CodiceColorePaziente, string> = {
   verde: 'bg-emerald-600',
   bianco: 'bg-slate-300',
 }
-
-/** Pulsanti toolbar sotto header PMA Manager. */
-const BTN_TOOLBAR_SM =
-  'inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-[#e2e8f0] bg-white px-3 text-[11px] font-bold uppercase tracking-wide text-slate-900 transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40'
 
 function formatPermanenza(apertura: Timestamp | null, nowMs: number): string {
   if (!apertura?.toMillis) return '—'
@@ -647,7 +644,7 @@ export function PMADashboardPage() {
               : undefined
         }
         onClick={() => void handleNuovoPazienteImmediato()}
-        className={BTN_TOOLBAR_SM}
+        className={opToolbarBtnSm}
       >
         {creating ? '…' : 'NUOVO PAZIENTE'}
       </button>
@@ -662,7 +659,7 @@ export function PMADashboardPage() {
               : undefined
         }
         onClick={() => setCodiciMinoriOpen(true)}
-        className={BTN_TOOLBAR_SM}
+        className={opToolbarBtnSm}
       >
         CODICI MINORI
       </button>
@@ -674,7 +671,7 @@ export function PMADashboardPage() {
           setDimessiModalSearch('')
           setDimessiModalErr(null)
         }}
-        className={BTN_TOOLBAR_SM}
+        className={opToolbarBtnSm}
       >
         PAZIENTI DIMESSI
       </button>
@@ -684,7 +681,7 @@ export function PMADashboardPage() {
         onClick={(e) => {
           if (!pmaId.trim()) e.preventDefault()
         }}
-        className={`${BTN_TOOLBAR_SM} ${!pmaId.trim() ? 'pointer-events-none opacity-40' : ''}`}
+        className={`${opToolbarBtnSm} ${!pmaId.trim() ? 'pointer-events-none opacity-40' : ''}`}
       >
         IMPOSTAZIONI PMA
       </Link>
@@ -693,7 +690,7 @@ export function PMADashboardPage() {
           type="button"
           disabled={zipBusy || !db}
           onClick={() => void handleZipDimessi()}
-          className={`${BTN_TOOLBAR_SM} shrink-0`}
+          className={`${opToolbarBtnSm} shrink-0`}
         >
           {zipBusy ? (
             <>
@@ -856,7 +853,7 @@ export function PMADashboardPage() {
               </div>
               <button
                 type="button"
-                className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium uppercase text-slate-700 hover:bg-slate-50"
                 onClick={() => setDimessiModalOpen(false)}
               >
                 Chiudi
@@ -918,7 +915,7 @@ export function PMADashboardPage() {
                             type="button"
                             disabled={busy || !db}
                             onClick={() => void downloadDimessoPdf(pz.id)}
-                            className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                            className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold uppercase text-slate-800 hover:bg-slate-50 disabled:opacity-50"
                           >
                             {busy ? '…' : 'Scarica PDF'}
                           </button>
@@ -926,7 +923,7 @@ export function PMADashboardPage() {
                             type="button"
                             disabled={busy || !db}
                             onClick={() => void mailDimessoPdf(pz.id)}
-                            className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-900 hover:bg-blue-100 disabled:opacity-50"
+                            className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold uppercase text-blue-900 hover:bg-blue-100 disabled:opacity-50"
                           >
                             {busy ? '…' : 'Invia via mail'}
                           </button>
@@ -975,7 +972,7 @@ export function PMADashboardPage() {
             <div className="mt-6 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium uppercase text-slate-800 hover:bg-slate-50"
                 onClick={() => {
                   setDeleteModal(null)
                   setDeleteErr(null)
@@ -986,7 +983,7 @@ export function PMADashboardPage() {
               {deleteModal.step === 1 ? (
                 <button
                   type="button"
-                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold uppercase text-white hover:bg-amber-700"
                   onClick={() => setDeleteModal({ ...deleteModal, step: 2 })}
                 >
                   Continua
@@ -994,7 +991,7 @@ export function PMADashboardPage() {
               ) : (
                 <button
                   type="button"
-                  className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+                  className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold uppercase text-white hover:bg-red-800"
                   onClick={() => void eseguiElimina()}
                 >
                   Elimina definitivamente

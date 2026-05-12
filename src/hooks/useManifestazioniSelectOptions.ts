@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { useSyncLive } from '../context/SyncLiveContext'
 
 export type ManifestazioneSelectOption = {
   id: string
@@ -12,6 +13,7 @@ export type ManifestazioneSelectOption = {
  * Manifestazioni esistenti per select admin (onSnapshot).
  */
 export function useManifestazioniSelectOptions() {
+  const { bumpSync } = useSyncLive()
   const [items, setItems] = useState<ManifestazioneSelectOption[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -45,16 +47,18 @@ export function useManifestazioniSelectOptions() {
         next.sort((a, b) => a.nome.localeCompare(b.nome, 'it'))
         setItems(next)
         setLoading(false)
+        bumpSync()
       },
       (err) => {
         setError(err.message)
         setItems([])
         setLoading(false)
+        bumpSync()
       },
     )
 
     return () => unsub()
-  }, [])
+  }, [bumpSync])
 
   return { items, loading, error }
 }

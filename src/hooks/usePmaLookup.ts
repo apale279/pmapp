@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { useSyncLive } from '../context/SyncLiveContext'
 
 /**
  * Mappa id documento PMA → nome visualizzato (onSnapshot su tutta la collection `pma`).
  */
 export function usePmaLookup() {
+  const { bumpSync } = useSyncLive()
   const [nomeById, setNomeById] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -32,16 +34,18 @@ export function usePmaLookup() {
         })
         setNomeById(next)
         setLoading(false)
+        bumpSync()
       },
       (err) => {
         setError(err.message)
         setNomeById({})
         setLoading(false)
+        bumpSync()
       },
     )
 
     return () => unsub()
-  }, [])
+  }, [bumpSync])
 
   return { nomeById, loading, error }
 }

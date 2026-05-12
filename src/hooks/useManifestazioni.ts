@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { collection, onSnapshot, type Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { useSyncLive } from '../context/SyncLiveContext'
 import type { Manifestazione, ManifestazioneStato } from '../types/manifestazione'
 
 function parseStato(value: unknown): ManifestazioneStato {
@@ -8,6 +9,7 @@ function parseStato(value: unknown): ManifestazioneStato {
 }
 
 export function useManifestazioni() {
+  const { bumpSync } = useSyncLive()
   const [items, setItems] = useState<Manifestazione[]>([])
   const [loading, setLoading] = useState(() => db !== null)
   const [error, setError] = useState<string | null>(null)
@@ -40,15 +42,17 @@ export function useManifestazioni() {
         })
         setItems(next)
         setLoading(false)
+        bumpSync()
       },
       (err) => {
         setError(err.message)
         setLoading(false)
+        bumpSync()
       },
     )
 
     return () => unsub()
-  }, [])
+  }, [bumpSync])
 
   const sorted = useMemo(() => {
     const copy = [...items]

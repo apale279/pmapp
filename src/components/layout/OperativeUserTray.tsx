@@ -27,7 +27,7 @@ export function OperativeUserTray({ user, logout }: { user: UserProfile; logout:
       <button
         type="button"
         onClick={() => void logout()}
-        className="shrink-0 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
+        className="shrink-0 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase text-red-600 transition-colors hover:bg-red-50"
       >
         Logout
       </button>

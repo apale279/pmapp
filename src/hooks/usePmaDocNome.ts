@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { useSyncLive } from '../context/SyncLiveContext'
 
 export type PmaDocSnapshot = {
   nome: string | null
@@ -11,6 +12,7 @@ export type PmaDocSnapshot = {
 
 /** Metadati PMA da `pma/{id}` (nome + manifestazione collegata). */
 export function usePmaDocSnapshot(pmaId: string | undefined): PmaDocSnapshot {
+  const { bumpSync } = useSyncLive()
   const [nome, setNome] = useState<string | null>(null)
   const [idManifestazione, setIdManifestazione] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -32,6 +34,7 @@ export function usePmaDocSnapshot(pmaId: string | undefined): PmaDocSnapshot {
           setNome(id)
           setIdManifestazione(null)
           setLoading(false)
+          bumpSync()
           return
         }
         const d = snap.data() as Record<string, unknown>
@@ -43,15 +46,17 @@ export function usePmaDocSnapshot(pmaId: string | undefined): PmaDocSnapshot {
         setNome(n)
         setIdManifestazione(mid)
         setLoading(false)
+        bumpSync()
       },
       () => {
         setNome(id)
         setIdManifestazione(null)
         setLoading(false)
+        bumpSync()
       },
     )
     return () => unsub()
-  }, [pmaId])
+  }, [pmaId, bumpSync])
 
   return { nome, idManifestazione, loading }
 }

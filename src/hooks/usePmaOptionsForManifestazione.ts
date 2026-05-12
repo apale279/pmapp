@@ -6,6 +6,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { useSyncLive } from '../context/SyncLiveContext'
 
 export type PmaOption = { id: string; nome: string }
 
@@ -13,6 +14,7 @@ export type PmaOption = { id: string; nome: string }
  * PMA appartenenti a una manifestazione (real-time).
  */
 export function usePmaOptionsForManifestazione(manifestazioneId: string | null) {
+  const { bumpSync } = useSyncLive()
   const [items, setItems] = useState<PmaOption[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -43,15 +45,17 @@ export function usePmaOptionsForManifestazione(manifestazioneId: string | null) 
         next.sort((a, b) => a.nome.localeCompare(b.nome, 'it'))
         setItems(next)
         setLoading(false)
+        bumpSync()
       },
       () => {
         setItems([])
         setLoading(false)
+        bumpSync()
       },
     )
 
     return () => unsub()
-  }, [manifestazioneId])
+  }, [manifestazioneId, bumpSync])
 
   return { items, loading }
 }

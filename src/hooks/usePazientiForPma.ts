@@ -7,6 +7,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { useSyncLive } from '../context/SyncLiveContext'
 import type { CodiceColorePaziente, PazienteStato } from '../types/paziente'
 import { isCodiceColorePaziente, isPazienteStato } from '../types/paziente'
 
@@ -71,6 +72,7 @@ function parseListItem(id: string, d: Record<string, unknown>): PazienteListItem
  * Elenco pazienti del PMA in tempo reale: `where('id_pma', '==', pmaId)`.
  */
 export function usePazientiForPma(pmaId: string | undefined) {
+  const { bumpSync } = useSyncLive()
   const [items, setItems] = useState<PazienteListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -111,16 +113,18 @@ export function usePazientiForPma(pmaId: string | undefined) {
         })
         setItems(next)
         setLoading(false)
+        bumpSync()
       },
       (err) => {
         setError(err.message)
         setItems([])
         setLoading(false)
+        bumpSync()
       },
     )
 
     return () => unsub()
-  }, [pmaId])
+  }, [pmaId, bumpSync])
 
   return { items, loading, error }
 }

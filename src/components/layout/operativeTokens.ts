@@ -12,3 +12,7 @@ export const opPrimaryBtn =
 
 export const opSecondaryBtn =
   'inline-flex items-center justify-center rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-900 transition-colors hover:bg-slate-100'
+
+/** Toolbar sotto header (stile dashboard PMA): compatto, bordo medical. */
+export const opToolbarBtnSm =
+  'inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-[#e2e8f0] bg-white px-3 text-[11px] font-bold uppercase tracking-wide text-slate-900 transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40'

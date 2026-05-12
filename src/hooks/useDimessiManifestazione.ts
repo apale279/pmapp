@@ -8,6 +8,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { useSyncLive } from '../context/SyncLiveContext'
 import type { CodiceColorePaziente } from '../types/paziente'
 import { isCodiceColorePaziente } from '../types/paziente'
 
@@ -45,6 +46,7 @@ function parseRow(id: string, d: Record<string, unknown>): DimessoManifestazione
  * Pazienti dimessi della manifestazione (query composta; ordinamento lato client su `dimesso_at`).
  */
 export function useDimessiManifestazione(manifestazioneId: string | undefined) {
+  const { bumpSync } = useSyncLive()
   const [items, setItems] = useState<DimessoManifestazioneRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -85,16 +87,18 @@ export function useDimessiManifestazione(manifestazioneId: string | undefined) {
         })
         setItems(next)
         setLoading(false)
+        bumpSync()
       },
       (err) => {
         setError(err.message)
         setItems([])
         setLoading(false)
+        bumpSync()
       },
     )
 
     return () => unsub()
-  }, [manifestazioneId])
+  }, [manifestazioneId, bumpSync])
 
   return { items, loading, error }
 }

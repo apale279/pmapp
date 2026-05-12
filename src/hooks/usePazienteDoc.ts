@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { doc, onSnapshot, Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { useSyncLive } from '../context/SyncLiveContext'
 import {
   parseEoQuick,
   parseFarmaci,
@@ -183,6 +184,7 @@ export function parsePazienteFromFirestore(id: string, raw: Record<string, unkno
  * Scheda paziente in tempo reale (`pazienti/{id}`).
  */
 export function usePazienteDoc(pazienteId: string | undefined) {
+  const { bumpSync } = useSyncLive()
   const [data, setData] = useState<Paziente | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -212,21 +214,24 @@ export function usePazienteDoc(pazienteId: string | undefined) {
           setExists(false)
           setData(null)
           setLoading(false)
+          bumpSync()
           return
         }
         setExists(true)
         setData(parsePaziente(snap.id, snap.data() as Record<string, unknown>))
         setLoading(false)
+        bumpSync()
       },
       (err) => {
         setError(err.message)
         setData(null)
         setLoading(false)
+        bumpSync()
       },
     )
 
     return () => unsub()
-  }, [pazienteId])
+  }, [pazienteId, bumpSync])
 
   return { data, loading, error, exists }
 }

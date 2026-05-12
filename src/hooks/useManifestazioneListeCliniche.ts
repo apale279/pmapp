@@ -8,6 +8,7 @@ import {
 import { sortRecordKeysAndValuesIt, sortStringsIt } from '../lib/sortLocaleIt'
 import { EO_CLINICAL_TABS } from '../lib/multilineList'
 import { EO_OPZIONI_RAPIDE } from '../types/cartellaClinica'
+import { useSyncLive } from '../context/SyncLiveContext'
 
 function asStringArray(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null
@@ -135,6 +136,7 @@ export type ManifestazioneCoreListe = {
  * Liste cliniche + IMP_GENERALI (Core v3) da `manifestazioni/{id}` in tempo reale.
  */
 export function useManifestazioneListeCliniche(manifestazioneId: string | undefined): ManifestazioneCoreListe {
+  const { bumpSync } = useSyncLive()
   const [prestazioni, setPrestazioni] = useState<string[]>(() =>
     sortStringsIt([...PRESTAZIONI_LISTA_DEFAULT]),
   )
@@ -178,6 +180,7 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
           setEoQuickLabels(flattenLabelsFromGroups(defG2))
           setEoQuickDefaultLabel(null)
           setLoading(false)
+          bumpSync()
           return
         }
         const d = snap.data() as Record<string, unknown>
@@ -218,6 +221,7 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
         setEoQuickLabels(eoFlat)
         setEoQuickDefaultLabel(eoDef)
         setLoading(false)
+        bumpSync()
       },
       () => {
         setPrestazioni(sortStringsIt([...PRESTAZIONI_LISTA_DEFAULT]))
@@ -229,11 +233,12 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
         setEoQuickLabels(flattenLabelsFromGroups(defG3))
         setEoQuickDefaultLabel(null)
         setLoading(false)
+        bumpSync()
       },
     )
 
     return () => unsub()
-  }, [manifestazioneId])
+  }, [manifestazioneId, bumpSync])
 
   return useMemo(
     () => ({

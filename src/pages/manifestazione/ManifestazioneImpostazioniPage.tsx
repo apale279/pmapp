@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { deleteField, doc, onSnapshot, updateDoc } from 'firebase/firestore'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useSyncLive } from '../../context/SyncLiveContext'
 import { db } from '../../lib/firebase'
 import { ChipTagField } from '../../components/manifestazione/ChipTagField'
+import { OperativePageGrid } from '../../components/layout/OperativePageGrid'
+import { opPrimaryBtn, opToolbarBtnSm } from '../../components/layout/operativeTokens'
 import {
   EO_CLINICAL_TABS,
   firstEoRapidoDefaultFromDrafts,
@@ -94,6 +97,7 @@ export function ManifestazioneImpostazioniPage() {
   const { id: idParam } = useParams<{ id: string }>()
   const manifestazioneId = idParam ? decodeURIComponent(idParam) : ''
   const { user } = useAuth()
+  const { bumpSync } = useSyncLive()
   const isReadOnlyTriage = user?.rank === 'Triage'
 
   const [prestazioniDraft, setPrestazioniDraft] = useState('')
@@ -121,6 +125,7 @@ export function ManifestazioneImpostazioniPage() {
       (snap) => {
         if (!snap.exists()) {
           setLoading(false)
+          bumpSync()
           return
         }
         const d = snap.data() as Record<string, unknown>
@@ -163,14 +168,16 @@ export function ManifestazioneImpostazioniPage() {
         setEoDraft(nextEoDraft)
 
         setLoading(false)
+        bumpSync()
       },
       (e) => {
         setError(e.message)
         setLoading(false)
+        bumpSync()
       },
     )
     return () => unsub()
-  }, [manifestazioneId])
+  }, [manifestazioneId, bumpSync])
 
   const setTipoEventoSync = useCallback((next: string[]) => {
     const sorted = sortStringsIt(next)
@@ -218,13 +225,23 @@ export function ManifestazioneImpostazioniPage() {
           : { dettaglio_eo_rapido_default: deleteField() }),
       })
       setSaved('Salvataggio completato.')
+      bumpSync()
       window.setTimeout(() => setSaved(null), 5000)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Salvataggio non riuscito.')
     } finally {
       setSaving(false)
     }
-  }, [isReadOnlyTriage, manifestazioneId, prestazioniDraft, farmaciDraft, tipoEvento, dettaglioDraft, eoDraft])
+  }, [
+    isReadOnlyTriage,
+    manifestazioneId,
+    prestazioniDraft,
+    farmaciDraft,
+    tipoEvento,
+    dettaglioDraft,
+    eoDraft,
+    bumpSync,
+  ])
 
   const toggleAcc = (tipo: string) => {
     setOpenAcc((o) => ({ ...o, [tipo]: !o[tipo] }))
@@ -245,33 +262,58 @@ export function ManifestazioneImpostazioniPage() {
   }, [tipoEvento])
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 pb-12">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-[#111827]">
-          Impostazioni manifestazione
-          {isReadOnlyTriage ? (
-            <span className="ml-2 text-base font-normal text-slate-500">(sola lettura)</span>
-          ) : null}
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">Documento: manifestazioni/{manifestazioneId || '—'}</p>
-        <p className="mt-2 text-sm text-slate-600">
-          Prestazioni e farmaci: una riga per voce; usa &quot;Ordina Alfabeticamente&quot; per pulire e
-          ordinare. Tipo evento = evento lesivo (es. trauma).{' '}
-          <strong>Dettaglio evento per tipo</strong>: al salvataggio righe pulite, chiavi e valori ordinati
-          alfabeticamente. <strong>Dettaglio EO rapido</strong>: l&apos;ordine delle righe è clinico — non viene
-          mai riordinato alfabeticamente. Il primo valore EO non vuoto seguendo le tab (GENERALE, poi le altre)
-          definisce <code className="rounded bg-slate-100 px-1">dettaglio_eo_rapido_default</code>.{' '}
-          <code className="rounded bg-slate-100 px-1">updateDoc</code> aggiorna solo i campi indicati.
-        </p>
-        {isReadOnlyTriage ? (
-          <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-            Profilo <strong>Triage</strong>: puoi consultare le impostazioni generali della manifestazione; la
-            modifica e il salvataggio sono riservati ad altri ruoli.
-          </p>
-        ) : null}
-      </header>
+    <div className="mx-auto w-full max-w-[1920px] pb-12">
+      <OperativePageGrid
+        main={
+          <>
+            <header className="mb-6 rounded-lg border border-[#e2e8f0] bg-white px-6 py-5 sm:px-8">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-slate-500">
+                    Manifestazione
+                  </p>
+                  <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+                    Impostazioni manifestazione
+                    {isReadOnlyTriage ? (
+                      <span className="ml-2 text-base font-normal text-slate-500">(sola lettura)</span>
+                    ) : null}
+                  </h1>
+                  <p className="mt-1 text-[13px] text-slate-500">
+                    Documento: manifestazioni/{manifestazioneId || '—'}
+                  </p>
+                </div>
+                <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:items-end">
+                  <Link
+                    to={`/manifestazione/${encodeURIComponent(manifestazioneId)}`}
+                    className={`${opToolbarBtnSm} inline-flex justify-center no-underline`}
+                  >
+                    Torna alla dashboard
+                  </Link>
+                  {!isReadOnlyTriage ? (
+                    <button
+                      type="button"
+                      disabled={saving || !manifestazioneId}
+                      onClick={() => void salva()}
+                      className={`${opPrimaryBtn} inline-flex min-h-10 items-center justify-center gap-2 px-5`}
+                    >
+                      {saving ? (
+                        <>
+                          <span
+                            className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                            aria-hidden
+                          />
+                          <span>Salvataggio…</span>
+                        </>
+                      ) : (
+                        'Salva impostazioni'
+                      )}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </header>
 
-      {loading ? (
+            {loading ? (
         <div className="flex items-center gap-2 text-sm text-slate-600">
           <span
             className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-slate-800"
@@ -297,7 +339,7 @@ export function ManifestazioneImpostazioniPage() {
 
       {!loading ? (
         <div className="space-y-10">
-          <section className="rounded-lg border border-slate-200 bg-white px-6 py-6 sm:px-8">
+          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
             <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Liste cliniche</h2>
             <div className="mt-4 space-y-8">
               <div>
@@ -307,7 +349,7 @@ export function ManifestazioneImpostazioniPage() {
                     type="button"
                     disabled={isReadOnlyTriage}
                     onClick={() => setPrestazioniDraft((t) => sortLinesText(t))}
-                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium uppercase text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
                   >
                     Ordina Alfabeticamente
                   </button>
@@ -334,7 +376,7 @@ export function ManifestazioneImpostazioniPage() {
                     type="button"
                     disabled={isReadOnlyTriage}
                     onClick={() => setFarmaciDraft((t) => sortLinesText(t))}
-                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium uppercase text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
                   >
                     Ordina Alfabeticamente
                   </button>
@@ -357,7 +399,7 @@ export function ManifestazioneImpostazioniPage() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-slate-200 bg-white px-6 py-6 sm:px-8">
+          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
             <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Tipo evento</h2>
             <p className="mt-1 text-xs text-slate-500">
               Evento lesivo selezionabile in scheda (es. trauma, caduta). Campo Firestore:{' '}
@@ -373,7 +415,7 @@ export function ManifestazioneImpostazioniPage() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-slate-200 bg-white px-6 py-6 sm:px-8">
+          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
             <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
               Dettaglio evento per tipo
             </h2>
@@ -389,7 +431,7 @@ export function ManifestazioneImpostazioniPage() {
                 {tipoEvento.map((tipo) => {
                   const open = Boolean(openAcc[tipo])
                   return (
-                    <div key={tipo} className="overflow-hidden rounded-lg border border-slate-200">
+                    <div key={tipo} className="overflow-hidden rounded-lg border border-[#e2e8f0]">
                       <button
                         type="button"
                         onClick={() => toggleAcc(tipo)}
@@ -423,7 +465,7 @@ export function ManifestazioneImpostazioniPage() {
             )}
           </section>
 
-          <section className="rounded-lg border border-slate-200 bg-white px-6 py-6 sm:px-8">
+          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
             <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
               Dettaglio EO rapido (tab clinici)
             </h2>
@@ -443,8 +485,8 @@ export function ManifestazioneImpostazioniPage() {
                     onClick={() => setEoActiveTab(tab)}
                     className={
                       sel
-                        ? 'rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white'
-                        : 'rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100'
+                        ? 'rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold uppercase text-white'
+                        : 'rounded-md px-3 py-1.5 text-xs font-medium uppercase text-slate-600 hover:bg-slate-100'
                     }
                   >
                     {tab}
@@ -467,28 +509,43 @@ export function ManifestazioneImpostazioniPage() {
             </div>
           </section>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              disabled={saving || !manifestazioneId || isReadOnlyTriage}
-              onClick={() => void salva()}
-              className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-            >
-              {saving ? (
-                <>
-                  <span
-                    className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
-                    aria-hidden
-                  />
-                  <span>Salvataggio…</span>
-                </>
-              ) : (
-                'Salva impostazioni'
-              )}
-            </button>
-          </div>
         </div>
       ) : null}
+          </>
+        }
+        aside={
+          <div className="space-y-4">
+            <section className="rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
+              <h2 className="text-[12px] font-bold uppercase tracking-wide text-slate-500">Guida rapida</h2>
+              <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
+                Prestazioni e farmaci: una riga per voce; usa &quot;Ordina Alfabeticamente&quot; per pulire e
+                ordinare. Tipo evento = evento lesivo (es. trauma).{' '}
+                <strong className="text-slate-900">Dettaglio evento per tipo</strong>: al salvataggio righe
+                pulite, chiavi e valori ordinati alfabeticamente.{' '}
+                <strong className="text-slate-900">Dettaglio EO rapido</strong>: l&apos;ordine delle righe è
+                clinico — non viene mai riordinato alfabeticamente. Il primo valore EO non vuoto seguendo le tab
+                (GENERALE, poi le altre) definisce{' '}
+                <code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1 font-mono text-xs">
+                  dettaglio_eo_rapido_default
+                </code>
+                .{' '}
+                <code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1 font-mono text-xs">
+                  updateDoc
+                </code>{' '}
+                aggiorna solo i campi indicati.
+              </p>
+            </section>
+            {isReadOnlyTriage ? (
+              <section className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-4">
+                <p className="text-[13px] leading-relaxed text-slate-700">
+                  Profilo <strong>Triage</strong>: puoi consultare le impostazioni generali della manifestazione;
+                  la modifica e il salvataggio sono riservati ad altri ruoli.
+                </p>
+              </section>
+            ) : null}
+          </div>
+        }
+      />
     </div>
   )
 }

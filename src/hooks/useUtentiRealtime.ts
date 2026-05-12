@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { useSyncLive } from '../context/SyncLiveContext'
 import type { UtenteListRow } from '../types/utenteList'
 import { isUserRank, type UserRank } from '../types/userProfile'
 
@@ -40,6 +41,7 @@ function parseRow(uid: string, d: Record<string, unknown>): UtenteListRow {
  * Elenco utenti in tempo reale (onSnapshot su `utenti`).
  */
 export function useUtentiRealtime() {
+  const { bumpSync } = useSyncLive()
   const [items, setItems] = useState<UtenteListRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -69,16 +71,18 @@ export function useUtentiRealtime() {
         })
         setItems(next)
         setLoading(false)
+        bumpSync()
       },
       (err) => {
         setError(err.message)
         setItems([])
         setLoading(false)
+        bumpSync()
       },
     )
 
     return () => unsub()
-  }, [])
+  }, [bumpSync])
 
   return { items, loading, error }
 }

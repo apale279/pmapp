@@ -7,6 +7,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { useSyncLive } from '../context/SyncLiveContext'
 import type { Pma } from '../types/pma'
 
 function parsePma(docId: string, d: Record<string, unknown>): Pma {
@@ -35,6 +36,7 @@ function parsePma(docId: string, d: Record<string, unknown>): Pma {
  * Elenco PMA della manifestazione in tempo reale (onSnapshot).
  */
 export function usePmaListForManifestazione(manifestazioneId: string | undefined) {
+  const { bumpSync } = useSyncLive()
   const [items, setItems] = useState<Pma[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -65,16 +67,18 @@ export function usePmaListForManifestazione(manifestazioneId: string | undefined
         next.sort((a, b) => a.nome.localeCompare(b.nome, 'it'))
         setItems(next)
         setLoading(false)
+        bumpSync()
       },
       (err) => {
         setError(err.message)
         setItems([])
         setLoading(false)
+        bumpSync()
       },
     )
 
     return () => unsub()
-  }, [manifestazioneId])
+  }, [manifestazioneId, bumpSync])
 
   return { items, loading, error }
 }

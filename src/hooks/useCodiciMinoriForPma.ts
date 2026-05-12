@@ -8,6 +8,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { useSyncLive } from '../context/SyncLiveContext'
 import type { CodiceMinore } from '../types/codiceMinore'
 
 function numOrNull(v: unknown): number | null {
@@ -44,6 +45,7 @@ function parseDoc(id: string, d: Record<string, unknown>): CodiceMinore | null {
 }
 
 export function useCodiciMinoriForPma(pmaId: string | undefined) {
+  const { bumpSync } = useSyncLive()
   const [items, setItems] = useState<CodiceMinore[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -74,16 +76,18 @@ export function useCodiciMinoriForPma(pmaId: string | undefined) {
         })
         setItems(next)
         setLoading(false)
+        bumpSync()
       },
       (err) => {
         setError(err.message)
         setItems([])
         setLoading(false)
+        bumpSync()
       },
     )
 
     return () => unsub()
-  }, [pmaId])
+  }, [pmaId, bumpSync])
 
   return { items, loading, error }
 }

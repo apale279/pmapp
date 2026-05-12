@@ -2,6 +2,7 @@ import { useEffect, useId, useState, type FormEvent } from 'react'
 import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { STAFF_RANKS, type StaffRank } from '../../types/userProfile'
 import { db } from '../../lib/firebase'
+import { useSyncLive } from '../../context/SyncLiveContext'
 import {
   IdentityToolkitSignUpError,
   identityToolkitSignUp,
@@ -17,6 +18,7 @@ type Props = {
 }
 
 export function AddUserModal({ open, onClose }: Props) {
+  const { bumpSync } = useSyncLive()
   const titleId = useId()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -66,15 +68,17 @@ export function AddUserModal({ open, onClose }: Props) {
         next.sort((a, b) => a.nome.localeCompare(b.nome, 'it'))
         setManifestazioni(next)
         setManifestazioniLoading(false)
+        bumpSync()
       },
       (err) => {
         setManifestazioniListError(err.message)
         setManifestazioni([])
         setManifestazioniLoading(false)
+        bumpSync()
       },
     )
     return () => unsub()
-  }, [open])
+  }, [open, bumpSync])
 
   if (!open) return null
 

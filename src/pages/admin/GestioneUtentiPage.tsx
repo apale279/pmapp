@@ -14,6 +14,7 @@ import { useUtentiRealtime } from '../../hooks/useUtentiRealtime'
 import type { UtenteListRow } from '../../types/utenteList'
 import { AddUserModal } from '../../components/admin/AddUserModal'
 import { EditUserModal } from '../../components/admin/EditUserModal'
+import { OperativePageGrid } from '../../components/layout/OperativePageGrid'
 import { opPrimaryBtn } from '../../components/layout/operativeTokens'
 
 function cellMuted(value: string | undefined, emptyLabel: string) {
@@ -128,141 +129,165 @@ export function GestioneUtentiPage() {
   const listError = utentiError ?? manError
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#111827]">Gestione utenti</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Elenco in tempo reale dalla collection <code className="rounded bg-slate-100 px-1">utenti</code>.
-            Gli account Superadmin non compaiono in questa vista.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setNuovoKey((k) => k + 1)
-            setNuovoOpen(true)
-          }}
-          className={`${opPrimaryBtn} shrink-0 px-5 text-sm`}
-        >
-          Nuovo operatore
-        </button>
-      </header>
+    <>
+      <OperativePageGrid
+        main={
+          <div className="space-y-6">
+            <header className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-5 sm:px-8">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-900">Gestione utenti</h1>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Elenco in tempo reale dalla collection <code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1 font-mono text-xs">utenti</code>.
+                    Gli account Superadmin non compaiono in questa vista.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNuovoKey((k) => k + 1)
+                    setNuovoOpen(true)
+                  }}
+                  className={`${opPrimaryBtn} shrink-0 px-5 text-sm`}
+                >
+                  Nuovo operatore
+                </button>
+              </div>
+            </header>
 
-      {listError ? (
-        <div
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-          role="alert"
-        >
-          {listError}
-        </div>
-      ) : null}
+            {listError ? (
+              <div
+                className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+                role="alert"
+              >
+                {listError}
+              </div>
+            ) : null}
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="overflow-x-auto">
-          <table className="min-w-[880px] w-full divide-y divide-slate-200 text-left text-sm">
-            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <tr>
-                <th scope="col" className="px-4 py-3 sm:px-5">
-                  Nome
-                </th>
-                <th scope="col" className="px-4 py-3 sm:px-5">
-                  Email
-                </th>
-                <th scope="col" className="whitespace-nowrap px-4 py-3 sm:px-5">
-                  Rank
-                </th>
-                <th scope="col" className="px-4 py-3 sm:px-5">
-                  Manifestazione
-                </th>
-                <th scope="col" className="px-4 py-3 sm:px-5">
-                  Ambito operativo
-                </th>
-                <th scope="col" className="whitespace-nowrap px-4 py-3 sm:px-5">
-                  Firma
-                </th>
-                <th scope="col" className="whitespace-nowrap px-4 py-3 text-right sm:px-5">
-                  Azioni
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {utentiLoading || manLoading ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
-                    <span className="inline-flex items-center gap-2">
-                      <span
-                        className={`h-5 w-5 animate-spin rounded-full border-2 ${theme.spinnerAccent}`}
-                        aria-hidden
-                      />
-                      Caricamento…
-                    </span>
-                  </td>
-                </tr>
-              ) : visibili.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
-                    Nessun operatore da mostrare (solo account non Superadmin).
-                  </td>
-                </tr>
-              ) : (
-                visibili.map((u) => {
-                  const manId = u.id_manifestazione
-                  const manLabel =
-                    manId && manLabelById[manId] ? manLabelById[manId] : manId
-
-                  return (
-                    <tr key={u.uid} className="hover:bg-slate-50/60">
-                      <td className="px-4 py-3 font-medium text-[#111827] sm:px-5">{u.nome}</td>
-                      <td className="max-w-[180px] truncate px-4 py-3 text-slate-700 sm:max-w-xs sm:px-5">
-                        {u.email}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 sm:px-5">
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-800">
-                          {u.rank}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 sm:px-5">
-                        {cellMuted(manLabel, 'Non assegnata')}
-                      </td>
-                      <td className="max-w-[220px] px-4 py-3 sm:px-5">
-                        <AmbitoCell u={u} pmaNomeById={pmaNomeById} />
-                      </td>
-                      <td className="px-4 py-3 sm:px-5">{firmaMedicoCell(u)}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right sm:px-5">
-                        <div className="flex flex-wrap justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditKey((k) => k + 1)
-                              setEditUtente(u)
-                            }}
-                            className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50 sm:text-sm"
-                          >
-                            Modifica
-                          </button>
-                          <button
-                            type="button"
-                            disabled={u.uid === user.uid}
-                            title={u.uid === user.uid ? 'Operazione non disponibile' : undefined}
-                            onClick={() => {
-                              setDeleteError(null)
-                              setDeleteTarget(u)
-                            }}
-                            className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
-                          >
-                            Elimina
-                          </button>
-                        </div>
-                      </td>
+            <div className="overflow-hidden rounded-lg border border-[#e2e8f0] bg-white">
+              <div className="overflow-x-auto">
+                <table className="min-w-[880px] w-full divide-y divide-slate-200 text-left text-sm">
+                  <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 sm:px-5">
+                        Nome
+                      </th>
+                      <th scope="col" className="px-4 py-3 sm:px-5">
+                        Email
+                      </th>
+                      <th scope="col" className="whitespace-nowrap px-4 py-3 sm:px-5">
+                        Rank
+                      </th>
+                      <th scope="col" className="px-4 py-3 sm:px-5">
+                        Manifestazione
+                      </th>
+                      <th scope="col" className="px-4 py-3 sm:px-5">
+                        Ambito operativo
+                      </th>
+                      <th scope="col" className="whitespace-nowrap px-4 py-3 sm:px-5">
+                        Firma
+                      </th>
+                      <th scope="col" className="whitespace-nowrap px-4 py-3 text-right sm:px-5">
+                        Azioni
+                      </th>
                     </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {utentiLoading || manLoading ? (
+                      <tr>
+                        <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
+                          <span className="inline-flex items-center gap-2">
+                            <span
+                              className={`h-5 w-5 animate-spin rounded-full border-2 ${theme.spinnerAccent}`}
+                              aria-hidden
+                            />
+                            Caricamento…
+                          </span>
+                        </td>
+                      </tr>
+                    ) : visibili.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
+                          Nessun operatore da mostrare (solo account non Superadmin).
+                        </td>
+                      </tr>
+                    ) : (
+                      visibili.map((u) => {
+                        const manId = u.id_manifestazione
+                        const manLabel =
+                          manId && manLabelById[manId] ? manLabelById[manId] : manId
+
+                        return (
+                          <tr key={u.uid} className="hover:bg-slate-50/60">
+                            <td className="px-4 py-3 font-medium text-slate-900 sm:px-5">{u.nome}</td>
+                            <td className="max-w-[180px] truncate px-4 py-3 text-slate-700 sm:max-w-xs sm:px-5">
+                              {u.email}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 sm:px-5">
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-800">
+                                {u.rank}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 sm:px-5">{cellMuted(manLabel, 'Non assegnata')}</td>
+                            <td className="max-w-[220px] px-4 py-3 sm:px-5">
+                              <AmbitoCell u={u} pmaNomeById={pmaNomeById} />
+                            </td>
+                            <td className="px-4 py-3 sm:px-5">{firmaMedicoCell(u)}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-right sm:px-5">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditKey((k) => k + 1)
+                                    setEditUtente(u)
+                                  }}
+                                  className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium uppercase text-slate-800 hover:bg-slate-50 sm:text-sm"
+                                >
+                                  Modifica
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={u.uid === user.uid}
+                                  title={u.uid === user.uid ? 'Operazione non disponibile' : undefined}
+                                  onClick={() => {
+                                    setDeleteError(null)
+                                    setDeleteTarget(u)
+                                  }}
+                                  className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium uppercase text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
+                                >
+                                  Elimina
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        }
+        aside={
+          <div className="space-y-4">
+            <section className="rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
+              <h2 className="text-[12px] font-bold uppercase tracking-wide text-slate-500">Sincronizzazione</h2>
+              <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
+                La tabella si aggiorna in tempo reale tramite Firestore. Le modifiche da altri operatori compaiono
+                automaticamente.
+              </p>
+            </section>
+            <section className="rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
+              <h2 className="text-[12px] font-bold uppercase tracking-wide text-slate-500">Ambito</h2>
+              <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
+                <strong className="text-slate-900">Centrale</strong> vede tutto l&apos;evento; gli altri ruoli
+                sono legati a una manifestazione e, se applicabile, a un PMA.
+              </p>
+            </section>
+          </div>
+        }
+      />
 
       <AddUserModal
         key={nuovoKey}
@@ -319,7 +344,7 @@ export function GestioneUtentiPage() {
                 type="button"
                 disabled={deleteBusy}
                 onClick={() => setDeleteTarget(null)}
-                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium uppercase text-slate-800 hover:bg-slate-50 disabled:opacity-50"
               >
                 Annulla
               </button>
@@ -327,7 +352,7 @@ export function GestioneUtentiPage() {
                 type="button"
                 disabled={deleteBusy}
                 onClick={() => void confirmDelete()}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium uppercase text-white hover:bg-red-700 disabled:opacity-60"
               >
                 {deleteBusy ? 'Eliminazione…' : 'Elimina utente'}
               </button>
@@ -335,6 +360,6 @@ export function GestioneUtentiPage() {
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   )
 }

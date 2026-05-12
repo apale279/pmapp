@@ -135,7 +135,7 @@ export function Login() {
           <button
             type="submit"
             disabled={pending || !isFirebaseReady()}
-            className="w-full rounded-full bg-[#2563eb] py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-full bg-[#2563eb] py-2.5 text-sm font-semibold uppercase text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {pending ? 'Accesso in corso…' : 'Accedi'}
           </button>
@@ -155,7 +155,7 @@ export function Login() {
               type="button"
               disabled={bootstrapBusy || !isFirebaseReady()}
               onClick={() => void handleBootstrap()}
-              className="mt-3 w-full rounded-md border border-slate-300 bg-white py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-3 w-full rounded-md border border-slate-300 bg-white py-2 text-sm font-medium uppercase text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {bootstrapBusy ? 'Creazione…' : 'Crea Superadmin di test (se DB vuoto)'}
             </button>
@@ -170,7 +170,7 @@ export function Login() {
             <p>Hai un account ma manca il profilo Firestore.</p>
             <button
               type="button"
-              className="mt-2 text-sm font-medium text-amber-950 underline"
+              className="mt-2 text-sm font-medium uppercase text-amber-950 underline"
               onClick={() => void logout()}
             >
               Esci e riprova con un altro account
