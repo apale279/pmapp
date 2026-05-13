@@ -497,7 +497,6 @@ export function PMADashboardPage() {
   )
 
   const canOpenCodiciMinori =
-    !isPmaDashboardReadOnly &&
     Boolean(db && pmaId.trim() && manifestazioneForCodiciMinori) &&
     Boolean(
       user &&

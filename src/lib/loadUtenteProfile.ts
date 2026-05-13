@@ -41,6 +41,15 @@ export async function loadUtenteProfile(
       ? data.firma_medico_base64.trim()
       : undefined)
 
+  const telefono =
+    typeof data.telefono === 'string' && data.telefono.trim() !== '' ? data.telefono.trim() : undefined
+  const email_contatto =
+    typeof data.email_contatto === 'string' && data.email_contatto.trim() !== ''
+      ? data.email_contatto.trim()
+      : undefined
+  const note_utente =
+    typeof data.note_utente === 'string' && data.note_utente.trim() !== '' ? data.note_utente.trim() : undefined
+
   return {
     uid,
     email,
@@ -48,6 +57,9 @@ export async function loadUtenteProfile(
     rank,
     ...(idManifestazione !== undefined ? { id_manifestazione: idManifestazione } : {}),
     ...(idPma !== undefined ? { id_pma: idPma } : {}),
+    ...(telefono !== undefined ? { telefono } : {}),
+    ...(email_contatto !== undefined ? { email_contatto } : {}),
+    ...(note_utente !== undefined ? { note_utente } : {}),
     ...(firmaUrl !== undefined ? { firmaUrl } : {}),
     ...(firma_medico_base64 !== undefined ? { firma_medico_base64 } : {}),
   }

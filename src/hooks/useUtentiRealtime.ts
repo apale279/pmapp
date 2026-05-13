@@ -25,6 +25,15 @@ function parseRow(uid: string, d: Record<string, unknown>): UtenteListRow {
         ? d.firma_medico_base64.trim()
         : undefined
 
+  const telefono =
+    typeof d.telefono === 'string' && d.telefono.trim() !== '' ? d.telefono.trim() : undefined
+  const email_contatto =
+    typeof d.email_contatto === 'string' && d.email_contatto.trim() !== ''
+      ? d.email_contatto.trim()
+      : undefined
+  const note_utente =
+    typeof d.note_utente === 'string' && d.note_utente.trim() !== '' ? d.note_utente.trim() : undefined
+
   return {
     uid,
     nome: typeof d.nome === 'string' && d.nome.trim() !== '' ? d.nome.trim() : 'Senza nome',
@@ -32,6 +41,9 @@ function parseRow(uid: string, d: Record<string, unknown>): UtenteListRow {
     rank,
     ...(idMan !== undefined ? { id_manifestazione: idMan } : {}),
     ...(idPma !== undefined ? { id_pma: idPma } : {}),
+    ...(telefono !== undefined ? { telefono } : {}),
+    ...(email_contatto !== undefined ? { email_contatto } : {}),
+    ...(note_utente !== undefined ? { note_utente } : {}),
     ...(firmaMedicoBase64Raw !== undefined ? { firmaMedicoBase64: firmaMedicoBase64Raw } : {}),
     ...(firmaUrl !== undefined ? { firmaUrl } : {}),
   }

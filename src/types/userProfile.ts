@@ -46,6 +46,12 @@ export interface UserProfile {
   rank: UserRank
   id_manifestazione?: string
   id_pma?: string
+  /** Telefono di contatto (opzionale). */
+  telefono?: string
+  /** Email di contatto aggiuntiva (opzionale; diversa dall’email di login Auth). */
+  email_contatto?: string
+  /** Note interne (opzionale). */
+  note_utente?: string
   /** URL immagine firma (solo Medico; legacy Storage). */
   firmaUrl?: string
   /** Data URL / Base64 firma medico (senza Storage). */

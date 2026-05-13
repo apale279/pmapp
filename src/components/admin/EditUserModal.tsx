@@ -6,6 +6,7 @@ import { STAFF_RANKS, isStaffRank, staffRankRequiresPma, type StaffRank } from '
 import type { ManifestazioneSelectOption } from '../../hooks/useManifestazioniSelectOptions'
 import { usePmaOptionsForManifestazione } from '../../hooks/usePmaOptionsForManifestazione'
 import { readImageFileAsDataUrl, validateFirmaFile } from '../../lib/firmaMedicoImage'
+import { syncUtenteTelefonoToRubrica } from '../../lib/syncUtenteRubricaContatto'
 
 type Props = {
   open: boolean
@@ -14,6 +15,8 @@ type Props = {
   manifestazioniLoading: boolean
   onClose: () => void
   onSaved: () => void
+  /** Centrale: manifestazione non modificabile. */
+  fixedManifestazioneId?: string
 }
 
 type InnerProps = {
@@ -22,6 +25,7 @@ type InnerProps = {
   manifestazioniLoading: boolean
   onClose: () => void
   onSaved: () => void
+  fixedManifestazioneId?: string
 }
 
 function EditUserModalInner({
@@ -30,9 +34,13 @@ function EditUserModalInner({
   manifestazioniLoading,
   onClose,
   onSaved,
+  fixedManifestazioneId,
 }: InnerProps) {
   const titleId = useId()
   const [nome, setNome] = useState(() => row.nome)
+  const [telefono, setTelefono] = useState(() => row.telefono ?? '')
+  const [emailContatto, setEmailContatto] = useState(() => row.email_contatto ?? '')
+  const [noteUtente, setNoteUtente] = useState(() => row.note_utente ?? '')
   const [rank, setRank] = useState<StaffRank>(() =>
     isStaffRank(row.rank) ? row.rank : 'Soccorritore',
   )
@@ -110,6 +118,22 @@ function EditUserModalInner({
       patch.id_pma = pmaNew ? pmaNew : null
     }
 
+    const telT = telefono.trim()
+    const telOrig = (row.telefono ?? '').trim()
+    if (telT !== telOrig) {
+      patch.telefono = telT ? telT : deleteField()
+    }
+    const ecT = emailContatto.trim()
+    const ecOrig = (row.email_contatto ?? '').trim()
+    if (ecT !== ecOrig) {
+      patch.email_contatto = ecT ? ecT : deleteField()
+    }
+    const nT = noteUtente.trim()
+    const nOrig = (row.note_utente ?? '').trim()
+    if (nT !== nOrig) {
+      patch.note_utente = nT ? nT : deleteField()
+    }
+
     const hadFirma = Boolean(row.firmaUrl || row.firmaMedicoBase64)
 
     if (rank !== 'Medico') {
@@ -137,6 +161,13 @@ function EditUserModalInner({
     setError(null)
     try {
       await updateDoc(doc(db, 'utenti', row.uid), patch)
+      await syncUtenteTelefonoToRubrica(db, {
+        uid: row.uid,
+        idManifestazione: manNew,
+        nome: nomeT,
+        telefono: telT,
+        note: nT,
+      })
       onSaved()
       onClose()
     } catch (err) {
@@ -176,13 +207,44 @@ function EditUserModalInner({
 
         <form className="space-y-0" onSubmit={(e) => void handleSubmit(e)}>
           <label className="pma-field" htmlFor="eu-nome">
-            <span className="pma-field__label">Nome</span>
+            <span className="pma-field__label">Nome (obbligatorio)</span>
             <input
               id="eu-nome"
               type="text"
               required
               value={nome}
               onChange={(ev) => setNome(ev.target.value)}
+            />
+          </label>
+
+          <label className="pma-field" htmlFor="eu-tel">
+            <span className="pma-field__label">Telefono (opzionale)</span>
+            <input
+              id="eu-tel"
+              type="tel"
+              value={telefono}
+              onChange={(ev) => setTelefono(ev.target.value)}
+            />
+            <p className="mt-1 text-xs pma-field__value--muted">
+              Se presente, sincronizza la rubrica manifestazione (nome e numero; note solo se compilate).
+            </p>
+          </label>
+          <label className="pma-field" htmlFor="eu-email-contatto">
+            <span className="pma-field__label">Email di contatto (opzionale)</span>
+            <input
+              id="eu-email-contatto"
+              type="email"
+              value={emailContatto}
+              onChange={(ev) => setEmailContatto(ev.target.value)}
+            />
+          </label>
+          <label className="pma-field" htmlFor="eu-note">
+            <span className="pma-field__label">Note (opzionale)</span>
+            <textarea
+              id="eu-note"
+              rows={2}
+              value={noteUtente}
+              onChange={(ev) => setNoteUtente(ev.target.value)}
             />
           </label>
 
@@ -224,7 +286,7 @@ function EditUserModalInner({
                 setIdManifestazione(ev.target.value)
                 setIdPma('')
               }}
-              disabled={manifestazioniLoading}
+              disabled={manifestazioniLoading || Boolean(fixedManifestazioneId?.trim())}
             >
               <option value="">
                 {manifestazioniLoading ? 'Caricamento…' : '— Seleziona —'}
@@ -406,6 +468,7 @@ export function EditUserModal({
   manifestazioniLoading,
   onClose,
   onSaved,
+  fixedManifestazioneId,
 }: Props) {
   if (!open || !utente) return null
   return (
@@ -416,6 +479,7 @@ export function EditUserModal({
       manifestazioniLoading={manifestazioniLoading}
       onClose={onClose}
       onSaved={onSaved}
+      fixedManifestazioneId={fixedManifestazioneId}
     />
   )
 }

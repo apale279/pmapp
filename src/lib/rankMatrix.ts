@@ -46,10 +46,9 @@ export function loginAllows(rank: UserRank, op: 'READ' | 'CREATE'): boolean {
   return op === 'READ' ? hasToken(read, rank, 'READ') : hasToken(create, rank, 'CREATE')
 }
 
-/** Gestione utenti: solo Superadmin (READ + CUD). */
+/** Gestione utenti: Superadmin (globale); Centrale (solo utenti della propria manifestazione, in pagina). */
 export function gestioneUtentiAllows(rank: UserRank, _op: 'READ' | 'CREATE' | 'UPDATE' | 'DELETE'): boolean {
-  if (rank !== 'Superadmin') return false
-  return true
+  return rank === 'Superadmin' || rank === 'Centrale'
 }
 
 /** Home: tutti READ; staff "R solo menu…"; CUD solo Superadmin (righe 9–11 col. B). */
@@ -87,9 +86,9 @@ export function manifestazioneImpostazioniRouteRanks(): readonly UserRank[] {
   return RANK_ORDER
 }
 
-/** Rotte router: gestione utenti. */
+/** Rotte router: gestione utenti (`/admin/utenti`). */
 export function gestioneUtentiRouteRanks(): readonly UserRank[] {
-  return ['Superadmin']
+  return ['Superadmin', 'Centrale']
 }
 
 /** Area amministrativa globale (liste / CRUD): solo Superadmin. */

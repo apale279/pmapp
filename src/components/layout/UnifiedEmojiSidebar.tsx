@@ -162,6 +162,7 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
     manifestazioneDocId && manActive?.nome ? manActive.nome : manifestazioneDocId || null
 
   const showDashCentrale = rank === 'Centrale'
+  const showElencoUtentiCentrale = rank === 'Centrale'
   const showDashPma = RANKS_PMA_DASH.includes(rank) && Boolean(pmaSeg)
   const showImpPma =
     (rank === 'Superadmin' ||
@@ -197,6 +198,10 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
           />
         ) : showDashCentrale ? (
           <RailDisabled title="Dashboard centrale (apri una manifestazione dalla Home)" emoji="🖥️" />
+        ) : null}
+
+        {showElencoUtentiCentrale ? (
+          <RailLink to="/admin/utenti" title="Elenco utenti" emoji="👥" onNavigate={onNavigate} />
         ) : null}
 
         {showDashPma ? (
@@ -279,6 +284,9 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
           />
         ) : showDashCentrale ? (
           <DrawerDisabled label="Dashboard centrale" emoji="🖥️" />
+        ) : null}
+        {showElencoUtentiCentrale ? (
+          <DrawerLink to="/admin/utenti" label="Elenco utenti" emoji="👥" onNavigate={onNavigate} />
         ) : null}
         {showDashPma ? (
           <DrawerLink to={`/pma/${pmaSeg}`} end label="Dashboard PMA" emoji="🏥" onNavigate={onNavigate} />

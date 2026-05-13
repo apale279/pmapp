@@ -9,15 +9,18 @@ import {
 } from '../../lib/identityToolkitSignUp'
 import { usePmaOptionsForManifestazione } from '../../hooks/usePmaOptionsForManifestazione'
 import { readImageFileAsDataUrl, validateFirmaFile } from '../../lib/firmaMedicoImage'
+import { syncUtenteTelefonoToRubrica } from '../../lib/syncUtenteRubricaContatto'
 
 type ManifestazioneOption = { nome: string }
 
 type Props = {
   open: boolean
   onClose: () => void
+  /** Centrale: manifestazione fissa (document id manifestazione). */
+  fixedManifestazioneId?: string
 }
 
-export function AddUserModal({ open, onClose }: Props) {
+export function AddUserModal({ open, onClose, fixedManifestazioneId }: Props) {
   const { bumpSync } = useSyncLive()
   const titleId = useId()
   const [email, setEmail] = useState('')
@@ -29,6 +32,9 @@ export function AddUserModal({ open, onClose }: Props) {
   const [firmaDataUrl, setFirmaDataUrl] = useState<string | null>(null)
   const [firmaConverting, setFirmaConverting] = useState(false)
   const [firmaPickError, setFirmaPickError] = useState<string | null>(null)
+  const [telefono, setTelefono] = useState('')
+  const [emailContatto, setEmailContatto] = useState('')
+  const [noteUtente, setNoteUtente] = useState('')
   const [manifestazioni, setManifestazioni] = useState<ManifestazioneOption[]>([])
   const [manifestazioniLoading, setManifestazioniLoading] = useState(true)
   const [manifestazioniListError, setManifestazioniListError] = useState<string | null>(null)
@@ -38,6 +44,12 @@ export function AddUserModal({ open, onClose }: Props) {
 
   const manForPma = rank !== 'Centrale' && idManifestazione.trim() ? idManifestazione.trim() : null
   const { items: pmaOptions, loading: pmaLoading } = usePmaOptionsForManifestazione(manForPma)
+
+  useEffect(() => {
+    if (!open) return
+    const fix = fixedManifestazioneId?.trim()
+    if (fix) setIdManifestazione(fix)
+  }, [open, fixedManifestazioneId])
 
   useEffect(() => {
     if (!open) return
@@ -91,6 +103,11 @@ export function AddUserModal({ open, onClose }: Props) {
       setError('Firestore non disponibile.')
       return
     }
+    const nomeT = nome.trim()
+    if (!nomeT) {
+      setError('Il nome è obbligatorio.')
+      return
+    }
     if (!idManifestazione) {
       setError('Seleziona la manifestazione di appartenenza.')
       return
@@ -123,17 +140,32 @@ export function AddUserModal({ open, onClose }: Props) {
 
       const docPayload: Record<string, unknown> = {
         email: createdEmail.trim().toLowerCase(),
-        nome: nome.trim(),
+        nome: nomeT,
         rank,
         id_manifestazione: idManifestazione,
         id_pma: idPmaValue,
       }
+
+      const telT = telefono.trim()
+      if (telT) docPayload.telefono = telT
+      const ecT = emailContatto.trim()
+      if (ecT) docPayload.email_contatto = ecT
+      const nT = noteUtente.trim()
+      if (nT) docPayload.note_utente = nT
 
       if (rank === 'Medico' && firmaDataUrl) {
         docPayload.firmaMedicoBase64 = firmaDataUrl
       }
 
       await setDoc(doc(db, 'utenti', localId), docPayload)
+
+      await syncUtenteTelefonoToRubrica(db, {
+        uid: localId,
+        idManifestazione: idManifestazione,
+        nome: nomeT,
+        telefono: telT || null,
+        note: nT || null,
+      })
 
       if (rank === 'Medico' && firmaDataUrl) {
         setSuccess(`Operatore creato. UID: ${localId}. Firma salvata su Firestore (Base64).`)
@@ -170,8 +202,8 @@ export function AddUserModal({ open, onClose }: Props) {
             Nuovo operatore
           </h2>
           <p className="text-xs text-[#a8a8c8]">
-            Crea un account per il personale. La sessione del Superadmin non viene interrotta:
-            registrazione tramite API REST Identity Toolkit.
+            Crea un account per il personale. La sessione corrente non viene interrotta: registrazione tramite API
+            REST Identity Toolkit.
           </p>
         </div>
 
@@ -200,13 +232,46 @@ export function AddUserModal({ open, onClose }: Props) {
             />
           </label>
           <label className="pma-field" htmlFor="au-nome">
-            <span className="pma-field__label">Nome</span>
+            <span className="pma-field__label">Nome (obbligatorio)</span>
             <input
               id="au-nome"
               type="text"
               required
               value={nome}
               onChange={(ev) => setNome(ev.target.value)}
+            />
+          </label>
+          <label className="pma-field" htmlFor="au-tel">
+            <span className="pma-field__label">Telefono (opzionale)</span>
+            <input
+              id="au-tel"
+              type="tel"
+              autoComplete="off"
+              value={telefono}
+              onChange={(ev) => setTelefono(ev.target.value)}
+            />
+            <p className="mt-1 text-xs pma-field__value--muted">
+              Se compilato, il contatto viene copiato in rubrica manifestazione (nome e numero; note solo se
+              presenti).
+            </p>
+          </label>
+          <label className="pma-field" htmlFor="au-email-contatto">
+            <span className="pma-field__label">Email di contatto (opzionale)</span>
+            <input
+              id="au-email-contatto"
+              type="email"
+              autoComplete="off"
+              value={emailContatto}
+              onChange={(ev) => setEmailContatto(ev.target.value)}
+            />
+          </label>
+          <label className="pma-field" htmlFor="au-note">
+            <span className="pma-field__label">Note (opzionale)</span>
+            <textarea
+              id="au-note"
+              rows={2}
+              value={noteUtente}
+              onChange={(ev) => setNoteUtente(ev.target.value)}
             />
           </label>
           <label className="pma-field" htmlFor="au-rank">
@@ -234,40 +299,50 @@ export function AddUserModal({ open, onClose }: Props) {
               ))}
             </select>
           </label>
-          <div className="pma-field">
-            <label htmlFor="au-man" className="pma-field__label">
-              Manifestazione (attive)
-            </label>
-            <select
-              id="au-man"
-              value={idManifestazione}
-              onChange={(ev) => {
-                setIdManifestazione(ev.target.value)
-                setIdPma('')
-              }}
-              required
-              disabled={manifestazioniLoading}
-            >
-              <option value="">
-                {manifestazioniLoading ? 'Caricamento…' : '— Seleziona —'}
-              </option>
-              {manifestazioni.map((m) => (
-                <option key={m.nome} value={m.nome}>
-                  {m.nome}
+          {fixedManifestazioneId?.trim() ? (
+            <div className="pma-field">
+              <span className="pma-field__label">Manifestazione</span>
+              <p className="pma-field__value font-mono text-sm">{fixedManifestazioneId.trim()}</p>
+              <p className="mt-1 text-xs pma-field__value--muted">
+                Utenti creati da Centrale sono legati automaticamente a questa manifestazione.
+              </p>
+            </div>
+          ) : (
+            <div className="pma-field">
+              <label htmlFor="au-man" className="pma-field__label">
+                Manifestazione (attive)
+              </label>
+              <select
+                id="au-man"
+                value={idManifestazione}
+                onChange={(ev) => {
+                  setIdManifestazione(ev.target.value)
+                  setIdPma('')
+                }}
+                required
+                disabled={manifestazioniLoading}
+              >
+                <option value="">
+                  {manifestazioniLoading ? 'Caricamento…' : '— Seleziona —'}
                 </option>
-              ))}
-            </select>
-            {!manifestazioniLoading && manifestazioni.length === 0 ? (
-              <p className="mt-1 text-xs text-amber-700">
-                Nessuna manifestazione APERTA. Creane una dalla homepage.
-              </p>
-            ) : null}
-            {manifestazioniListError ? (
-              <p className="mt-1 text-xs text-red-600" role="alert">
-                {manifestazioniListError}
-              </p>
-            ) : null}
-          </div>
+                {manifestazioni.map((m) => (
+                  <option key={m.nome} value={m.nome}>
+                    {m.nome}
+                  </option>
+                ))}
+              </select>
+              {!manifestazioniLoading && manifestazioni.length === 0 ? (
+                <p className="mt-1 text-xs text-amber-700">
+                  Nessuna manifestazione APERTA. Creane una dalla homepage.
+                </p>
+              ) : null}
+              {manifestazioniListError ? (
+                <p className="mt-1 text-xs text-red-600" role="alert">
+                  {manifestazioniListError}
+                </p>
+              ) : null}
+            </div>
+          )}
 
           {rank !== 'Centrale' ? (
             <div className="pma-field">
@@ -394,7 +469,7 @@ export function AddUserModal({ open, onClose }: Props) {
                 disabled={
                   submitting ||
                   manifestazioniLoading ||
-                  manifestazioni.length === 0 ||
+                  (!fixedManifestazioneId?.trim() && manifestazioni.length === 0) ||
                   firmaConverting ||
                   (staffRankRequiresPma(rank) && (pmaLoading || !idPma.trim()))
                 }

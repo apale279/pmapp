@@ -38,13 +38,13 @@ export default function App() {
 
           <Route element={<RankGuard allow={gestioneUtentiRouteRanks()} />}>
             <Route path="utenti" element={<Navigate to="/admin/utenti" replace />} />
+            <Route path="admin/utenti" element={<GestioneUtentiPage />} />
           </Route>
 
           <Route path="admin" element={<RankGuard allow={superadminAdminRouteRanks()} />}>
             <Route index element={<AdminDashboardPage />} />
             <Route path="manifestazioni" element={<AdminManifestazioniPage />} />
             <Route path="pma" element={<AdminPmaGlobalPage />} />
-            <Route path="utenti" element={<GestioneUtentiPage />} />
             <Route path="pazienti" element={<AdminPazientiGlobalPage />} />
           </Route>
 

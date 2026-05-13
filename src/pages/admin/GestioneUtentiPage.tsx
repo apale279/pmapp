@@ -72,10 +72,20 @@ export function GestioneUtentiPage() {
     useManifestazioniSelectOptions()
   const { nomeById: pmaNomeById } = usePmaLookup()
 
-  const visibili = useMemo(
-    () => utenti.filter((u) => u.rank !== 'Superadmin'),
-    [utenti],
+  const centraleMid = user?.rank === 'Centrale' ? user.id_manifestazione?.trim() ?? '' : ''
+
+  const manifestazioniForForms = useMemo(
+    () => (centraleMid ? manifestazioni.filter((m) => m.id === centraleMid) : manifestazioni),
+    [manifestazioni, centraleMid],
   )
+
+  const visibili = useMemo(() => {
+    let rows = utenti.filter((u) => u.rank !== 'Superadmin')
+    if (centraleMid) {
+      rows = rows.filter((u) => (u.id_manifestazione ?? '').trim() === centraleMid)
+    }
+    return rows
+  }, [utenti, centraleMid])
 
   const manLabelById = useMemo(() => {
     const m: Record<string, string> = {}
@@ -104,6 +114,9 @@ export function GestioneUtentiPage() {
       return (
         u.nome.toLowerCase().includes(s) ||
         u.email.toLowerCase().includes(s) ||
+        (u.email_contatto ?? '').toLowerCase().includes(s) ||
+        (u.telefono ?? '').toLowerCase().includes(s) ||
+        (u.note_utente ?? '').toLowerCase().includes(s) ||
         u.rank.toLowerCase().includes(s) ||
         manDisp.toLowerCase().includes(s) ||
         (u.id_manifestazione ?? '').toLowerCase().includes(s) ||
@@ -149,7 +162,11 @@ export function GestioneUtentiPage() {
       <div className="pma-dashboard w-full max-w-[min(100%,1800px)] space-y-6">
         <AdminTableToolbar
           title="Utenti"
-          subtitle="Elenco in tempo reale dalla collection `utenti`. Gli account Superadmin non compaiono in questa vista."
+          subtitle={
+            centraleMid
+              ? 'Elenco operatori della tua manifestazione (creazione e modifica con ambito evento e PMA).'
+              : 'Elenco in tempo reale dalla collection `utenti`. Gli account Superadmin non compaiono in questa vista.'
+          }
           searchPlaceholder="Filtra per nome, email, rank, manifestazione, PMA…"
           searchValue={q}
           onSearchChange={setQ}
@@ -175,14 +192,23 @@ export function GestioneUtentiPage() {
 
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="min-w-[880px] w-full divide-y divide-slate-200 text-left text-sm">
+            <table className="min-w-[1100px] w-full divide-y divide-slate-200 text-left text-sm">
               <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th scope="col" className="px-4 py-3 sm:px-5">
                     Nome
                   </th>
                   <th scope="col" className="px-4 py-3 sm:px-5">
-                    Email
+                    Email login
+                  </th>
+                  <th scope="col" className="whitespace-nowrap px-4 py-3 sm:px-5">
+                    Telefono
+                  </th>
+                  <th scope="col" className="px-4 py-3 sm:px-5">
+                    Email contatto
+                  </th>
+                  <th scope="col" className="max-w-[140px] px-4 py-3 sm:px-5">
+                    Note
                   </th>
                   <th scope="col" className="whitespace-nowrap px-4 py-3 sm:px-5">
                     Rank
@@ -204,7 +230,7 @@ export function GestioneUtentiPage() {
               <tbody className="divide-y divide-slate-100">
                 {utentiLoading || manLoading ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
+                    <td colSpan={10} className="px-5 py-10 text-center text-slate-500">
                       <span className="inline-flex items-center gap-2">
                         <span
                           className={`h-5 w-5 animate-spin rounded-full border-2 ${theme.spinnerAccent}`}
@@ -216,13 +242,13 @@ export function GestioneUtentiPage() {
                   </tr>
                 ) : visibili.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
+                    <td colSpan={10} className="px-5 py-8 text-center text-slate-500">
                       Nessun operatore da mostrare (solo account non Superadmin).
                     </td>
                   </tr>
                 ) : filteredVisibili.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
+                    <td colSpan={10} className="px-5 py-8 text-center text-slate-500">
                       Nessun operatore corrisponde al filtro di ricerca.
                     </td>
                   </tr>
@@ -236,6 +262,15 @@ export function GestioneUtentiPage() {
                         <td className="px-4 py-3 font-medium text-slate-900 sm:px-5">{u.nome}</td>
                         <td className="max-w-[180px] truncate px-4 py-3 text-slate-700 sm:max-w-xs sm:px-5">
                           {u.email}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-700 sm:px-5">
+                          {cellMuted(u.telefono, '—')}
+                        </td>
+                        <td className="max-w-[160px] truncate px-4 py-3 text-slate-700 sm:px-5" title={u.email_contatto}>
+                          {cellMuted(u.email_contatto, '—')}
+                        </td>
+                        <td className="max-w-[140px] truncate px-4 py-3 text-slate-600 sm:px-5" title={u.note_utente}>
+                          {cellMuted(u.note_utente, '—')}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 sm:px-5">
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-800">
@@ -275,14 +310,16 @@ export function GestioneUtentiPage() {
         key={nuovoKey}
         open={nuovoOpen}
         onClose={() => setNuovoOpen(false)}
+        fixedManifestazioneId={centraleMid || undefined}
       />
 
       <EditUserModal
         key={editKey}
         open={editUtente !== null}
         utente={editUtente}
-        manifestazioni={manifestazioni}
+        manifestazioni={manifestazioniForForms}
         manifestazioniLoading={manLoading}
+        fixedManifestazioneId={centraleMid || undefined}
         onClose={() => setEditUtente(null)}
         onSaved={() => {
           void refreshProfile()

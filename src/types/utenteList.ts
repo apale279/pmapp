@@ -8,6 +8,9 @@ export interface UtenteListRow {
   rank: UserRank
   id_manifestazione?: string
   id_pma?: string
+  telefono?: string
+  email_contatto?: string
+  note_utente?: string
   /** Data URL / Base64 su Firestore (`firmaMedicoBase64`). */
   firmaMedicoBase64?: string
   /** URL Storage legacy. */
