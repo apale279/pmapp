@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { arrayUnion, Timestamp } from 'firebase/firestore'
+import { orderedPrestazioniLabels } from '../../lib/prestazioniDisplay'
 import { datetimeLocalToTimestamp, toDatetimeLocal } from '../../lib/schedaDatetimeLocal'
 import { registerPmaFarmacoUsato } from '../../lib/registerPmaFarmacoUsato'
 import { db } from '../../lib/firebase'
@@ -33,8 +34,8 @@ export type CartellaClinicaSectionProps = {
   embedded?: boolean
 }
 
-function sortPvDesc(rows: ParametroVitaleRilevazione[]) {
-  return [...rows].sort((a, b) => b.registrato_at.toMillis() - a.registrato_at.toMillis())
+function sortPvChronoAsc(rows: ParametroVitaleRilevazione[]) {
+  return [...rows].sort((a, b) => a.registrato_at.toMillis() - b.registrato_at.toMillis())
 }
 
 function sortFarmaciDesc(rows: FarmacoSomministrato[]) {
@@ -47,6 +48,10 @@ function sortRivDesc(rows: RivalutazioneVoce[]) {
 
 const PV_INPUT =
   'mt-0.5 w-full min-w-0 rounded-md border border-slate-300 px-2 py-1.5 text-sm font-medium disabled:bg-slate-100'
+
+/** Input compatto: riga unica parametri vitali (celle strette). */
+const PV_IN_ROW =
+  'box-border w-full min-w-0 rounded border border-slate-300 px-0.5 py-1 text-center text-sm font-semibold tabular-nums leading-none disabled:bg-slate-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
 
 type PvTone = 'critical' | 'warn' | null
 
@@ -92,10 +97,13 @@ function MonitorCell({
   label,
   tone,
   children,
+  boxClassName,
 }: {
   label: string
   tone: PvTone
   children: ReactNode
+  /** Larghezza fissa cella (riga unica). */
+  boxClassName?: string
 }) {
   const shell =
     tone === 'critical'
@@ -104,8 +112,10 @@ function MonitorCell({
         ? 'border-amber-300 bg-amber-50'
         : 'border-slate-200 bg-white'
   return (
-    <div className={`rounded-md border px-1.5 py-1 ${shell}`}>
-      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</div>
+    <div className={`shrink-0 rounded-md border px-1 py-0.5 ${shell} ${boxClassName ?? ''}`}>
+      <div className="text-[10px] font-semibold uppercase leading-tight tracking-wider text-slate-500">
+        {label}
+      </div>
       <div className="mt-0.5 min-w-0">{children}</div>
     </div>
   )
@@ -121,11 +131,12 @@ function ParametriVitaliBlock({
   onPatch: (id: string, partial: Partial<ParametroVitaleRilevazione>) => void
 }) {
   const t = pvTones(row)
+  const opNome = (row.operatore_nome ?? '').trim() || '—'
 
   return (
-    <div className="rounded-md border border-slate-300 bg-slate-200/40 p-2 shadow-sm">
-      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-        <MonitorCell label="Data/ora" tone={null}>
+    <div className="rounded-md border border-slate-300 bg-slate-200/40 p-1.5 shadow-sm">
+      <div className="flex min-w-0 flex-nowrap items-end gap-1.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
+        <MonitorCell label="Data/ora" tone={null} boxClassName="w-[11.5rem] shrink-0">
           <input
             type="datetime-local"
             disabled={!canEdit}
@@ -134,21 +145,10 @@ function ParametriVitaliBlock({
               const ts = datetimeLocalToTimestamp(e.target.value)
               if (ts) onPatch(row.id, { registrato_at: ts })
             }}
-            className={PV_INPUT}
+            className={`${PV_IN_ROW} text-left text-xs font-medium`}
           />
         </MonitorCell>
-        <MonitorCell label="Operatore" tone={null}>
-          <input
-            type="text"
-            disabled={!canEdit}
-            defaultValue={row.operatore_nome}
-            onBlur={(e) => onPatch(row.id, { operatore_nome: e.target.value.trim() || '—' })}
-            className={PV_INPUT}
-          />
-        </MonitorCell>
-      </div>
-      <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        <MonitorCell label="GCS" tone={t.gcs ?? null}>
+        <MonitorCell label="GCS" tone={t.gcs ?? null} boxClassName="w-[2.85rem] shrink-0">
           <input
             type="number"
             min={1}
@@ -160,10 +160,10 @@ function ParametriVitaliBlock({
               if (!Number.isFinite(n)) return
               onPatch(row.id, { gcs: Math.min(15, Math.max(1, Math.floor(n))) })
             }}
-            className={PV_INPUT}
+            className={PV_IN_ROW}
           />
         </MonitorCell>
-        <MonitorCell label="FR" tone={t.fr ?? null}>
+        <MonitorCell label="FR" tone={t.fr ?? null} boxClassName="w-[3rem] shrink-0">
           <input
             type="number"
             min={0}
@@ -174,10 +174,10 @@ function ParametriVitaliBlock({
               if (!Number.isFinite(n)) return
               onPatch(row.id, { fr: Math.max(0, Math.floor(n)) })
             }}
-            className={PV_INPUT}
+            className={PV_IN_ROW}
           />
         </MonitorCell>
-        <MonitorCell label="SpO₂ aa" tone={t.spo2 ?? null}>
+        <MonitorCell label="SpO₂ aa" tone={t.spo2 ?? null} boxClassName="w-[3rem] shrink-0">
           <input
             type="number"
             min={0}
@@ -194,10 +194,10 @@ function ParametriVitaliBlock({
               if (!Number.isFinite(n)) return
               onPatch(row.id, { spo2_aa: Math.min(100, Math.max(0, Math.floor(n))) })
             }}
-            className={PV_INPUT}
+            className={PV_IN_ROW}
           />
         </MonitorCell>
-        <MonitorCell label="SpO₂ O₂" tone={t.spo2 ?? null}>
+        <MonitorCell label="SpO₂ O₂" tone={t.spo2 ?? null} boxClassName="w-[3rem] shrink-0">
           <input
             type="number"
             min={0}
@@ -214,10 +214,10 @@ function ParametriVitaliBlock({
               if (!Number.isFinite(n)) return
               onPatch(row.id, { spo2_o2: Math.min(100, Math.max(0, Math.floor(n))) })
             }}
-            className={PV_INPUT}
+            className={PV_IN_ROW}
           />
         </MonitorCell>
-        <MonitorCell label="FC" tone={t.fc ?? null}>
+        <MonitorCell label="FC" tone={t.fc ?? null} boxClassName="w-[3rem] shrink-0">
           <input
             type="number"
             min={0}
@@ -228,38 +228,40 @@ function ParametriVitaliBlock({
               if (!Number.isFinite(n)) return
               onPatch(row.id, { fc: Math.max(0, Math.floor(n)) })
             }}
-            className={PV_INPUT}
+            className={PV_IN_ROW}
           />
         </MonitorCell>
-        <MonitorCell label="PA sys" tone={t.pa_sys ?? null}>
+        <MonitorCell label="PA sys" tone={t.pa_sys ?? null} boxClassName="w-[3.1rem] shrink-0">
           <input
             type="number"
             min={0}
+            max={999}
             disabled={!canEdit}
             defaultValue={row.pa_sistolica}
             onBlur={(e) => {
               const n = Number(e.target.value)
               if (!Number.isFinite(n)) return
-              onPatch(row.id, { pa_sistolica: Math.max(0, Math.floor(n)) })
+              onPatch(row.id, { pa_sistolica: Math.max(0, Math.min(999, Math.floor(n))) })
             }}
-            className={PV_INPUT}
+            className={PV_IN_ROW}
           />
         </MonitorCell>
-        <MonitorCell label="PA dia" tone={t.pa_dia ?? null}>
+        <MonitorCell label="PA dia" tone={t.pa_dia ?? null} boxClassName="w-[3.1rem] shrink-0">
           <input
             type="number"
             min={0}
+            max={999}
             disabled={!canEdit}
             defaultValue={row.pa_diastolica}
             onBlur={(e) => {
               const n = Number(e.target.value)
               if (!Number.isFinite(n)) return
-              onPatch(row.id, { pa_diastolica: Math.max(0, Math.floor(n)) })
+              onPatch(row.id, { pa_diastolica: Math.max(0, Math.min(999, Math.floor(n))) })
             }}
-            className={PV_INPUT}
+            className={PV_IN_ROW}
           />
         </MonitorCell>
-        <MonitorCell label="T °C" tone={t.temp ?? null}>
+        <MonitorCell label="T °C" tone={t.temp ?? null} boxClassName="w-[3.25rem] shrink-0">
           <input
             type="number"
             step="0.1"
@@ -275,10 +277,10 @@ function ParametriVitaliBlock({
               if (!Number.isFinite(n)) return
               onPatch(row.id, { temperatura: n })
             }}
-            className={PV_INPUT}
+            className={PV_IN_ROW}
           />
         </MonitorCell>
-        <MonitorCell label="NRS" tone={t.nrs ?? null}>
+        <MonitorCell label="NRS" tone={t.nrs ?? null} boxClassName="w-[2.85rem] shrink-0">
           <input
             type="number"
             min={0}
@@ -295,8 +297,25 @@ function ParametriVitaliBlock({
               if (!Number.isFinite(n)) return
               onPatch(row.id, { nrs: Math.min(10, Math.max(0, Math.floor(n))) })
             }}
-            className={PV_INPUT}
+            className={PV_IN_ROW}
           />
+        </MonitorCell>
+        <MonitorCell label="Operatore" tone={null} boxClassName="min-w-[8.5rem] max-w-[18rem] shrink-0">
+          {canEdit ? (
+            <input
+              type="text"
+              defaultValue={row.operatore_nome}
+              onBlur={(e) => onPatch(row.id, { operatore_nome: e.target.value.trim() || '—' })}
+              className={`${PV_IN_ROW} text-left text-xs font-medium normal-case`}
+            />
+          ) : (
+            <div
+              className="max-w-full overflow-x-auto whitespace-nowrap px-0.5 text-xs font-medium leading-tight text-slate-900"
+              title={opNome}
+            >
+              {opNome}
+            </div>
+          )}
         </MonitorCell>
       </div>
     </div>
@@ -445,7 +464,7 @@ export function CartellaClinicaSection({
 
   const canEditRivalutazioniEsistenti = Boolean(canEdit && user?.rank === 'Medico')
 
-  const pvSorted = useMemo(() => sortPvDesc(p.parametri_vitali), [p.parametri_vitali])
+  const pvSorted = useMemo(() => sortPvChronoAsc(p.parametri_vitali), [p.parametri_vitali])
   const farmaciSorted = useMemo(() => sortFarmaciDesc(p.farmaci), [p.farmaci])
   const rivSorted = useMemo(() => sortRivDesc(p.rivalutazioni), [p.rivalutazioni])
 
@@ -577,6 +596,10 @@ export function CartellaClinicaSection({
   }
 
   const selPrest = new Set(p.prestazioni_sel)
+  const prestazioniOrdinate = useMemo(
+    () => orderedPrestazioniLabels(prestazioniLista, p.prestazioni_sel ?? []),
+    [prestazioniLista, p.prestazioni_sel],
+  )
 
   return (
     <section
@@ -791,6 +814,26 @@ export function CartellaClinicaSection({
                 )}
               </div>
             </details>
+            <div className="mt-3">
+              <span className="pma-field__label">Prestazioni selezionate</span>
+              {prestazioniOrdinate.length === 0 ? (
+                <p className="mt-1 text-xs text-slate-500">Nessuna prestazione selezionata.</p>
+              ) : (
+                <ul
+                  className="mt-2 grid list-none grid-cols-4 gap-2 p-0"
+                  aria-label="Elenco prestazioni selezionate"
+                >
+                  {prestazioniOrdinate.map((label) => (
+                    <li
+                      key={label}
+                      className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-medium leading-snug text-slate-800"
+                    >
+                      {label}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
 
           <div className="mt-5">

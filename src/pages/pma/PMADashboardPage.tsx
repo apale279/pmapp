@@ -12,6 +12,7 @@ import { updateSchedaPazienteGranular } from '../../lib/updateSchedaPaziente'
 import { usePazientiForPma } from '../../hooks/usePazientiForPma'
 import { usePmaDocSnapshot } from '../../hooks/usePmaDocNome'
 import { useManifestazioneDoc } from '../../hooks/useManifestazioneDoc'
+import { useManifestazioneListeCliniche } from '../../hooks/useManifestazioneListeCliniche'
 import { useDimessiManifestazione } from '../../hooks/useDimessiManifestazione'
 import { parsePazienteFromFirestore } from '../../hooks/usePazienteDoc'
 import {
@@ -56,6 +57,23 @@ function sortByColoreCodice(list: PazienteListItem[]) {
   })
 }
 
+/** Medico/Infermiere: pazienti con lo stesso riferimento soft in cima (poi triage sugli altri). */
+function partitionRefFirstMedicoInfermiere(
+  list: PazienteListItem[],
+  rank: string | undefined,
+  staffRef: string,
+): PazienteListItem[] {
+  if (!staffRef || (rank !== 'Medico' && rank !== 'Infermiere')) return sortByColoreCodice(list)
+  const mine: PazienteListItem[] = []
+  const other: PazienteListItem[] = []
+  for (const p of list) {
+    const isMine =
+      rank === 'Infermiere' ? p.infermiere_rif.trim() === staffRef : p.medico_rif.trim() === staffRef
+    ;(isMine ? mine : other).push(p)
+  }
+  return [...sortByColoreCodice(mine), ...sortByColoreCodice(other)]
+}
+
 function countByColor(list: PazienteListItem[], col: CodiceColorePaziente) {
   return list.filter((p) => p.codice_colore === col).length
 }
@@ -66,15 +84,15 @@ function ManagerQueueBox({
   titleLine2,
   lista,
   pmaId,
-  showTakeCharge,
+  takeChargeFromQueues,
   onInCarico,
 }: {
   titleLine1: string
   titleLine2: string
   lista: PazienteListItem[]
   pmaId: string
-  /** Solo coda “IN ARRIVO”: Medico, Infermiere, Soccorritore, Triage possono passare a in carico. */
-  showTakeCharge: boolean
+  /** Prendi in carico da coda IN ARRIVO, IN ATTESA o IN SOSPESO (staff clinico). */
+  takeChargeFromQueues: boolean
   onInCarico: (id: string) => void
 }) {
   const preview = lista.slice(0, 2)
@@ -98,12 +116,13 @@ function ManagerQueueBox({
                   className="absolute inset-0 z-0 rounded-md"
                   aria-label={`Apri scheda ${nome}`}
                 />
-                <div className="relative z-[1] p-2">
+                <div className="pointer-events-none relative z-[1] p-2">
                   <div className="flex min-w-0 items-start justify-between gap-1.5">
-                    <div className="pointer-events-none min-w-0 flex-1 text-sm font-medium leading-snug text-slate-900">
+                    <div className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-900">
                       <span className="line-clamp-2">{nome}</span>
                     </div>
-                    {showTakeCharge && pz.stato === 'in_arrivo' ? (
+                    {takeChargeFromQueues &&
+                    (pz.stato === 'in_arrivo' || pz.stato === 'in_attesa' || pz.stato === 'in_sospeso') ? (
                       <button
                         type="button"
                         title="Prendi in carico"
@@ -112,13 +131,13 @@ function ManagerQueueBox({
                           e.stopPropagation()
                           onInCarico(pz.id)
                         }}
-                        className="relative z-[2] shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-bold uppercase leading-none text-slate-800 hover:bg-slate-50"
+                        className="pointer-events-auto relative z-[2] shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-bold uppercase leading-none text-slate-800 hover:bg-slate-50"
                       >
                         Prendi
                       </button>
                     ) : null}
                   </div>
-                  <div className="pointer-events-none mt-0.5 font-mono text-xs font-medium text-slate-600">
+                  <div className="mt-0.5 font-mono text-xs font-medium text-slate-600">
                     {pz.id_paziente_visibile}
                   </div>
                 </div>
@@ -302,7 +321,7 @@ function ListaPazientiInCarico({
                           e.stopPropagation()
                           onDeleteClick(pz.id, pz.id_paziente_visibile)
                         }}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded border border-transparent text-slate-500 transition-colors hover:border-slate-200 hover:bg-slate-50 hover:text-red-600"
+                        className="pma-theme-skip inline-flex h-10 w-10 items-center justify-center rounded border border-transparent text-slate-500 transition-colors hover:border-slate-200 hover:bg-slate-50 hover:text-red-600"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
                           <path
@@ -348,6 +367,7 @@ export function PMADashboardPage() {
   const theme = useRankTheme()
   const pmaSnap = usePmaDocSnapshot(pmaId || undefined)
   const { data: manZipMeta } = useManifestazioneDoc(pmaSnap.idManifestazione || undefined)
+  const manListeCliniche = useManifestazioneListeCliniche(pmaSnap.idManifestazione || undefined)
   const { items: pazienti, loading: listaLoading, error: listaError } = usePazientiForPma(
     pmaId || undefined,
   )
@@ -387,12 +407,17 @@ export function PMADashboardPage() {
   const manifestazioneForCreate =
     user?.id_manifestazione?.trim() || pmaSnap.idManifestazione?.trim() || ''
 
+  const staffRefCorrente = useMemo(() => staffSoftRefFromUser(user), [user?.uid, user?.nome, user?.email])
+
   const attivi = useMemo(() => pazienti.filter((p) => p.stato !== 'dimesso'), [pazienti])
-  const inArrivo = useMemo(() => sortByColoreCodice(attivi.filter((p) => p.stato === 'in_arrivo')), [attivi])
-  const inAttesa = useMemo(
-    () => sortByColoreCodice(attivi.filter((p) => p.stato === 'in_attesa' || p.stato === 'in_sospeso')),
-    [attivi],
-  )
+  const inArrivo = useMemo(() => {
+    const raw = attivi.filter((p) => p.stato === 'in_arrivo')
+    return partitionRefFirstMedicoInfermiere(raw, user?.rank, staffRefCorrente)
+  }, [attivi, user?.rank, staffRefCorrente])
+  const inAttesa = useMemo(() => {
+    const raw = attivi.filter((p) => p.stato === 'in_attesa' || p.stato === 'in_sospeso')
+    return partitionRefFirstMedicoInfermiere(raw, user?.rank, staffRefCorrente)
+  }, [attivi, user?.rank, staffRefCorrente])
   const inCarico = useMemo(
     () =>
       sortByColoreCodice(
@@ -400,8 +425,6 @@ export function PMADashboardPage() {
       ),
     [attivi],
   )
-
-  const staffRefCorrente = useMemo(() => staffSoftRefFromUser(user), [user?.uid, user?.nome, user?.email])
 
   const inCaricoAMie = useMemo(() => {
     if (user?.rank !== 'Infermiere' && user?.rank !== 'Medico') return []
@@ -641,6 +664,7 @@ export function PMADashboardPage() {
         consensoGenericoCure: manZipMeta?.consensoGenericoCure,
         consensoPrivacy: manZipMeta?.consensoPrivacy,
         rifiutoInvioPsText: manZipMeta?.rifiutoInvioPs,
+        prestazioniManifestazioneLista: manListeCliniche.prestazioni,
       })
       saveAs(blob, defaultPdfFilename(full))
     } catch (e) {
@@ -672,6 +696,7 @@ export function PMADashboardPage() {
         consensoGenericoCure: manZipMeta?.consensoGenericoCure,
         consensoPrivacy: manZipMeta?.consensoPrivacy,
         rifiutoInvioPsText: manZipMeta?.rifiutoInvioPs,
+        prestazioniManifestazioneLista: manListeCliniche.prestazioni,
       })
       const fname = defaultPdfFilename(full)
       saveAs(blob, fname)
@@ -760,7 +785,7 @@ export function PMADashboardPage() {
             setDimessiModalSearch('')
             setDimessiModalErr(null)
           }}
-          className={opToolbarBtnSm}
+          className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold uppercase text-slate-800 shadow-sm hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40"
         >
           PAZIENTI DIMESSI
         </button>
@@ -893,7 +918,7 @@ export function PMADashboardPage() {
                 titleLine2="IN ARRIVO"
                 lista={inArrivo}
                 pmaId={pmaId}
-                showTakeCharge={showPrendiInCarico}
+                takeChargeFromQueues={showPrendiInCarico}
                 onInCarico={handleInCarico}
               />
               <ManagerQueueBox
@@ -901,7 +926,7 @@ export function PMADashboardPage() {
                 titleLine2="IN ATTESA"
                 lista={inAttesa}
                 pmaId={pmaId}
-                showTakeCharge={false}
+                takeChargeFromQueues={showPrendiInCarico}
                 onInCarico={handleInCarico}
               />
             </div>

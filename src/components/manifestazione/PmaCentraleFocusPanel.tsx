@@ -9,7 +9,6 @@ import type { Pma } from '../../types/pma'
 import type { CodiceColorePaziente } from '../../types/paziente'
 import { CODICE_COLORE_LABEL, pazienteOccupaPostoLetto } from '../../types/paziente'
 import { PmaCapacityGauge } from './PmaCapacityGauge'
-import { opToolbarBtnSm } from '../layout/operativeTokens'
 
 const PILLS: CodiceColorePaziente[] = ['bianco', 'verde', 'giallo', 'rosso']
 
@@ -185,7 +184,7 @@ export function PmaCentraleFocusPanel({ manifestazioneId, pmaList, theme }: Prop
           </Link>
           <Link
             to={`/pma/${encodeURIComponent(focusPmaId)}?dimessi=1`}
-            className={`${opToolbarBtnSm} no-underline`}
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold uppercase text-slate-800 shadow-sm hover:bg-slate-50 no-underline"
           >
             PAZIENTI DIMESSI
           </Link>

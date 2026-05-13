@@ -125,7 +125,7 @@ export function QuickExamField(props: QuickExamFieldProps) {
                             else next.add(label)
                             onColumnSelectionChange(tab, [...next])
                           }}
-                          className={chipColumn(on)}
+                          className={`pma-theme-skip ${chipColumn(on)}`}
                         >
                           {label}
                         </button>
@@ -171,7 +171,7 @@ export function QuickExamField(props: QuickExamFieldProps) {
                   else next.add(label)
                   flat.onSelectionChange([...next])
                 }}
-                className={chipFlat(on)}
+                className={`pma-theme-skip ${chipFlat(on)}`}
               >
                 {label}
               </button>

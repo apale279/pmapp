@@ -13,10 +13,13 @@ import { buildLesioniPngDataUrl } from './lesioniFigurePng'
 import { resolveEoColumnsForDisplay, EO_PAZIENTE_FIRESTORE_FIELDS } from '../eoPazienteFields'
 import { EO_CLINICAL_TABS } from '../multilineList'
 import { defaultEoQuickGroupRows } from '../eoQuickDefaults'
+import { orderedPrestazioniLabels, prestazioniRowsOfFour } from '../prestazioniDisplay'
 
 export type PazientePdfContext = {
   manifestazioneNome: string
   pmaNome: string
+  /** Per ordinare le prestazioni come in cartella clinica (stesso elenco manifestazione). */
+  prestazioniManifestazioneLista?: string[]
   /**
    * Firma medico da profilo (data URL / Base64 / URL) se non ancora salvata in
    * `dimissione_firma_medico_base64` sul documento paziente.
@@ -183,6 +186,15 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
     }
   }
 
+  /** Evita che tabelle vengano spezzate tra pagine quando possibile (jspdf-autotable). */
+  const TABLE_KEEP_ON_PAGE = { pageBreak: 'avoid' as const, rowPageBreak: 'avoid' as const }
+
+  /** Se il blocco stimato (≤ un foglio) non sta nel residuo, inizia in cima a una nuova pagina. */
+  const ensureSectionFits = (estimatedMm: number) => {
+    const need = Math.min(Math.max(estimatedMm, 0), pageInnerH)
+    if (need > 0 && y + need > H - M) newPage()
+  }
+
   const titleLineHeightMm = (size: number) => size * 0.45 + 2
 
   /** Titolo di sezione: non resta “appiccicato” in fondo pagina senza spazio per il contenuto. */
@@ -200,8 +212,8 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
   const paragraphTitleGap = 4
 
   /**
-   * Titolo + testo come un unico blocco quando possibile (titolo mai separato dall’inizio del valore).
-   * Se il testo supera un’intera pagina, il titolo resta con almeno la prima riga; poi il testo fluisce.
+   * Titolo + testo: se l’intero blocco entra in una pagina, non viene spezzato (salto pagina prima se serve).
+   * Se il testo è più alto di un foglio, il titolo resta con le prime righe possibili e il resto continua.
    */
   const writeParagraph = (title: string, body: string) => {
     const bodyText = (body || '').trim() || '—'
@@ -214,12 +226,22 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
     const total = titleH + bodyH + tail
 
     if (total <= pageInnerH) {
-      ensureBlockHeight(total)
-    } else {
-      const head = titleH + bodyLineH
-      ensureBlockHeight(Math.min(head, pageInnerH))
+      if (y + total > H - M) newPage()
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.text(title, M, y)
+      y += titleH
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      for (const line of lines) {
+        doc.text(line, M, y)
+        y += bodyLineH
+      }
+      y += tail
+      return
     }
 
+    if (y + titleH + bodyLineH > H - M) newPage()
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9)
     doc.text(title, M, y)
@@ -271,12 +293,13 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
     `Pettorale: ${p.pettorale != null ? String(p.pettorale) : '—'}`,
   ]
   const nAnagRows = Math.max(leftCol.length, rightCol.length)
-  ensureBlockHeight(nAnagRows * 4 + 2)
+  const anagBlockH = nAnagRows * 4 + 2
+  if (anagBlockH <= pageInnerH && y + anagBlockH > H - M) newPage()
   let ya = y
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   for (let i = 0; i < nAnagRows; i++) {
-    if (ya + 4 > H - M) {
+    if (anagBlockH > pageInnerH && ya + 4 > H - M) {
       newPage()
       ya = y
     }
@@ -298,7 +321,18 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
   writeParagraph('APP', p.app)
   writeParagraph('EO — note', p.eo_note)
   const eoCols = resolveEoColumnsForDisplay(p, defaultEoQuickGroupRows())
-  writeTitle('EO — selezione rapida', 9)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  let eoBodyMaxLines = 1
+  const eoCellWForEst = Math.max(4, textW / EO_CLINICAL_TABS.length - 1.5)
+  for (const field of EO_PAZIENTE_FIRESTORE_FIELDS) {
+    const arr = eoCols[field] ?? []
+    const cellText = arr.length ? arr.join('\n') : '—'
+    eoBodyMaxLines = Math.max(eoBodyMaxLines, doc.splitTextToSize(cellText, eoCellWForEst).length)
+  }
+  const eoTableMm = 8 + eoBodyMaxLines * 3 + 5
+  ensureSectionFits(titleLineHeightMm(9) + eoTableMm)
+  writeTitle('EO — selezione rapida', 9, 0)
   const eoCellW = textW / EO_CLINICAL_TABS.length
   const eoColStyles: Record<number, { cellWidth: number }> = {}
   for (let i = 0; i < EO_CLINICAL_TABS.length; i++) {
@@ -318,12 +352,11 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
     styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak', valign: 'top' },
     headStyles: { fillColor: [51, 65, 85], fontSize: 7, halign: 'center' },
     columnStyles: eoColStyles,
+    ...TABLE_KEEP_ON_PAGE,
   })
   y = afterAutoTableY(doc, y)
 
   // Parametri vitali
-  ensure(12)
-  writeTitle('Parametri vitali', 9)
   const pvBody = [...p.parametri_vitali]
     .sort((a, b) => (a.registrato_at?.toMillis?.() ?? 0) - (b.registrato_at?.toMillis?.() ?? 0))
     .map((r) => [
@@ -338,7 +371,10 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
       r.temperatura != null ? String(r.temperatura) : '—',
       r.nrs != null ? String(r.nrs) : '—',
     ])
-
+  const nPvRows = Math.max(1, pvBody.length)
+  const pvTableMm = 10 + nPvRows * 6.5
+  ensureSectionFits(titleLineHeightMm(9) + pvTableMm)
+  writeTitle('Parametri vitali', 9, 0)
   autoTable(doc, {
     startY: y,
     head: [
@@ -364,27 +400,37 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
       9: { cellWidth: 10 },
     },
     margin: { left: M, right: M },
+    ...TABLE_KEEP_ON_PAGE,
   })
   y = afterAutoTableY(doc, y)
 
-  // Prestazioni / farmaci
-  const prest = (p.prestazioni_sel ?? []).length ? p.prestazioni_sel.map((x) => `• ${x}`).join('\n') : '—'
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  const prestLines = doc.splitTextToSize(prest, textW)
-  const prestTitleSz = 9
-  ensureBlockHeight(titleLineHeightMm(prestTitleSz) + prestLines.length * bodyLineH + 2)
-  writeTitle('Prestazioni', prestTitleSz, 0)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  for (const line of prestLines) {
-    if (y + bodyLineH > H - M) newPage()
-    doc.text(line, M, y)
-    y += bodyLineH
-  }
-  y += 2
+  // Prestazioni (griglia 4 colonne, come cartella clinica)
+  const prestOrdinate = orderedPrestazioniLabels(
+    ctx.prestazioniManifestazioneLista ?? [],
+    p.prestazioni_sel ?? [],
+  )
+  const prestBody = prestOrdinate.length ? prestazioniRowsOfFour(prestOrdinate) : [['—', '', '', '']]
+  const prestColW = textW / 4
+  const prestRows = Math.max(1, prestBody.length)
+  const prestTableMm = 8 + prestRows * 5.5
+  ensureSectionFits(titleLineHeightMm(9) + prestTableMm)
+  writeTitle('Prestazioni', 9, 0)
+  autoTable(doc, {
+    startY: y,
+    body: prestBody,
+    margin: { left: M, right: M },
+    tableWidth: textW,
+    styles: { fontSize: 7.5, cellPadding: 1, overflow: 'linebreak', valign: 'top' },
+    columnStyles: {
+      0: { cellWidth: prestColW },
+      1: { cellWidth: prestColW },
+      2: { cellWidth: prestColW },
+      3: { cellWidth: prestColW },
+    },
+    ...TABLE_KEEP_ON_PAGE,
+  })
+  y = afterAutoTableY(doc, y)
 
-  writeTitle('Farmaci', 9)
   const farmBody = [...p.farmaci]
     .sort((a, b) => (a.registrato_at?.toMillis?.() ?? 0) - (b.registrato_at?.toMillis?.() ?? 0))
     .map((f) => [
@@ -393,6 +439,10 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
       f.dose,
       FARMACO_VIA_LABEL[f.via],
     ])
+  const nFarmRows = Math.max(1, farmBody.length)
+  const farmTableMm = 10 + nFarmRows * 5.5
+  ensureSectionFits(titleLineHeightMm(9) + farmTableMm)
+  writeTitle('Farmaci', 9, 0)
   autoTable(doc, {
     startY: y,
     head: [['Data/ora', 'Farmaco', 'Dose', 'Via']],
@@ -401,14 +451,26 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
     headStyles: { fillColor: [51, 65, 85], fontSize: 8 },
     columnStyles: { 1: { cellWidth: 55 } },
     margin: { left: M, right: M },
+    ...TABLE_KEEP_ON_PAGE,
   })
   y = afterAutoTableY(doc, y)
 
   // Rivalutazioni
-  writeTitle('Rivalutazioni', 9)
   const rivBody = [...p.rivalutazioni]
     .sort((a, b) => (a.creato_at?.toMillis?.() ?? 0) - (b.creato_at?.toMillis?.() ?? 0))
     .map((r) => [tsIt(r.creato_at), r.firma_nome, r.testo])
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  const rivNoteW = 104
+  let rivTableMm = 10
+  const rivRowsForEst = rivBody.length ? rivBody : [['—', '—', '—']]
+  for (const r of rivRowsForEst) {
+    const noteLines = doc.splitTextToSize(String(r[2]), rivNoteW).length
+    rivTableMm += 4 + noteLines * 2.7
+  }
+  rivTableMm = Math.min(rivTableMm, pageInnerH)
+  ensureSectionFits(titleLineHeightMm(9) + rivTableMm)
+  writeTitle('Rivalutazioni', 9, 0)
   autoTable(doc, {
     startY: y,
     head: [['Data/ora', 'Firma', 'Nota']],
@@ -417,6 +479,7 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
     headStyles: { fillColor: [51, 65, 85], fontSize: 8 },
     columnStyles: { 2: { cellWidth: 110 } },
     margin: { left: M, right: M },
+    ...TABLE_KEEP_ON_PAGE,
   })
   y = afterAutoTableY(doc, y)
 
@@ -444,7 +507,7 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
 
     const lesioniTotal = lesTitH + imgBlockH + listBlockH
     if (lesioniTotal <= pageInnerH) {
-      ensureBlockHeight(lesioniTotal)
+      if (y + lesioniTotal > H - M) newPage()
     } else {
       const keepHead = lesTitH + imgBlockH
       ensureBlockHeight(Math.min(Math.max(keepHead, lesTitH + lesListLineH), pageInnerH))
@@ -461,14 +524,15 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
       const line = `${L.n}. [${L.vista === 'front' ? 'Fronte' : 'Retro'}] ${L.descrizione?.trim() || '—'}`
       const wrapped = doc.splitTextToSize(line, textW)
       for (const ln of wrapped) {
-        if (y + lesListLineH > H - M) newPage()
+        if (lesioniTotal > pageInnerH && y + lesListLineH > H - M) newPage()
         doc.text(ln, M, y)
         y += lesListLineH
       }
     }
     y += 2
   } else {
-    ensureBlockHeight(lesTitH + 6)
+    const lesEmptyH = lesTitH + 6
+    if (lesEmptyH <= pageInnerH && y + lesEmptyH > H - M) newPage()
     writeTitle('Lesioni (schema)', lesTitSz, 0)
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
@@ -477,6 +541,7 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
   }
 
   // Dimissione
+  ensureSectionFits(titleLineHeightMm(10) + 28)
   writeTitle('Dimissione (Sez. 4)', 10)
   ensureBlockHeight(8)
   const esitoLabel = p.dimissione_esito ? DIMISSIONE_ESITO_LABEL[p.dimissione_esito] : '—'
@@ -521,12 +586,14 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
       `Note: ${p.invio_ps_note || '—'}`,
     ]
     const invLineH = 4
-    ensureBlockHeight(titleLineHeightMm(invTitSz) + invLines.length * invLineH + 2)
+    const invTitleH = titleLineHeightMm(invTitSz)
+    const invBlockH = invTitleH + invLines.length * invLineH + 2
+    if (invBlockH <= pageInnerH && y + invBlockH > H - M) newPage()
     writeTitle('Invio in PS (Sez. 5)', invTitSz, 0)
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
     for (const ln of invLines) {
-      if (y + invLineH > H - M) newPage()
+      if (invBlockH > pageInnerH && y + invLineH > H - M) newPage()
       doc.text(ln, M, y)
       y += invLineH
     }
@@ -569,7 +636,12 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
   }
 
   const imgRowH = Math.max(hLeftMeas, hRightMeas, 5)
-  ensureBlockHeight(firmeTitleH + labelRowH + imgRowH + 6)
+  const firmeBlockH = firmeTitleH + labelRowH + imgRowH + 6
+  if (firmeBlockH <= pageInnerH) {
+    if (y + firmeBlockH > H - M) newPage()
+  } else {
+    ensureBlockHeight(Math.min(firmeBlockH, pageInnerH))
+  }
   writeTitle('Firme', firmeTitleSz, 0)
   doc.setFontSize(8)
   const yLabels = y

@@ -123,6 +123,9 @@ const RANKS_PMA_DASH: readonly UserRank[] = [
   'Triage',
 ]
 
+/** Staff su singolo PMA: niente voce Home (evita confusione; login → dashboard PMA). */
+const RANKS_HIDE_HOME_IN_NAV: readonly UserRank[] = [...RANKS_PMA_DASH]
+
 /**
  * Navigazione globale: contesto da **profilo** (`id_pma`, `id_manifestazione`) integrato con la **URL**
  * corrente (`/manifestazione/...`, `/pma/...`). Il Superadmin usa `AdminEmojiSidebar` nell'app shell.
@@ -174,6 +177,8 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
     Boolean(pmaSeg)
   const showImpEvento = RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) && Boolean(manSeg)
 
+  const showHomeNav = !RANKS_HIDE_HOME_IN_NAV.includes(rank)
+
   const operatoreInitial = (user.nome?.trim()?.charAt(0) || user.email?.trim()?.charAt(0) || '?').toUpperCase()
 
   if (variant === 'rail') {
@@ -186,7 +191,7 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
           {operatoreInitial}
         </div>
 
-        <RailLink to="/" end title="Home" emoji="🏠" onNavigate={onNavigate} />
+        {showHomeNav ? <RailLink to="/" end title="Home" emoji="🏠" onNavigate={onNavigate} /> : null}
 
         {showDashCentrale && manSeg ? (
           <RailLink
@@ -273,7 +278,7 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
         </p>
       </div>
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
-        <DrawerLink to="/" end label="Home" emoji="🏠" onNavigate={onNavigate} />
+        {showHomeNav ? <DrawerLink to="/" end label="Home" emoji="🏠" onNavigate={onNavigate} /> : null}
         {showDashCentrale && manSeg ? (
           <DrawerLink
             to={`/manifestazione/${manSeg}`}

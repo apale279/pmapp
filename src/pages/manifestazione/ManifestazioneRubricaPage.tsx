@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { useParams } from 'react-router-dom'
 import {
   addDoc,
   collection,
@@ -38,7 +38,6 @@ export function ManifestazioneRubricaPage() {
   const routeManId = idParam ? decodeURIComponent(idParam) : ''
   const { user } = useAuth()
   const tenantId = user ? manifestazioneTenantIdForFirestore(user, routeManId) : ''
-  const manSeg = routeManId.trim() ? encodeURIComponent(routeManId.trim()) : ''
 
   const { items, loading, error } = useManifestazioneRubrica(tenantId || undefined)
 
@@ -55,8 +54,6 @@ export function ManifestazioneRubricaPage() {
   const [copyMsg, setCopyMsg] = useState<string | null>(null)
 
   const canUse = Boolean(db && tenantId.trim())
-
-  const dashHref = useMemo(() => `/manifestazione/${manSeg}`, [manSeg])
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault()
@@ -148,11 +145,6 @@ export function ManifestazioneRubricaPage() {
           <div className="pma-bar__id text-base">Rubrica</div>
           <p className="mt-0.5 text-xs text-[#a8a8c8]">Contatti condivisi per manifestazione</p>
         </div>
-        {manSeg ? (
-          <Link to={dashHref} className={`${opToolbarBtnSm} no-underline`}>
-            Dashboard manifestazione
-          </Link>
-        ) : null}
       </div>
 
       {!canUse ? (

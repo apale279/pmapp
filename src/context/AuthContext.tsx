@@ -7,10 +7,15 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { auth, db, isFirebaseReady } from '../lib/firebase'
+import { auth, db, ensureBrowserSessionAuthPersistence, isFirebaseReady } from '../lib/firebase'
+import { setLoginFlashMessage } from '../lib/authLoginFlash'
 import { loadUtenteProfile } from '../lib/loadUtenteProfile'
 import type { UserProfile } from '../types/userProfile'
+
+/** Timeout sessione Superadmin (sicurezza). */
+const SUPERADMIN_IDLE_TIMEOUT_MS = 10 * 60 * 1000
 
 export type AuthStatus =
   | 'loading'
@@ -32,7 +37,10 @@ export interface AuthContextValue {
 const AuthStateContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate()
   const firebaseOk = isFirebaseReady()
+
+  const [persistenceReady, setPersistenceReady] = useState(() => !firebaseOk || !auth)
 
   const [status, setStatus] = useState<AuthStatus>(() =>
     firebaseOk ? 'loading' : 'firebase_disabled',
@@ -71,7 +79,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!firebaseOk || !auth || !db) {
+    if (!auth) {
+      setPersistenceReady(true)
+      return
+    }
+    let cancelled = false
+    void ensureBrowserSessionAuthPersistence()
+      .catch(() => {
+        /* persistence non applicabile: prosegui comunque con auth */
+      })
+      .finally(() => {
+        if (!cancelled) setPersistenceReady(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [auth])
+
+  useEffect(() => {
+    if (!firebaseOk || !auth || !db || !persistenceReady) {
       return
     }
 
@@ -87,7 +113,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     return () => unsub()
-  }, [firebaseOk, loadProfileForUid])
+  }, [firebaseOk, persistenceReady, loadProfileForUid])
+
+  useEffect(() => {
+    if (!firebaseOk || !auth) return undefined
+    if (!user || user.rank !== 'Superadmin') return undefined
+
+    const timerId = window.setTimeout(() => {
+      void (async () => {
+        if (!auth) return
+        setLoginFlashMessage('Sessione scaduta per motivi di sicurezza.')
+        try {
+          await signOut(auth)
+        } catch {
+          /* signOut fallito: comunque porta al login */
+        }
+        navigate('/login', { replace: true })
+      })()
+    }, SUPERADMIN_IDLE_TIMEOUT_MS)
+
+    return () => window.clearTimeout(timerId)
+  }, [firebaseOk, auth, user?.uid, user?.rank, navigate])
 
   const logout = useCallback(async () => {
     if (!auth) return

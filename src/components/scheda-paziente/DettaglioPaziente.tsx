@@ -56,7 +56,7 @@ export function DettaglioPaziente({ p, tabs, activeTab, onTabChange, saveError, 
               id={`scheda-tab-${tab.id}`}
               tabIndex={selected ? 0 : -1}
               onClick={() => onTabChange(tab.id)}
-              className={`pma-tab ${selected ? 'pma-tab--active' : ''}`}
+              className={`pma-theme-skip pma-tab ${selected ? 'pma-tab--active' : ''}`}
             >
               {tab.label}
             </button>

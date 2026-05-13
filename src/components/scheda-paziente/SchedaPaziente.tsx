@@ -31,11 +31,13 @@ import { InvioOspedaleSection } from './InvioOspedaleSection'
 import { EtaPmaCountdown } from './EtaPmaCountdown'
 import { schedaPazienteTabsFor, type SchedaPazienteTabId } from './schedaPazienteTabs'
 import { useManifestazioneListeCliniche } from '../../hooks/useManifestazioneListeCliniche'
+import { useManifestazionePartecipantiElenco } from '../../hooks/useManifestazionePartecipantiElenco'
 import { useManifestazioneDoc } from '../../hooks/useManifestazioneDoc'
 import { usePmaDocSnapshot } from '../../hooks/usePmaDocNome'
 import { usePmaListForManifestazione } from '../../hooks/usePmaListForManifestazione'
 import { createPmaAlert } from '../../lib/createPmaAlert'
 import { SchedaPazienteShell } from '../pma/SchedaPazienteShell'
+import { findPartecipanteByPettorale } from '../../types/manifestazionePartecipanti'
 
 type Props = {
   pazienteId: string
@@ -83,6 +85,8 @@ export function SchedaPaziente({ pazienteId }: Props) {
   const [contact, setContact] = useState({ email: '', telefono: '' })
   const [allertaBusy, setAllertaBusy] = useState(false)
   const [allertaErr, setAllertaErr] = useState<string | null>(null)
+  const [partLookupMsg, setPartLookupMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
+  const pettoraleInputRef = useRef<HTMLInputElement>(null)
 
   const isCentrale = user?.rank === 'Centrale'
   const isMedico = user?.rank === 'Medico'
@@ -106,9 +110,71 @@ export function SchedaPaziente({ pazienteId }: Props) {
   const etaCalcolata = useMemo(() => calculateEtaAnni(p?.data_nascita ?? undefined), [p?.data_nascita])
 
   const manifestCore = useManifestazioneListeCliniche(p?.id_manifestazione)
+  const partecipantiElenco = useManifestazionePartecipantiElenco(p?.id_manifestazione?.trim() || undefined)
   const { items: pmaDestList, loading: pmaDestLoading } = usePmaListForManifestazione(
     p?.id_manifestazione?.trim() || undefined,
   )
+
+  const applicaPartecipanteDaElenco = useCallback(() => {
+    if (!db) {
+      setPartLookupMsg({ tone: 'err', text: 'Database non disponibile.' })
+      return
+    }
+    if (!p?.aperto) {
+      setPartLookupMsg({ tone: 'err', text: 'La scheda non è modificabile (chiusa o senza accesso).' })
+      return
+    }
+    const raw = pettoraleInputRef.current?.value?.trim() ?? ''
+    if (raw === '') {
+      setPartLookupMsg({ tone: 'err', text: 'Inserisci il numero di pettorale nel campo.' })
+      return
+    }
+    const n = Number(raw.replace(',', '.'))
+    if (!Number.isFinite(n)) {
+      setPartLookupMsg({ tone: 'err', text: 'Numero pettorale non valido.' })
+      return
+    }
+    const pet = Math.floor(n)
+    const rows = partecipantiElenco.rows
+    if (rows.length === 0) {
+      setPartLookupMsg({
+        tone: 'err',
+        text: 'Nessun elenco partecipanti per questa manifestazione. Un amministratore può caricare l’Excel in Impostazioni manifestazione.',
+      })
+      return
+    }
+    const hit = findPartecipanteByPettorale(rows, pet)
+    if (!hit) {
+      setPartLookupMsg({ tone: 'err', text: `Nessun partecipante con pettorale ${pet} nell’elenco.` })
+      return
+    }
+    const emailCur = contact.email.trim() || p.email?.trim() || ''
+    const tel = hit.telefono.trim()
+    const patch: Record<string, unknown> = {
+      pettorale: pet,
+      nome: hit.nome,
+      cognome: hit.cognome,
+      telefono: tel,
+      email: emailCur,
+      email_tel: emailTelLegacy(emailCur, tel),
+    }
+    if (hit.data_nascita_ymd) {
+      const ts = ymdToTimestamp(hit.data_nascita_ymd)
+      if (ts) {
+        patch.data_nascita = ts
+        Object.assign(patch, patchEtaFromDataNascita(ts))
+      }
+    }
+    void write(patch)
+      .then(() => {
+        setContact((c) => ({ email: c.email, telefono: tel }))
+        if (hit.data_nascita_ymd) setDataNascitaDraft(hit.data_nascita_ymd)
+        setPartLookupMsg({ tone: 'ok', text: 'Dati anagrafici compilati dall’elenco manifestazione.' })
+      })
+      .catch(() => {
+        setPartLookupMsg({ tone: 'err', text: 'Salvataggio non riuscito.' })
+      })
+  }, [db, p, contact.email, partecipantiElenco.rows, write])
 
   const inviaAllertaPma = useCallback(async () => {
     if (!db || !user || user.rank !== 'Centrale' || !p) return
@@ -256,6 +322,12 @@ export function SchedaPaziente({ pazienteId }: Props) {
     setDataNascitaDraft(toYmd(p.data_nascita))
     setContact({ email: p.email, telefono: p.telefono })
   }, [p?.id, p?.data_nascita?.toMillis?.(), p?.email, p?.telefono])
+
+  useEffect(() => {
+    if (!partLookupMsg) return
+    const t = window.setTimeout(() => setPartLookupMsg(null), 6000)
+    return () => window.clearTimeout(t)
+  }, [partLookupMsg])
 
   const isInfermiere = user?.rank === 'Infermiere'
   const isMedicoRank = user?.rank === 'Medico'
@@ -756,22 +828,61 @@ export function SchedaPaziente({ pazienteId }: Props) {
               <div className="pma-row pma-row--2">
                 <label className="pma-field pma-field--br">
                   <span className="pma-field__label">Pettorale</span>
-                  <input
-                    key={`pet-${p.id}-${p.pettorale ?? 'x'}`}
-                    type="number"
-                    min={0}
-                    disabled={!canEdit}
-                    defaultValue={p.pettorale ?? ''}
-                    onBlur={(e) => {
-                      const v = e.target.value.trim()
-                      if (v === '') {
-                        void write({ pettorale: null })
-                        return
+                  <div className="mt-0.5 flex min-w-0 items-center gap-2">
+                    <input
+                      ref={pettoraleInputRef}
+                      key={`pet-${p.id}-${p.pettorale ?? 'x'}`}
+                      className="min-w-0 flex-1"
+                      type="number"
+                      min={0}
+                      disabled={!canEdit}
+                      defaultValue={p.pettorale ?? ''}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim()
+                        if (v === '') {
+                          void write({ pettorale: null })
+                          return
+                        }
+                        const n = Number(v)
+                        if (Number.isFinite(n)) void write({ pettorale: Math.floor(n) })
+                      }}
+                    />
+                    <button
+                      type="button"
+                      title="Compila anagrafica dall’elenco partecipanti (Excel manifestazione)"
+                      aria-label="Cerca pettorale nell’elenco manifestazione e compila anagrafica"
+                      disabled={
+                        !canEdit ||
+                        partecipantiElenco.loading ||
+                        partecipantiElenco.rows.length === 0
                       }
-                      const n = Number(v)
-                      if (Number.isFinite(n)) void write({ pettorale: Math.floor(n) })
-                    }}
-                  />
+                      onClick={() => applicaPartecipanteDaElenco()}
+                      className="pma-theme-skip inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                        <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.75" />
+                        <path
+                          d="M15.2 15.2 20 20"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  {partLookupMsg ? (
+                    <p
+                      className={`mt-1.5 text-xs leading-snug ${partLookupMsg.tone === 'ok' ? 'text-emerald-700' : 'text-red-600'}`}
+                      role="status"
+                    >
+                      {partLookupMsg.text}
+                    </p>
+                  ) : partecipantiElenco.rows.length === 0 && !partecipantiElenco.loading ? (
+                    <p className="mt-1.5 text-xs text-slate-500">
+                      Elenco partecipanti non caricato: in Impostazioni manifestazione carica l’Excel (colonne
+                      A–E).
+                    </p>
+                  ) : null}
                 </label>
                 <div className="pma-field">
                   <span className="pma-field__label">Età</span>
@@ -900,6 +1011,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
               consensoPrivacy={manReport.data?.consensoPrivacy}
               rifiutoInvioPs={manReport.data?.rifiutoInvioPs}
               presetDimissione={manReport.data?.presetDimissione}
+              prestazioniManifestazioneLista={manifestCore.prestazioni}
             />
           ),
           invio_ps: (

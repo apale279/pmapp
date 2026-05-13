@@ -27,7 +27,7 @@ export function SyncLiveIndicator({ variant = 'light' }: { variant?: 'light' | '
       <button
         type="button"
         onClick={() => toggleAudioMuted()}
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border border-transparent text-lg leading-none ${btnHover}`}
+        className={`pma-theme-skip flex h-8 w-8 shrink-0 items-center justify-center rounded border border-transparent text-lg leading-none ${btnHover}`}
         title={audioMuted ? 'Audio disattivato' : 'Audio attivo'}
         aria-pressed={audioMuted}
         aria-label={audioMuted ? 'Riattiva indicatore audio' : 'Disattiva indicatore audio'}

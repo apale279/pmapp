@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
 import { deleteField, doc, onSnapshot, updateDoc } from 'firebase/firestore'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
@@ -19,6 +19,7 @@ import {
   parsePresetDimissioneFromFirestore,
   type PresetDimissioneVoce,
 } from '../../types/manifestazioneImpostazioni'
+import { parsePartecipantiExcelFile } from '../../lib/parsePartecipantiExcel'
 
 /** Testo textarea → righe pulite, deduplicate, ordinate, rimesse su righe. */
 function sortLinesText(text: string): string {
@@ -117,6 +118,9 @@ export function ManifestazioneImpostazioniPage() {
   const [presetDimissioneDraft, setPresetDimissioneDraft] = useState<PresetDimissioneVoce[]>([])
   const [openAcc, setOpenAcc] = useState<Record<string, boolean>>({})
 
+  const [partecipantiElencoCount, setPartecipantiElencoCount] = useState(0)
+  const [partExcelBusy, setPartExcelBusy] = useState(false)
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -182,6 +186,9 @@ export function ManifestazioneImpostazioniPage() {
         setConsensoPrivacyDraft(typeof imp.consenso_privacy === 'string' ? imp.consenso_privacy : '')
         setRifiutoInvioPsDraft(typeof imp.rifiuto_invio_ps === 'string' ? imp.rifiuto_invio_ps : '')
         setPresetDimissioneDraft(parsePresetDimissioneFromFirestore(imp.preset_dimissione))
+
+        const rawPe = imp.partecipanti_elenco
+        setPartecipantiElencoCount(Array.isArray(rawPe) ? rawPe.length : 0)
 
         setLoading(false)
         bumpSync()
@@ -273,6 +280,50 @@ export function ManifestazioneImpostazioniPage() {
   const toggleAcc = (tipo: string) => {
     setOpenAcc((o) => ({ ...o, [tipo]: !o[tipo] }))
   }
+
+  const onPartecipantiExcel = useCallback(
+    async (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      e.target.value = ''
+      if (!file || !db || !manifestazioneId || isReadOnlyManifestazione) return
+      setPartExcelBusy(true)
+      setError(null)
+      try {
+        const rows = await parsePartecipantiExcelFile(file)
+        if (rows.length === 0) {
+          setError('Nessuna riga valida: la colonna A deve contenere il numero di pettorale.')
+          return
+        }
+        await updateDoc(doc(db, 'manifestazioni', manifestazioneId), {
+          'impostazioni.partecipanti_elenco': rows,
+        })
+        setSaved(`Elenco partecipanti caricato: ${rows.length} righe.`)
+        bumpSync()
+        window.setTimeout(() => setSaved(null), 5000)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Lettura Excel non riuscita.')
+      } finally {
+        setPartExcelBusy(false)
+      }
+    },
+    [manifestazioneId, isReadOnlyManifestazione, bumpSync],
+  )
+
+  const rimuoviElencoPartecipanti = useCallback(async () => {
+    if (!db || !manifestazioneId || isReadOnlyManifestazione) return
+    if (!window.confirm('Rimuovere l’elenco partecipanti da questa manifestazione?')) return
+    setError(null)
+    try {
+      await updateDoc(doc(db, 'manifestazioni', manifestazioneId), {
+        'impostazioni.partecipanti_elenco': deleteField(),
+      })
+      setSaved('Elenco partecipanti rimosso.')
+      bumpSync()
+      window.setTimeout(() => setSaved(null), 5000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Operazione non riuscita.')
+    }
+  }, [db, manifestazioneId, isReadOnlyManifestazione, bumpSync])
 
   useEffect(() => {
     setOpenAcc((prev) => {
@@ -610,6 +661,51 @@ export function ManifestazioneImpostazioniPage() {
 
           <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
             <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+              Elenco partecipanti (Excel)
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Primo foglio, colonne <strong className="text-slate-800">A–E</strong>: A = pettorale, B = nome, C =
+              cognome, D = data di nascita, E = telefono. Formati data: <code className="rounded bg-slate-100 px-1">gg/mm/aaaa</code>,{' '}
+              <code className="rounded bg-slate-100 px-1">aaaa-mm-gg</code> o cella data Excel. L&apos;elenco viene
+              salvato in{' '}
+              <code className="rounded bg-slate-100 px-1">impostazioni.partecipanti_elenco</code> e usato in scheda
+              paziente (ricerca accanto al pettorale).
+            </p>
+            <p className="mt-2 text-sm font-medium text-slate-800">
+              Righe caricate: <span className="tabular-nums">{partecipantiElencoCount}</span>
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <label
+                className={`inline-flex items-center gap-2 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-100 ${
+                  isReadOnlyManifestazione || partExcelBusy || !manifestazioneId
+                    ? 'cursor-not-allowed opacity-50'
+                    : 'cursor-pointer'
+                }`}
+              >
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                  className="sr-only"
+                  disabled={isReadOnlyManifestazione || partExcelBusy || !manifestazioneId}
+                  onChange={(ev) => void onPartecipantiExcel(ev)}
+                />
+                {partExcelBusy ? 'Lettura…' : 'Carica Excel'}
+              </label>
+              {!isReadOnlyManifestazione && partecipantiElencoCount > 0 ? (
+                <button
+                  type="button"
+                  disabled={partExcelBusy}
+                  onClick={() => void rimuoviElencoPartecipanti()}
+                  className={`${opToolbarBtnSm} border-red-200 text-red-800 hover:bg-red-50`}
+                >
+                  Rimuovi elenco
+                </button>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
+            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
               Testi legali dimissione (in fondo alle impostazioni)
             </h2>
             <p className="mt-1 text-xs text-slate-500">
@@ -689,7 +785,8 @@ export function ManifestazioneImpostazioniPage() {
                 <code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1 font-mono text-xs">
                   updateDoc
                 </code>{' '}
-                aggiorna solo i campi indicati.
+                aggiorna solo i campi indicati. L&apos;Excel partecipanti si carica dalla sezione dedicata e non
+                richiede &quot;Salva impostazioni&quot;: viene scritto subito su Firestore.
               </p>
             </section>
             {isReadOnlyManifestazione ? (

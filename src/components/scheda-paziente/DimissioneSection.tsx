@@ -33,6 +33,8 @@ type Props = {
   consensoPrivacy?: string
   rifiutoInvioPs?: string
   presetDimissione?: PresetDimissioneVoce[]
+  /** Elenco prestazioni manifestazione: stesso ordine della cartella clinica nel PDF. */
+  prestazioniManifestazioneLista?: string[]
 }
 
 /**
@@ -53,6 +55,7 @@ export function DimissioneSection({
   consensoPrivacy = '',
   rifiutoInvioPs = '',
   presetDimissione = [],
+  prestazioniManifestazioneLista = [],
 }: Props) {
   const dimissioneEdit = canEditDimissioneTab && canEditScheda
   const canChiudiDimetti = Boolean(canEditScheda && user && user.rank === 'Medico')
@@ -119,6 +122,7 @@ export function DimissioneSection({
         manifestazioneNome: reportManifestazioneNome,
         pmaNome: reportPmaNome,
         firmaMedicoProfiloDataUrl: firmaMedicoProfilo,
+        prestazioniManifestazioneLista,
         ...pdfManifestazioneTesti,
       })
       saveAs(blob, defaultPdfFilename(p))
@@ -146,6 +150,7 @@ export function DimissioneSection({
         manifestazioneNome: reportManifestazioneNome,
         pmaNome: reportPmaNome,
         firmaMedicoProfiloDataUrl: firmaMedicoProfilo,
+        prestazioniManifestazioneLista,
         ...pdfManifestazioneTesti,
       })
       const fname = defaultPdfFilename(p)
@@ -164,6 +169,19 @@ export function DimissioneSection({
   }
 
   const firmaPaz = p.firma_paziente_base64
+
+  const showPresetMenuMedico = Boolean(isMedico && dimissioneEdit && presetDimissione.length > 0)
+
+  function appendPresetTesto(testoPreset: string) {
+    const t = testoPreset.trim()
+    if (!t) return
+    setNoteDraft((prev) => {
+      const base = prev.trimEnd()
+      const next = base ? `${base}\n\n${t}` : t
+      void write({ dimissione_note: next })
+      return next
+    })
+  }
 
   return (
     <section className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -257,32 +275,49 @@ export function DimissioneSection({
         ) : null}
 
         <div className="pma-field max-w-3xl">
-          <label htmlFor={`dimissione-note-${p.id}`} className="pma-field__label">
-            Note di dimissione
-          </label>
-          {dimissioneEdit && presetDimissione.length > 0 ? (
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-slate-500">Importa preset:</span>
-              {presetDimissione.map((preset, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    const t = preset.testo.trim()
-                    if (!t) return
-                    setNoteDraft((prev) => {
-                      const base = prev.trimEnd()
-                      const next = base ? `${base}\n\n${t}` : t
-                      void write({ dimissione_note: next })
-                      return next
-                    })
-                  }}
-                  className="pma-pill pma-pill--stato-off text-xs"
+          <div className="mb-1 flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <label htmlFor={`dimissione-note-${p.id}`} className="pma-field__label m-0">
+              Note di dimissione
+            </label>
+            {showPresetMenuMedico ? (
+              <details className="relative shrink-0 [&_summary::-webkit-details-marker]:hidden">
+                <summary className="cursor-pointer list-none rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-800 shadow-sm hover:bg-slate-50">
+                  Preset <span className="text-slate-400" aria-hidden>▾</span>
+                </summary>
+                <div
+                  className="absolute right-0 z-20 mt-1 max-h-60 min-w-[14rem] max-w-[min(100vw-2rem,20rem)] overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+                  role="menu"
+                  aria-label="Preset note dimissione"
                 >
-                  {preset.titolo.trim() || `Preset ${idx + 1}`}
-                </button>
-              ))}
-            </div>
+                  {presetDimissione.map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      role="menuitem"
+                      className="block w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
+                      onClick={() => {
+                        appendPresetTesto(preset.testo)
+                      }}
+                    >
+                      <span className="font-semibold text-slate-900">
+                        {preset.titolo.trim() || `Preset ${idx + 1}`}
+                      </span>
+                      {preset.testo.trim() ? (
+                        <span className="mt-0.5 line-clamp-2 block text-xs font-normal text-slate-500">
+                          {preset.testo.trim()}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+          </div>
+          {showPresetMenuMedico ? (
+            <p className="mb-2 text-xs text-slate-500">
+              Come <strong className="font-semibold text-slate-700">Medico</strong>, apri il menu &quot;Preset&quot;
+              e scegli una voce: puoi ripetere l&apos;operazione per aggiungere più blocchi di testo alle note.
+            </p>
           ) : null}
           <textarea
             id={`dimissione-note-${p.id}`}

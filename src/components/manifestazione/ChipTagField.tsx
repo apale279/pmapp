@@ -41,7 +41,7 @@ export function ChipTagField({ tags, onChange, placeholder, disabled, hint }: Pr
             {!disabled ? (
               <button
                 type="button"
-                className="rounded-full p-0.5 hover:bg-white/20"
+                className="pma-theme-skip inline-flex h-5 w-5 min-h-0 shrink-0 items-center justify-center rounded-full p-0 text-xs font-bold leading-none text-white hover:bg-white/25"
                 aria-label={`Rimuovi ${t}`}
                 onClick={() => onChange(tags.filter((x) => x !== t))}
               >

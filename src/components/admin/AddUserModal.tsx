@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useMemo, useState, type FormEvent } from 'react'
 import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { STAFF_RANKS, staffRankRequiresPma, type StaffRank } from '../../types/userProfile'
 import { db } from '../../lib/firebase'
@@ -42,7 +42,14 @@ export function AddUserModal({ open, onClose, fixedManifestazioneId }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  const manForPma = rank !== 'Centrale' && idManifestazione.trim() ? idManifestazione.trim() : null
+  const isCentraleCreating = Boolean(fixedManifestazioneId?.trim())
+  const rankOptions = useMemo(
+    () => (isCentraleCreating ? STAFF_RANKS.filter((r) => r !== 'Centrale') : [...STAFF_RANKS]),
+    [isCentraleCreating],
+  )
+
+  const showPmaField = rank !== 'Centrale' || isCentraleCreating
+  const manForPma = showPmaField && idManifestazione.trim() ? idManifestazione.trim() : null
   const { items: pmaOptions, loading: pmaLoading } = usePmaOptionsForManifestazione(manForPma)
 
   useEffect(() => {
@@ -50,6 +57,11 @@ export function AddUserModal({ open, onClose, fixedManifestazioneId }: Props) {
     const fix = fixedManifestazioneId?.trim()
     if (fix) setIdManifestazione(fix)
   }, [open, fixedManifestazioneId])
+
+  useEffect(() => {
+    if (!open || !isCentraleCreating) return
+    if (rank === 'Centrale') setRank('Medico')
+  }, [open, isCentraleCreating, rank])
 
   useEffect(() => {
     if (!open) return
@@ -112,6 +124,10 @@ export function AddUserModal({ open, onClose, fixedManifestazioneId }: Props) {
       setError('Seleziona la manifestazione di appartenenza.')
       return
     }
+    if (isCentraleCreating && !idPma.trim()) {
+      setError('Seleziona il PMA di assegnazione (obbligatorio per utenti creati da Centrale).')
+      return
+    }
     if (staffRankRequiresPma(rank) && pmaLoading) {
       setError('Attendi il caricamento dell’elenco PMA.')
       return
@@ -136,7 +152,7 @@ export function AddUserModal({ open, onClose, fixedManifestazioneId }: Props) {
     setSubmitting(true)
     try {
       const { localId, email: createdEmail } = await identityToolkitSignUp(email, password)
-      const idPmaValue = rank === 'Centrale' ? null : idPma.trim() || null
+      const idPmaValue = rank === 'Centrale' && !isCentraleCreating ? null : idPma.trim() || null
 
       const docPayload: Record<string, unknown> = {
         email: createdEmail.trim().toLowerCase(),
@@ -292,7 +308,7 @@ export function AddUserModal({ open, onClose, fixedManifestazioneId }: Props) {
                 }
               }}
             >
-              {STAFF_RANKS.map((r) => (
+              {rankOptions.map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
@@ -344,11 +360,15 @@ export function AddUserModal({ open, onClose, fixedManifestazioneId }: Props) {
             </div>
           )}
 
-          {rank !== 'Centrale' ? (
+          {rank === 'Centrale' && !isCentraleCreating ? (
+            <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              Ruolo Centrale: nessun PMA assegnato (visibilità su tutta la manifestazione).
+            </p>
+          ) : (
             <div className="pma-field">
               <label htmlFor="au-pma" className="pma-field__label">
                 PMA assegnato
-                {staffRankRequiresPma(rank) ? (
+                {staffRankRequiresPma(rank) || isCentraleCreating ? (
                   <span className="font-semibold text-slate-900"> (obbligatorio)</span>
                 ) : null}
               </label>
@@ -358,22 +378,21 @@ export function AddUserModal({ open, onClose, fixedManifestazioneId }: Props) {
                 onChange={(ev) => setIdPma(ev.target.value)}
                 disabled={!idManifestazione || pmaLoading}
               >
-                <option value="">{staffRankRequiresPma(rank) ? '— Seleziona PMA —' : 'Non assegnato'}</option>
+                <option value="">
+                  {staffRankRequiresPma(rank) || isCentraleCreating ? '— Seleziona PMA —' : 'Non assegnato'}
+                </option>
                 {pmaOptions.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.nome}
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-slate-500">
-                Per il ruolo Centrale il PMA non si assegna: visibilità su tutti i PMA della
-                manifestazione.
-              </p>
+              {isCentraleCreating ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  Gli utenti creati da Centrale devono essere associati a un PMA della manifestazione.
+                </p>
+              ) : null}
             </div>
-          ) : (
-            <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              Ruolo Centrale: nessun PMA assegnato (visibilità su tutta la manifestazione).
-            </p>
           )}
 
           {rank === 'Medico' ? (

@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { useParams } from 'react-router-dom'
 import { addDoc, collection, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
 import { db } from '../../lib/firebase'
@@ -32,7 +32,6 @@ export function ManifestazioneFileUtiliPage() {
   const routeManId = idParam ? decodeURIComponent(idParam) : ''
   const { user } = useAuth()
   const tenantId = user ? manifestazioneTenantIdForFirestore(user, routeManId) : ''
-  const manSeg = routeManId.trim() ? encodeURIComponent(routeManId.trim()) : ''
 
   const { items, loading, error } = useManifestazioneFileUtili(tenantId || undefined)
 
@@ -44,7 +43,6 @@ export function ManifestazioneFileUtiliPage() {
   const [rowBusy, setRowBusy] = useState<string | null>(null)
 
   const canUse = Boolean(db && tenantId.trim())
-  const dashHref = useMemo(() => `/manifestazione/${manSeg}`, [manSeg])
 
   function onPickFile(next: File | null) {
     setFile(next)
@@ -100,11 +98,6 @@ export function ManifestazioneFileUtiliPage() {
           <div className="pma-bar__id text-base">File utili</div>
           <p className="mt-0.5 text-xs text-[#a8a8c8]">Allegati condivisi per manifestazione</p>
         </div>
-        {manSeg ? (
-          <Link to={dashHref} className={`${opToolbarBtnSm} no-underline`}>
-            Dashboard manifestazione
-          </Link>
-        ) : null}
       </div>
 
       {!canUse ? (

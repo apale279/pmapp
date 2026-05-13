@@ -17,7 +17,7 @@ export function MobileEmojiNavOverlay({
     <>
       <button
         type="button"
-        className="fixed inset-0 z-40 bg-slate-900/40 md:hidden"
+        className="pma-theme-skip fixed inset-0 z-40 bg-slate-900/40 md:hidden"
         aria-label="Chiudi menu"
         onClick={onClose}
       />
@@ -31,7 +31,7 @@ export function MobileEmojiNavOverlay({
         <div className="flex shrink-0 items-center justify-end border-b border-[#e2e8f0] px-2 py-2">
           <button
             type="button"
-            className="min-h-10 rounded-md px-3 text-xs font-bold uppercase tracking-wide text-slate-700 hover:bg-slate-100"
+            className="pma-theme-skip min-h-10 rounded-md px-3 text-xs font-bold uppercase tracking-wide text-slate-700 hover:bg-slate-100"
             onClick={onClose}
           >
             Chiudi
@@ -62,7 +62,7 @@ export function MobileNavHamburgerButton({ onOpen }: { onOpen: () => void }) {
   return (
     <button
       type="button"
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-[#e2e8f0] bg-white text-slate-900 transition hover:bg-slate-50 md:hidden"
+      className="pma-theme-skip flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-[#e2e8f0] bg-white text-slate-900 transition hover:bg-slate-50 md:hidden"
       aria-label="Apri menu di navigazione"
       aria-controls="emoji-mobile-nav"
       onClick={onOpen}

@@ -33,3 +33,89 @@
     animation: pmapp-ticker 55s linear infinite;
   }
 }
+
+/**
+ * Chip neutro globale — stessa scala tipografica e geometrica di `.pma-pill` (codice colore).
+ * Colori allineati alla pill “Bianco” off. Esclusi: .pma-pill, .pma-theme-skip.
+ */
+button[type='button']:not(.pma-pill):not(.pma-theme-skip),
+button[type='submit']:not(.pma-pill):not(.pma-theme-skip),
+button[type='reset']:not(.pma-pill):not(.pma-theme-skip),
+button:not([type]):not(.pma-pill):not(.pma-theme-skip) {
+  box-sizing: border-box !important;
+  border-radius: 30px !important;
+  border: 1px solid var(--pma-bianco-border) !important;
+  background: var(--pma-bianco-bg) !important;
+  color: var(--pma-bianco-text) !important;
+  font-weight: 400 !important;
+  font-family: inherit !important;
+  font-size: calc(var(--pma-value-size) - 1px) !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  min-height: var(--pma-touch-min) !important;
+  padding: var(--pma-pill-pad-v) 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  gap: 6px !important;
+  cursor: pointer;
+  user-select: none !important;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04) !important;
+  text-decoration: none !important;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease !important;
+}
+
+button[type='button']:not(.pma-pill):not(.pma-theme-skip):hover:enabled,
+button[type='submit']:not(.pma-pill):not(.pma-theme-skip):hover:enabled,
+button[type='reset']:not(.pma-pill):not(.pma-theme-skip):hover:enabled,
+button:not([type]):not(.pma-pill):not(.pma-theme-skip):hover:enabled {
+  background: #ffffff !important;
+  color: var(--pma-bianco-text) !important;
+  border-color: #64748b !important;
+}
+
+button[type='button']:not(.pma-pill):not(.pma-theme-skip):disabled,
+button[type='submit']:not(.pma-pill):not(.pma-theme-skip):disabled,
+button[type='reset']:not(.pma-pill):not(.pma-theme-skip):disabled,
+button:not([type]):not(.pma-pill):not(.pma-theme-skip):disabled {
+  cursor: not-allowed !important;
+  opacity: 0.45 !important;
+}
+
+a.pma-action-chip {
+  box-sizing: border-box !important;
+  border-radius: 30px !important;
+  border: 1px solid var(--pma-bianco-border) !important;
+  background: var(--pma-bianco-bg) !important;
+  color: var(--pma-bianco-text) !important;
+  font-weight: 400 !important;
+  font-size: calc(var(--pma-value-size) - 1px) !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  min-height: var(--pma-touch-min) !important;
+  padding: var(--pma-pill-pad-v) 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  gap: 6px !important;
+  cursor: pointer;
+  user-select: none !important;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04) !important;
+  text-decoration: none !important;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+a.pma-action-chip:hover {
+  background: #ffffff !important;
+  color: var(--pma-bianco-text) !important;
+  border-color: #64748b !important;
+}

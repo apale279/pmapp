@@ -1,5 +1,5 @@
 import { getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app'
-import { getAuth, type Auth } from 'firebase/auth'
+import { browserSessionPersistence, getAuth, setPersistence, type Auth } from 'firebase/auth'
 import {
   getFirestore,
   initializeFirestore,
@@ -52,6 +52,15 @@ export const firebaseApp: FirebaseApp | null = configured
   : null
 
 export const auth: Auth | null = firebaseApp ? getAuth(firebaseApp) : null
+
+/**
+ * Sessione legata alla scheda del browser: chiusura finestra/tab → logout implicito (nessun token in persistenza locale estesa).
+ * Deve essere completata prima di `onAuthStateChanged` / login interattivo.
+ */
+export async function ensureBrowserSessionAuthPersistence(): Promise<void> {
+  if (!auth) return
+  await setPersistence(auth, browserSessionPersistence)
+}
 
 export const db: Firestore | null = firebaseApp
   ? createFirestoreWithOfflineSupport(firebaseApp)

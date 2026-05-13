@@ -223,7 +223,7 @@ function CodiceMinoreRow({ row, spinnerClass }: { row: CodiceMinore; spinnerClas
               type="button"
               title="Imposta ora dimissione adesso"
               onClick={() => void setDimissioneNow()}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-slate-300 bg-slate-50 text-slate-700 hover:bg-emerald-50 hover:text-emerald-800"
+              className="pma-theme-skip flex h-10 w-10 shrink-0 items-center justify-center rounded border border-slate-300 bg-slate-50 text-slate-700 hover:bg-emerald-50 hover:text-emerald-800"
             >
               <IconClock className="shrink-0" />
             </button>

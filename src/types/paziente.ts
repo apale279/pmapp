@@ -176,6 +176,7 @@ export function isPazienteStato(v: unknown): v is PazienteStato {
 }
 
 /** Saturazione letti PMA: contano solo chi occupa un posto (esclusi dimessi e ancora in logistica “in arrivo”). */
+/** Posto letto conteggiato solo per pazienti effettivamente in carico (non in arrivo / in attesa / sospeso). */
 export function pazienteOccupaPostoLetto(stato: PazienteStato): boolean {
-  return stato !== 'dimesso' && stato !== 'in_arrivo'
+  return stato === 'in_carico'
 }

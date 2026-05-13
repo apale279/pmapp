@@ -51,7 +51,7 @@ export function AdminRowActions({
         onClick={onEdit}
         disabled={editDisabled}
         title={editTitle ?? 'Modifica'}
-        className="inline-flex items-center justify-center rounded-md border border-slate-300 bg-white p-2 text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        className="pma-theme-skip inline-flex items-center justify-center rounded-md border border-slate-300 bg-white p-2 text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <IconPencil />
         <span className="sr-only">Modifica</span>
@@ -61,7 +61,7 @@ export function AdminRowActions({
         onClick={onDelete}
         disabled={deleteDisabled}
         title={deleteTitle ?? 'Elimina'}
-        className="inline-flex items-center justify-center rounded-md border border-red-200 bg-white p-2 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+        className="pma-theme-skip inline-flex items-center justify-center rounded-md border border-red-200 bg-white p-2 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <IconTrash />
         <span className="sr-only">Elimina</span>

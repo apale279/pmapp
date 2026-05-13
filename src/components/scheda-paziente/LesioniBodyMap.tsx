@@ -127,11 +127,11 @@ export function LesioniBodyMap({ lesioni, disabled, onLesioniChange }: Props) {
           type="button"
           disabled={disabled}
           onClick={() => setActiveVista('front')}
-          className={
+          className={`pma-theme-skip ${
             activeVista === 'front'
               ? 'rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white'
               : 'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800'
-          }
+          }`}
         >
           Vista frontale
         </button>
@@ -139,11 +139,11 @@ export function LesioniBodyMap({ lesioni, disabled, onLesioniChange }: Props) {
           type="button"
           disabled={disabled}
           onClick={() => setActiveVista('back')}
-          className={
+          className={`pma-theme-skip ${
             activeVista === 'back'
               ? 'rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white'
               : 'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800'
-          }
+          }`}
         >
           Vista posteriore
         </button>
@@ -191,11 +191,7 @@ export function LesioniBodyMap({ lesioni, disabled, onLesioniChange }: Props) {
                 />
               </label>
               {!disabled ? (
-                <button
-                  type="button"
-                  onClick={() => removeMarker(m.n)}
-                  className="shrink-0 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-800"
-                >
+                <button type="button" onClick={() => removeMarker(m.n)}>
                   Rimuovi
                 </button>
               ) : null}

@@ -10,6 +10,7 @@ import { ManifestazioneCard } from '../components/home/ManifestazioneCard'
 import { NewManifestazioneModal } from '../components/home/NewManifestazioneModal'
 import { useManifestazioni } from '../hooks/useManifestazioni'
 import { opPrimaryBtn } from '../components/layout/operativeTokens'
+import { defaultRouteAfterLogin } from '../lib/postLoginRedirect'
 
 export function HomePage() {
   const { user } = useAuth()
@@ -41,6 +42,11 @@ export function HomePage() {
 
   if (isSuperadmin) {
     return <Navigate to="/admin" replace />
+  }
+
+  const postAuthPath = user ? defaultRouteAfterLogin(user) : null
+  if (postAuthPath && postAuthPath !== '/') {
+    return <Navigate to={postAuthPath} replace />
   }
 
   return (

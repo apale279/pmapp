@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { useAuth } from '../context/AuthContext'
@@ -6,6 +6,8 @@ import {
   bootstrapSuperadminIfNoUsers,
   getBootstrapTestCredentials,
 } from '../lib/bootstrapTestSuperadmin'
+import { consumeLoginFlashMessage } from '../lib/authLoginFlash'
+import { defaultRouteAfterLogin } from '../lib/postLoginRedirect'
 import { auth, db, isFirebaseReady } from '../lib/firebase'
 
 export function Login() {
@@ -16,6 +18,12 @@ export function Login() {
   const [pending, setPending] = useState(false)
   const [bootstrapMessage, setBootstrapMessage] = useState<string | null>(null)
   const [bootstrapBusy, setBootstrapBusy] = useState(false)
+  const [securityNotice, setSecurityNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    const msg = consumeLoginFlashMessage()
+    if (msg) setSecurityNotice(msg)
+  }, [])
 
   if (firebaseDisabled || status === 'firebase_disabled') {
     return (
@@ -33,7 +41,7 @@ export function Login() {
   }
 
   if (status === 'ready' && user) {
-    return <Navigate to={user.rank === 'Superadmin' ? '/admin' : '/'} replace />
+    return <Navigate to={defaultRouteAfterLogin(user)} replace />
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -98,6 +106,15 @@ export function Login() {
         </div>
         <div className="px-6 pb-8 pt-5">
           <p className="text-center text-sm text-slate-500">Accedi con email e password</p>
+
+          {securityNotice ? (
+            <div
+              className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+              role="alert"
+            >
+              {securityNotice}
+            </div>
+          ) : null}
 
         <form className="mt-6 space-y-0" onSubmit={(e) => void handleSubmit(e)}>
           <label className="pma-field">
