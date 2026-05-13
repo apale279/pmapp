@@ -14,6 +14,11 @@ import {
   type EoTabKey,
 } from '../../lib/multilineList'
 import { sortRecordKeysAndValuesIt, sortStringsIt } from '../../lib/sortLocaleIt'
+import { manifestazioneImpostazioniAllows } from '../../lib/rankMatrix'
+import {
+  parsePresetDimissioneFromFirestore,
+  type PresetDimissioneVoce,
+} from '../../types/manifestazioneImpostazioni'
 
 /** Testo textarea → righe pulite, deduplicate, ordinate, rimesse su righe. */
 function sortLinesText(text: string): string {
@@ -98,7 +103,7 @@ export function ManifestazioneImpostazioniPage() {
   const manifestazioneId = idParam ? decodeURIComponent(idParam) : ''
   const { user } = useAuth()
   const { bumpSync } = useSyncLive()
-  const isReadOnlyTriage = user?.rank === 'Triage'
+  const isReadOnlyManifestazione = user ? !manifestazioneImpostazioniAllows(user.rank, 'UPDATE') : true
 
   const [prestazioniDraft, setPrestazioniDraft] = useState('')
   const [farmaciDraft, setFarmaciDraft] = useState('')
@@ -106,6 +111,10 @@ export function ManifestazioneImpostazioniPage() {
   const [dettaglioDraft, setDettaglioDraft] = useState<Record<string, string>>({})
   const [eoDraft, setEoDraft] = useState<Record<EoTabKey, string>>(emptyEoDraft)
   const [eoActiveTab, setEoActiveTab] = useState<EoTabKey>('GENERALE')
+  const [consensoGenericoDraft, setConsensoGenericoDraft] = useState('')
+  const [consensoPrivacyDraft, setConsensoPrivacyDraft] = useState('')
+  const [rifiutoInvioPsDraft, setRifiutoInvioPsDraft] = useState('')
+  const [presetDimissioneDraft, setPresetDimissioneDraft] = useState<PresetDimissioneVoce[]>([])
   const [openAcc, setOpenAcc] = useState<Record<string, boolean>>({})
 
   const [loading, setLoading] = useState(true)
@@ -167,6 +176,13 @@ export function ManifestazioneImpostazioniPage() {
         }
         setEoDraft(nextEoDraft)
 
+        setConsensoGenericoDraft(
+          typeof imp.consenso_generico_cure === 'string' ? imp.consenso_generico_cure : '',
+        )
+        setConsensoPrivacyDraft(typeof imp.consenso_privacy === 'string' ? imp.consenso_privacy : '')
+        setRifiutoInvioPsDraft(typeof imp.rifiuto_invio_ps === 'string' ? imp.rifiuto_invio_ps : '')
+        setPresetDimissioneDraft(parsePresetDimissioneFromFirestore(imp.preset_dimissione))
+
         setLoading(false)
         bumpSync()
       },
@@ -192,7 +208,7 @@ export function ManifestazioneImpostazioniPage() {
   }, [])
 
   const salva = useCallback(async () => {
-    if (isReadOnlyTriage) return
+    if (isReadOnlyManifestazione) return
     if (!db || !manifestazioneId) return
     setSaving(true)
     setError(null)
@@ -211,6 +227,9 @@ export function ManifestazioneImpostazioniPage() {
 
       const prestazioniLista = listFromMultilineText(prestazioniDraft)
       const farmaciLista = listFromMultilineText(farmaciDraft)
+      const presetPayload = presetDimissioneDraft
+        .map((row) => ({ titolo: row.titolo.trim(), testo: row.testo }))
+        .filter((row) => row.titolo || row.testo.trim())
 
       await updateDoc(ref, {
         prestazioni_lista: prestazioniLista,
@@ -220,6 +239,10 @@ export function ManifestazioneImpostazioniPage() {
         dettaglio_eo_rapido: eoPayload,
         'impostazioni.prestazioni_imp': prestazioniLista,
         'impostazioni.farmaci_imp': farmaciLista,
+        'impostazioni.consenso_generico_cure': consensoGenericoDraft,
+        'impostazioni.consenso_privacy': consensoPrivacyDraft,
+        'impostazioni.rifiuto_invio_ps': rifiutoInvioPsDraft,
+        'impostazioni.preset_dimissione': presetPayload,
         ...(defaultPrim
           ? { dettaglio_eo_rapido_default: defaultPrim }
           : { dettaglio_eo_rapido_default: deleteField() }),
@@ -233,13 +256,17 @@ export function ManifestazioneImpostazioniPage() {
       setSaving(false)
     }
   }, [
-    isReadOnlyTriage,
+    isReadOnlyManifestazione,
     manifestazioneId,
     prestazioniDraft,
     farmaciDraft,
     tipoEvento,
     dettaglioDraft,
     eoDraft,
+    consensoGenericoDraft,
+    consensoPrivacyDraft,
+    rifiutoInvioPsDraft,
+    presetDimissioneDraft,
     bumpSync,
   ])
 
@@ -262,39 +289,39 @@ export function ManifestazioneImpostazioniPage() {
   }, [tipoEvento])
 
   return (
-    <div className="mx-auto w-full max-w-[1920px] pb-12">
+    <div className="pma-dashboard mx-auto w-full max-w-[1920px] pb-12">
       <OperativePageGrid
         main={
           <>
-            <header className="mb-6 rounded-lg border border-[#e2e8f0] bg-white px-6 py-5 sm:px-8">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-[12px] font-bold uppercase tracking-wide text-slate-500">
+            <header className="mb-6 overflow-hidden rounded-lg border border-[#e2e8f0] bg-white shadow-sm">
+              <div className="pma-bar flex-col items-start gap-3 sm:flex-row sm:items-center">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9090b8]">
                     Manifestazione
-                  </p>
-                  <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+                  </div>
+                  <h1 className="pma-bar__id mt-0.5 text-lg font-semibold leading-tight">
                     Impostazioni manifestazione
-                    {isReadOnlyTriage ? (
-                      <span className="ml-2 text-base font-normal text-slate-500">(sola lettura)</span>
+                    {isReadOnlyManifestazione ? (
+                      <span className="ml-2 text-sm font-normal text-[#a8a8c8]">(sola lettura)</span>
                     ) : null}
                   </h1>
-                  <p className="mt-1 text-[13px] text-slate-500">
+                  <p className="mt-1 text-xs text-[#a8a8c8]">
                     Documento: manifestazioni/{manifestazioneId || '—'}
                   </p>
                 </div>
-                <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:items-end">
+                <div className="pma-bar__right flex w-full flex-col gap-2 sm:w-auto sm:items-end">
                   <Link
                     to={`/manifestazione/${encodeURIComponent(manifestazioneId)}`}
-                    className={`${opToolbarBtnSm} inline-flex justify-center no-underline`}
+                    className={`${opToolbarBtnSm} inline-flex justify-center border-slate-600 bg-slate-800 no-underline hover:bg-slate-700`}
                   >
                     Torna alla dashboard
                   </Link>
-                  {!isReadOnlyTriage ? (
+                  {!isReadOnlyManifestazione ? (
                     <button
                       type="button"
                       disabled={saving || !manifestazioneId}
                       onClick={() => void salva()}
-                      className={`${opPrimaryBtn} inline-flex min-h-10 items-center justify-center gap-2 px-5`}
+                      className={`${opPrimaryBtn} inline-flex items-center justify-center gap-2`}
                     >
                       {saving ? (
                         <>
@@ -347,7 +374,7 @@ export function ManifestazioneImpostazioniPage() {
                   <span className="text-sm font-medium text-slate-800">Elenco prestazioni</span>
                   <button
                     type="button"
-                    disabled={isReadOnlyTriage}
+                    disabled={isReadOnlyManifestazione}
                     onClick={() => setPrestazioniDraft((t) => sortLinesText(t))}
                     className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium uppercase text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
                   >
@@ -362,7 +389,7 @@ export function ManifestazioneImpostazioniPage() {
                 <textarea
                   value={prestazioniDraft}
                   onChange={(e) => setPrestazioniDraft(e.target.value)}
-                  disabled={isReadOnlyTriage}
+                  disabled={isReadOnlyManifestazione}
                   rows={10}
                   spellCheck={false}
                   className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
@@ -374,7 +401,7 @@ export function ManifestazioneImpostazioniPage() {
                   <span className="text-sm font-medium text-slate-800">Elenco farmaci</span>
                   <button
                     type="button"
-                    disabled={isReadOnlyTriage}
+                    disabled={isReadOnlyManifestazione}
                     onClick={() => setFarmaciDraft((t) => sortLinesText(t))}
                     className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium uppercase text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
                   >
@@ -389,7 +416,7 @@ export function ManifestazioneImpostazioniPage() {
                 <textarea
                   value={farmaciDraft}
                   onChange={(e) => setFarmaciDraft(e.target.value)}
-                  disabled={isReadOnlyTriage}
+                  disabled={isReadOnlyManifestazione}
                   rows={10}
                   spellCheck={false}
                   className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
@@ -409,7 +436,7 @@ export function ManifestazioneImpostazioniPage() {
               <ChipTagField
                 tags={tipoEvento}
                 onChange={setTipoEventoSync}
-                disabled={isReadOnlyTriage}
+                disabled={isReadOnlyManifestazione}
                 placeholder="es. trauma, contusione… poi Invio"
               />
             </div>
@@ -450,7 +477,7 @@ export function ManifestazioneImpostazioniPage() {
                               onChange={(e) =>
                                 setDettaglioDraft((prev) => ({ ...prev, [tipo]: e.target.value }))
                               }
-                              disabled={isReadOnlyTriage}
+                              disabled={isReadOnlyManifestazione}
                               rows={6}
                               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm disabled:bg-slate-50"
                               spellCheck={false}
@@ -500,10 +527,140 @@ export function ManifestazioneImpostazioniPage() {
                 <textarea
                   value={eoDraft[eoActiveTab] ?? ''}
                   onChange={(e) => setEoDraft((prev) => ({ ...prev, [eoActiveTab]: e.target.value }))}
-                  disabled={isReadOnlyTriage}
+                  disabled={isReadOnlyManifestazione}
                   rows={8}
                   className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm disabled:bg-slate-50"
                   spellCheck={false}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
+            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Preset dimissione</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Il medico può importare uno o più testi nelle <strong className="text-slate-800">note di dimissione</strong>{' '}
+              dalla scheda. Campo Firestore:{' '}
+              <code className="rounded bg-slate-100 px-1">impostazioni.preset_dimissione</code> (array di oggetti{' '}
+              <code className="rounded bg-slate-100 px-1">titolo</code>, <code className="rounded bg-slate-100 px-1">testo</code>
+              ).
+            </p>
+            <div className="mt-4 space-y-4">
+              {presetDimissioneDraft.map((row, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-lg border border-slate-200 bg-slate-50/60 p-4 shadow-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="block min-w-[12rem] flex-1 text-xs font-medium text-slate-600">
+                      Titolo (pulsante in scheda)
+                      <input
+                        type="text"
+                        value={row.titolo}
+                        onChange={(e) =>
+                          setPresetDimissioneDraft((prev) =>
+                            prev.map((r, i) => (i === idx ? { ...r, titolo: e.target.value } : r)),
+                          )
+                        }
+                        disabled={isReadOnlyManifestazione}
+                        className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-50"
+                        placeholder="es. Dimissione standard"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={isReadOnlyManifestazione}
+                      onClick={() =>
+                        setPresetDimissioneDraft((prev) => prev.filter((_, i) => i !== idx))
+                      }
+                      className={`${opToolbarBtnSm} text-red-800`}
+                    >
+                      Rimuovi
+                    </button>
+                  </div>
+                  <label className="mt-3 block text-xs font-medium text-slate-600">
+                    Testo da appendere alle note
+                    <textarea
+                      value={row.testo}
+                      onChange={(e) =>
+                        setPresetDimissioneDraft((prev) =>
+                          prev.map((r, i) => (i === idx ? { ...r, testo: e.target.value } : r)),
+                        )
+                      }
+                      disabled={isReadOnlyManifestazione}
+                      rows={5}
+                      spellCheck={false}
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-50"
+                    />
+                  </label>
+                </div>
+              ))}
+              <button
+                type="button"
+                disabled={isReadOnlyManifestazione}
+                onClick={() =>
+                  setPresetDimissioneDraft((prev) => [...prev, { titolo: '', testo: '' }])
+                }
+                className={opToolbarBtnSm}
+              >
+                Aggiungi preset
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
+            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+              Testi legali dimissione (in fondo alle impostazioni)
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Consensi sempre mostrati in scheda dopo le note (se compilati). Il testo &quot;Rifiuto invio in PS&quot; è
+              visibile solo se l&apos;esito dimissione è <strong className="text-slate-800">Rifiuta invio in PS</strong>.
+              Campi:{' '}
+              <code className="rounded bg-slate-100 px-1">impostazioni.consenso_generico_cure</code>,{' '}
+              <code className="rounded bg-slate-100 px-1">impostazioni.consenso_privacy</code>,{' '}
+              <code className="rounded bg-slate-100 px-1">impostazioni.rifiuto_invio_ps</code>.
+            </p>
+            <div className="mt-4 space-y-4">
+              <label className="block text-sm">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Consenso generico alle cure
+                </span>
+                <textarea
+                  value={consensoGenericoDraft}
+                  onChange={(e) => setConsensoGenericoDraft(e.target.value)}
+                  disabled={isReadOnlyManifestazione}
+                  rows={6}
+                  spellCheck={false}
+                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
+                  aria-label="Testo consenso generico alle cure"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Consenso privacy
+                </span>
+                <textarea
+                  value={consensoPrivacyDraft}
+                  onChange={(e) => setConsensoPrivacyDraft(e.target.value)}
+                  disabled={isReadOnlyManifestazione}
+                  rows={6}
+                  spellCheck={false}
+                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
+                  aria-label="Testo consenso privacy"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Rifiuto invio in PS
+                </span>
+                <textarea
+                  value={rifiutoInvioPsDraft}
+                  onChange={(e) => setRifiutoInvioPsDraft(e.target.value)}
+                  disabled={isReadOnlyManifestazione}
+                  rows={6}
+                  spellCheck={false}
+                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
+                  aria-label="Testo rifiuto invio in PS"
                 />
               </label>
             </div>
@@ -516,8 +673,8 @@ export function ManifestazioneImpostazioniPage() {
         aside={
           <div className="space-y-4">
             <section className="rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
-              <h2 className="text-[12px] font-bold uppercase tracking-wide text-slate-500">Guida rapida</h2>
-              <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
+              <h2 className="text-lg font-bold text-slate-900">Guida rapida</h2>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
                 Prestazioni e farmaci: una riga per voce; usa &quot;Ordina Alfabeticamente&quot; per pulire e
                 ordinare. Tipo evento = evento lesivo (es. trauma).{' '}
                 <strong className="text-slate-900">Dettaglio evento per tipo</strong>: al salvataggio righe
@@ -535,11 +692,11 @@ export function ManifestazioneImpostazioniPage() {
                 aggiorna solo i campi indicati.
               </p>
             </section>
-            {isReadOnlyTriage ? (
+            {isReadOnlyManifestazione ? (
               <section className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-4">
-                <p className="text-[13px] leading-relaxed text-slate-700">
-                  Profilo <strong>Triage</strong>: puoi consultare le impostazioni generali della manifestazione;
-                  la modifica e il salvataggio sono riservati ad altri ruoli.
+                <p className="text-sm leading-relaxed text-slate-700">
+                  Con il tuo profilo puoi consultare le impostazioni generali della manifestazione; la modifica e
+                  il salvataggio non sono abilitati (matrice permessi).
                 </p>
               </section>
             ) : null}

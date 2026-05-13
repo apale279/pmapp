@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { deleteDoc, doc, getDoc, type Timestamp } from 'firebase/firestore'
-import JSZip from 'jszip'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { deleteDoc, doc, getDoc, collection, query, where, limit, onSnapshot, deleteField, serverTimestamp, type Timestamp } from 'firebase/firestore'
 import { saveAs } from 'file-saver'
 import { useAuth } from '../../context/AuthContext'
 import { useSyncLive } from '../../context/SyncLiveContext'
@@ -19,7 +18,6 @@ import {
   buildMailtoReportPaziente,
   buildPazientePdfBlob,
   defaultPdfFilename,
-  sanitizeFilePart,
 } from '../../lib/pdf/pazientePdfReport'
 import { CodiciMinoriModal } from '../../components/pma/CodiciMinoriModal'
 import { PmaManagerShell } from '../../components/pma/PmaManagerShell'
@@ -68,47 +66,62 @@ function ManagerQueueBox({
   titleLine2,
   lista,
   pmaId,
-  isTriage,
+  showTakeCharge,
   onInCarico,
 }: {
   titleLine1: string
   titleLine2: string
   lista: PazienteListItem[]
   pmaId: string
-  isTriage: boolean
+  /** Solo coda “IN ARRIVO”: Medico, Infermiere, Soccorritore, Triage possono passare a in carico. */
+  showTakeCharge: boolean
   onInCarico: (id: string) => void
 }) {
   const preview = lista.slice(0, 2)
   return (
-    <section className="rounded border border-slate-200 bg-white p-3">
-      <h3 className="border-b border-slate-200 pb-2 text-center text-[11px] font-bold leading-tight text-[#111827]">
-        <span className="block font-medium">{titleLine1}</span>
-        <span className="mt-0.5 block text-[10px] font-extrabold uppercase tracking-widest">{titleLine2}</span>
-      </h3>
+    <section className="pma-card">
+      <div className="border-b border-slate-100 pb-2 text-center">
+        <div className="text-lg font-bold text-slate-900">{titleLine1}</div>
+        <div className="pma-card__hdr mb-0 mt-1 text-center">{titleLine2}</div>
+      </div>
       {preview.length === 0 ? (
-        <p className="mt-2 text-center text-[12px] text-slate-400">—</p>
+        <p className="mt-2 text-center text-sm text-slate-400">—</p>
       ) : (
         <ul className="mt-2 space-y-2">
           {preview.map((pz) => {
             const nome = [pz.cognome, pz.nome].filter(Boolean).join(' ') || '—'
+            const schedaTo = `/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`
             return (
-              <li key={pz.id} className="text-[12px] leading-snug">
+              <li key={pz.id} className="relative rounded-md border border-slate-100 bg-slate-50/40">
                 <Link
-                  to={`/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`}
-                  className="font-medium text-[#111827] hover:underline"
-                >
-                  {nome}
-                </Link>
-                <div className="mt-0.5 font-mono text-[10px] text-slate-600">{pz.id_paziente_visibile}</div>
-                {isTriage && pz.stato === 'in_arrivo' ? (
-                  <button
-                    type="button"
-                    onClick={() => onInCarico(pz.id)}
-                    className="mt-1 rounded border border-slate-300 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-800 hover:bg-slate-50"
-                  >
-                    Arrivato
-                  </button>
-                ) : null}
+                  to={schedaTo}
+                  className="absolute inset-0 z-0 rounded-md"
+                  aria-label={`Apri scheda ${nome}`}
+                />
+                <div className="relative z-[1] p-2">
+                  <div className="flex min-w-0 items-start justify-between gap-1.5">
+                    <div className="pointer-events-none min-w-0 flex-1 text-sm font-medium leading-snug text-slate-900">
+                      <span className="line-clamp-2">{nome}</span>
+                    </div>
+                    {showTakeCharge && pz.stato === 'in_arrivo' ? (
+                      <button
+                        type="button"
+                        title="Prendi in carico"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          onInCarico(pz.id)
+                        }}
+                        className="relative z-[2] shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-bold uppercase leading-none text-slate-800 hover:bg-slate-50"
+                      >
+                        Prendi
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="pointer-events-none mt-0.5 font-mono text-xs font-medium text-slate-600">
+                    {pz.id_paziente_visibile}
+                  </div>
+                </div>
               </li>
             )
           })}
@@ -138,6 +151,7 @@ function ListaPazientiInCarico({
   /** Layout allineato al mock PMA Manager (desktop). */
   visualVariant?: 'default' | 'manager'
 }) {
+  const navigate = useNavigate()
   const manager = visualVariant === 'manager'
   const dotTri: Record<CodiceColorePaziente, string> = manager
     ? {
@@ -150,7 +164,7 @@ function ListaPazientiInCarico({
 
   if (lista.length === 0) {
     return (
-      <p className={`py-6 text-center text-slate-500 ${manager ? 'text-[13px]' : 'text-xs'}`}>{emptyMessage}</p>
+      <p className={`py-6 text-center text-sm font-medium text-slate-500`}>{emptyMessage}</p>
     )
   }
 
@@ -162,12 +176,12 @@ function ListaPazientiInCarico({
           : 'mt-1.5 max-h-[min(82vh,44rem)] overflow-auto rounded border border-slate-200 bg-white'
       }
     >
-      <table className="w-full border-collapse text-left text-[13px] leading-snug">
+      <table className="w-full border-collapse text-left text-sm font-medium leading-snug">
         <thead
           className={
             manager
-              ? 'border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-[#111827]'
-              : 'sticky top-0 z-[1] border-b border-slate-200 bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-600'
+              ? 'border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500'
+              : 'sticky top-0 z-[1] border-b border-slate-200 bg-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-500'
           }
         >
           <tr>
@@ -197,10 +211,10 @@ function ListaPazientiInCarico({
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 text-[#111827]">
+        <tbody className="divide-y divide-slate-100 text-slate-900">
           {lista.map((pz) => {
             const nome = [pz.cognome, pz.nome].filter(Boolean).join(' ') || 'Senza nome'
-            const err = pz.stato === 'errore'
+            const inSosp = pz.stato === 'in_sospeso'
             const inEvidenza = !manager && (evidenzaIds?.has(pz.id) ?? false)
             const etaDisp = pz.eta !== null && pz.eta !== undefined ? `${pz.eta}a` : '—'
             const rawMotivo = pz.breve_descrizione?.trim() ?? ''
@@ -214,14 +228,25 @@ function ListaPazientiInCarico({
             if (pz.infermiere_rif.trim()) refParts.push(`I:${pz.infermiere_rif.trim()}`)
             if (pz.medico_rif.trim()) refParts.push(`M:${pz.medico_rif.trim()}`)
             const ref = refParts.join(' · ') || '—'
+            const schedaTo = `/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`
             return (
               <tr
                 key={pz.id}
-                className={`align-middle transition-colors ${
+                role="link"
+                tabIndex={0}
+                title={`Apri scheda ${nome}`}
+                onClick={() => navigate(schedaTo)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigate(schedaTo)
+                  }
+                }}
+                className={`cursor-pointer align-middle transition-colors ${
                   manager
                     ? 'hover:bg-[#f1f5f9]'
-                    : `hover:bg-slate-50/80 ${inEvidenza ? 'border-l-[3px] border-l-slate-900 bg-slate-100/60' : ''} ${err ? 'bg-red-50/70' : ''}`
-                } ${manager && err ? 'bg-red-50/50' : ''}`}
+                    : `hover:bg-slate-50/80 ${inEvidenza ? 'border-l-[3px] border-l-slate-900 bg-slate-100/60' : ''} ${inSosp ? 'bg-amber-50/80' : ''}`
+                } ${manager && inSosp ? 'bg-amber-50/60' : ''}`}
               >
                 <td className="whitespace-nowrap px-2 py-2.5">
                   <span className="inline-flex items-center gap-1" title={CODICE_COLORE_LABEL[pz.codice_colore]}>
@@ -230,13 +255,10 @@ function ListaPazientiInCarico({
                   </span>
                 </td>
                 <td className="max-w-0 min-w-0 px-2 py-2.5">
-                  <Link
-                    to={`/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`}
-                    className={`block truncate font-semibold hover:underline ${manager ? 'text-[#111827]' : 'text-slate-900 hover:text-slate-950'}`}
-                  >
+                  <span className={`block truncate font-semibold ${manager ? 'text-slate-900' : 'text-slate-900'}`}>
                     {nome}
-                  </Link>
-                  <div className={`mt-0.5 truncate font-mono ${manager ? 'text-[11px] text-slate-600' : 'text-[11px] text-slate-600'}`}>
+                  </span>
+                  <div className={`mt-0.5 truncate font-mono text-sm font-medium text-slate-600`}>
                     {pz.id_paziente_visibile}
                   </div>
                 </td>
@@ -250,7 +272,7 @@ function ListaPazientiInCarico({
                   {motivo}
                 </td>
                 <td
-                  className={`max-w-[8rem] truncate px-2 py-2.5 font-mono text-[11px] text-slate-600 ${manager ? 'table-cell' : 'hidden md:table-cell'}`}
+                  className={`max-w-[8rem] truncate px-2 py-2.5 font-mono text-sm font-medium text-slate-600 ${manager ? 'table-cell' : 'hidden md:table-cell'}`}
                   title={ref}
                 >
                   {ref}
@@ -260,9 +282,9 @@ function ListaPazientiInCarico({
                 </td>
                 <td className={`whitespace-nowrap px-2 py-2.5 ${manager ? 'table-cell' : 'hidden sm:table-cell'}`}>
                   <span
-                    className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                      err
-                        ? 'border-red-200 bg-red-50 text-red-800'
+                    className={`inline-flex rounded border px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wider ${
+                      inSosp
+                        ? 'border-amber-300 bg-amber-50 text-amber-900'
                         : 'border-slate-200 bg-white text-slate-700'
                     }`}
                   >
@@ -276,8 +298,11 @@ function ListaPazientiInCarico({
                         type="button"
                         title="Elimina"
                         aria-label="Elimina"
-                        onClick={() => onDeleteClick(pz.id, pz.id_paziente_visibile)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded border border-transparent text-slate-500 transition-colors hover:border-slate-200 hover:bg-slate-50 hover:text-red-600"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDeleteClick(pz.id, pz.id_paziente_visibile)
+                        }}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded border border-transparent text-slate-500 transition-colors hover:border-slate-200 hover:bg-slate-50 hover:text-red-600"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
                           <path
@@ -292,8 +317,11 @@ function ListaPazientiInCarico({
                     ) : (
                       <button
                         type="button"
-                        onClick={() => onDeleteClick(pz.id, pz.id_paziente_visibile)}
-                        className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-semibold uppercase text-slate-700 hover:bg-slate-100"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDeleteClick(pz.id, pz.id_paziente_visibile)
+                        }}
+                        className="inline-flex h-10 items-center justify-center rounded border border-slate-300 bg-white px-4 text-sm font-bold uppercase text-slate-700 hover:bg-slate-100"
                       >
                         Del
                       </button>
@@ -315,6 +343,7 @@ export function PMADashboardPage() {
   const { id } = useParams<{ id: string }>()
   const pmaId = id ? decodeURIComponent(id) : ''
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, logout } = useAuth()
   const theme = useRankTheme()
   const pmaSnap = usePmaDocSnapshot(pmaId || undefined)
@@ -329,30 +358,45 @@ export function PMADashboardPage() {
   const [dimessiModalOpen, setDimessiModalOpen] = useState(false)
   const [dimessiModalSearch, setDimessiModalSearch] = useState('')
   const [dimessiModalBusyId, setDimessiModalBusyId] = useState<string | null>(null)
+  const [dimessiRiprendiBusyId, setDimessiRiprendiBusyId] = useState<string | null>(null)
   const [dimessiModalErr, setDimessiModalErr] = useState<string | null>(null)
   const [deleteModal, setDeleteModal] = useState<{ id: string; label: string; step: 1 | 2 } | null>(
     null,
   )
   const [deleteErr, setDeleteErr] = useState<string | null>(null)
-  const [zipBusy, setZipBusy] = useState(false)
-  const [zipErr, setZipErr] = useState<string | null>(null)
   const [codiciMinoriOpen, setCodiciMinoriOpen] = useState(false)
+  const [pmaAlertToast, setPmaAlertToast] = useState<{ id: string; msg: string } | null>(null)
 
   const { bumpSync } = useSyncLive()
   useEffect(() => {
     if (!listaLoading) bumpSync()
   }, [listaLoading, bumpSync])
 
+  useEffect(() => {
+    if (!pmaId.trim()) return
+    const sp = new URLSearchParams(location.search)
+    if (sp.get('dimessi') !== '1') return
+    sp.delete('dimessi')
+    const qs = sp.toString()
+    navigate({ pathname: location.pathname, search: qs ? `?${qs}` : '' }, { replace: true })
+    setDimessiModalOpen(true)
+    setDimessiModalSearch('')
+    setDimessiModalErr(null)
+  }, [pmaId, location.pathname, location.search, navigate])
+
   const manifestazioneForCreate =
     user?.id_manifestazione?.trim() || pmaSnap.idManifestazione?.trim() || ''
 
   const attivi = useMemo(() => pazienti.filter((p) => p.stato !== 'dimesso'), [pazienti])
   const inArrivo = useMemo(() => sortByColoreCodice(attivi.filter((p) => p.stato === 'in_arrivo')), [attivi])
-  const inAttesa = useMemo(() => sortByColoreCodice(attivi.filter((p) => p.stato === 'in_attesa')), [attivi])
+  const inAttesa = useMemo(
+    () => sortByColoreCodice(attivi.filter((p) => p.stato === 'in_attesa' || p.stato === 'in_sospeso')),
+    [attivi],
+  )
   const inCarico = useMemo(
     () =>
       sortByColoreCodice(
-        attivi.filter((p) => p.stato === 'in_carico' || p.stato === 'errore'),
+        attivi.filter((p) => p.stato === 'in_carico'),
       ),
     [attivi],
   )
@@ -434,13 +478,14 @@ export function PMADashboardPage() {
     })
   }, [dimessiModalListaCompleta, dimessiModalSearch])
 
-  const canDeletePaziente =
-    Boolean(user && (user.rank === 'Centrale' || user.rank === 'Medico')) && Boolean(db)
+  const isPmaDashboardReadOnly = user?.rank === 'Centrale'
+
+  const canDeletePaziente = Boolean(user && user.rank === 'Medico') && Boolean(db)
 
   const canCreatePaziente =
+    !isPmaDashboardReadOnly &&
     Boolean(db && manifestazioneForCreate && pmaId.trim() !== '') &&
     (user?.rank === 'Superadmin' ||
-      user?.rank === 'Centrale' ||
       user?.rank === 'Medico' ||
       user?.rank === 'Infermiere' ||
       user?.rank === 'Triage' ||
@@ -452,6 +497,7 @@ export function PMADashboardPage() {
   )
 
   const canOpenCodiciMinori =
+    !isPmaDashboardReadOnly &&
     Boolean(db && pmaId.trim() && manifestazioneForCodiciMinori) &&
     Boolean(
       user &&
@@ -463,15 +509,86 @@ export function PMADashboardPage() {
           user.rank === 'Soccorritore'),
     )
 
-  const isTriage = user?.rank === 'Triage'
+  const showPrendiInCarico =
+    user?.rank === 'Medico' ||
+    user?.rank === 'Infermiere' ||
+    user?.rank === 'Soccorritore' ||
+    user?.rank === 'Triage'
+
+  const triageStripEl = useMemo(
+    () => (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm font-medium text-white">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ef4444]" aria-hidden />
+          Rosso{' '}
+          <span className="tabular-nums font-semibold text-white">{countByColor(inCarico, 'rosso')}</span>
+        </span>
+        <span className="text-white/45" aria-hidden>
+          •
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#eab308]" aria-hidden />
+          Giallo{' '}
+          <span className="tabular-nums font-semibold text-white">{countByColor(inCarico, 'giallo')}</span>
+        </span>
+        <span className="text-white/45" aria-hidden>
+          •
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" aria-hidden />
+          Verde{' '}
+          <span className="tabular-nums font-semibold text-white">{countByColor(inCarico, 'verde')}</span>
+        </span>
+        <span className="text-white/45" aria-hidden>
+          •
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="h-2 w-2 shrink-0 rounded-full border border-white/50 bg-slate-200 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.25)]"
+            aria-hidden
+          />
+          Bianco{' '}
+          <span className="tabular-nums font-semibold text-white">{countByColor(inCarico, 'bianco')}</span>
+        </span>
+      </div>
+    ),
+    [inCarico],
+  )
 
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
     return () => window.clearInterval(id)
   }, [])
 
+  useEffect(() => {
+    if (!db || !pmaId.trim()) return
+    const q = query(collection(db, 'allerte_pma'), where('id_pma', '==', pmaId.trim()), limit(40))
+    let first = true
+    const unsub = onSnapshot(q, (snap) => {
+      if (first) {
+        first = false
+        return
+      }
+      for (const ch of snap.docChanges()) {
+        if (ch.type !== 'added') continue
+        const d = ch.doc.data() as Record<string, unknown>
+        const msg = typeof d.messaggio === 'string' ? d.messaggio : 'Allerta PMA'
+        setPmaAlertToast({ id: ch.doc.id, msg })
+        window.setTimeout(() => setPmaAlertToast((cur) => (cur?.id === ch.doc.id ? null : cur)), 14_000)
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          try {
+            new Notification('Allerta PMA', { body: msg, tag: ch.doc.id })
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    })
+    return () => unsub()
+  }, [pmaId])
+
   async function handleNuovoPazienteImmediato() {
-    if (!db || !manifestazioneForCreate || !pmaId.trim() || !user) return
+    if (!db || !manifestazioneForCreate || !pmaId.trim() || !user || user.rank === 'Centrale') return
     setCreateErr(null)
     setCreating(true)
     try {
@@ -492,7 +609,7 @@ export function PMADashboardPage() {
   }
 
   async function handleInCarico(pazienteId: string) {
-    if (!db) return
+    if (!db || user?.rank === 'Centrale') return
     try {
       await updateSchedaPazienteGranular(db, pazienteId, { stato: 'in_carico' })
     } catch {
@@ -511,33 +628,6 @@ export function PMADashboardPage() {
     }
   }
 
-  async function handleZipDimessi() {
-    if (!db || user?.rank !== 'Centrale' || !pmaId.trim()) return
-    if (dimessi.length === 0) return
-    setZipErr(null)
-    setZipBusy(true)
-    try {
-      const zip = new JSZip()
-      const manNome = manZipMeta?.nome ?? ''
-      const pmaNome = pmaSnap.nome ?? pmaId
-      const ctx = { manifestazioneNome: manNome, pmaNome }
-      for (const row of dimessi) {
-        const snap = await getDoc(doc(db, 'pazienti', row.id))
-        if (!snap.exists()) continue
-        const full = parsePazienteFromFirestore(snap.id, snap.data() as Record<string, unknown>)
-        const blob = await buildPazientePdfBlob(full, ctx)
-        zip.file(defaultPdfFilename(full), blob)
-      }
-      const out = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
-      const day = new Date().toISOString().slice(0, 10)
-      saveAs(out, `Report_PMA_${sanitizeFilePart(pmaNome)}_${day}.zip`)
-    } catch (e) {
-      setZipErr(e instanceof Error ? e.message : 'Creazione archivio non riuscita.')
-    } finally {
-      setZipBusy(false)
-    }
-  }
-
   async function downloadDimessoPdf(patientId: string) {
     if (!db) return
     setDimessiModalErr(null)
@@ -549,6 +639,9 @@ export function PMADashboardPage() {
       const blob = await buildPazientePdfBlob(full, {
         manifestazioneNome: manZipMeta?.nome ?? '',
         pmaNome: pmaSnap.nome ?? pmaId,
+        consensoGenericoCure: manZipMeta?.consensoGenericoCure,
+        consensoPrivacy: manZipMeta?.consensoPrivacy,
+        rifiutoInvioPsText: manZipMeta?.rifiutoInvioPs,
       })
       saveAs(blob, defaultPdfFilename(full))
     } catch (e) {
@@ -577,6 +670,9 @@ export function PMADashboardPage() {
       const blob = await buildPazientePdfBlob(full, {
         manifestazioneNome: manZipMeta?.nome ?? '',
         pmaNome: pmaSnap.nome ?? pmaId,
+        consensoGenericoCure: manZipMeta?.consensoGenericoCure,
+        consensoPrivacy: manZipMeta?.consensoPrivacy,
+        rifiutoInvioPsText: manZipMeta?.rifiutoInvioPs,
       })
       const fname = defaultPdfFilename(full)
       saveAs(blob, fname)
@@ -594,159 +690,119 @@ export function PMADashboardPage() {
     }
   }
 
+  async function riprendiInCaricoDimesso(patientId: string) {
+    if (!db || user?.rank !== 'Medico') return
+    setDimessiModalErr(null)
+    setDimessiRiprendiBusyId(patientId)
+    try {
+      await updateSchedaPazienteGranular(db, patientId, {
+        stato: 'in_carico',
+        aperto: true,
+        dimesso_at: deleteField(),
+        ripreso_in_carico_at: serverTimestamp(),
+      })
+    } catch (e) {
+      setDimessiModalErr(e instanceof Error ? e.message : 'Ripresa in carico non riuscita.')
+    } finally {
+      setDimessiRiprendiBusyId(null)
+    }
+  }
+
+  const topToolbarEl = useMemo(
+    () => (
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={!canCreatePaziente || !manifestazioneForCreate || creating || !pmaId.trim()}
+          title={
+            isPmaDashboardReadOnly
+              ? 'Vista PMA in sola lettura per il ruolo Centrale.'
+              : !canCreatePaziente
+                ? 'Permessi insufficienti per creare una nuova scheda.'
+                : !manifestazioneForCreate
+                  ? 'Manifestazione non disponibile.'
+                  : undefined
+          }
+          onClick={() => void handleNuovoPazienteImmediato()}
+          className={opToolbarBtnSm}
+        >
+          {creating ? '…' : 'NUOVO PAZIENTE'}
+        </button>
+        <button
+          type="button"
+          disabled={!canOpenCodiciMinori}
+          title={
+            !manifestazioneForCodiciMinori
+              ? 'Manifestazione non disponibile per i codici minori.'
+              : !canOpenCodiciMinori
+                ? 'Permessi insufficienti.'
+                : undefined
+          }
+          onClick={() => setCodiciMinoriOpen(true)}
+          className={opToolbarBtnSm}
+        >
+          CODICI MINORI
+        </button>
+        {user?.rank !== 'Centrale' && typeof Notification !== 'undefined' && Notification.permission === 'default' ? (
+          <button
+            type="button"
+            className={opToolbarBtnSm}
+            title="Consenti avvisi browser per le allerte Centrale"
+            onClick={() => void Notification.requestPermission()}
+          >
+            Notifiche allerta
+          </button>
+        ) : null}
+        <button
+          type="button"
+          disabled={!pmaId.trim()}
+          onClick={() => {
+            setDimessiModalOpen(true)
+            setDimessiModalSearch('')
+            setDimessiModalErr(null)
+          }}
+          className={opToolbarBtnSm}
+        >
+          PAZIENTI DIMESSI
+        </button>
+        <Link
+          to={`/pma/${encodeURIComponent(pmaId)}/impostazioni`}
+          aria-disabled={!pmaId.trim()}
+          onClick={(e) => {
+            if (!pmaId.trim()) e.preventDefault()
+          }}
+          className={`${opToolbarBtnSm} ${!pmaId.trim() ? 'pointer-events-none opacity-40' : ''}`}
+        >
+          IMPOSTAZIONI PMA
+        </Link>
+      </div>
+    ),
+    [
+      canCreatePaziente,
+      manifestazioneForCreate,
+      creating,
+      pmaId,
+      canOpenCodiciMinori,
+      manifestazioneForCodiciMinori,
+      isPmaDashboardReadOnly,
+      user?.rank,
+      db,
+    ],
+  )
+
   if (!user) {
     return null
   }
 
   if (!pmaId.trim()) {
     return (
-      <div className="min-h-screen bg-white p-6 font-[system-ui,-apple-system,sans-serif] text-[#111827]">
+      <div className="min-h-screen bg-white p-6 font-[system-ui,-apple-system,sans-serif] text-slate-900">
         <p className="text-sm">URL PMA non valido.</p>
       </div>
     )
   }
 
   const manIdForNav = (manifestazioneForCreate || pmaSnap.idManifestazione || '').trim()
-
-  const triageStripEl = (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] font-medium text-[#111827]">
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ef4444]" aria-hidden />
-        Rosso {countByColor(inCarico, 'rosso')}
-      </span>
-      <span className="text-slate-300" aria-hidden>
-        •
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#eab308]" aria-hidden />
-        Giallo {countByColor(inCarico, 'giallo')}
-      </span>
-      <span className="text-slate-300" aria-hidden>
-        •
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" aria-hidden />
-        Verde {countByColor(inCarico, 'verde')}
-      </span>
-    </div>
-  )
-
-  const topToolbarEl = (
-    <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <button
-        type="button"
-        disabled={!canCreatePaziente || !manifestazioneForCreate || creating || !pmaId.trim()}
-        title={
-          !canCreatePaziente
-            ? 'Permessi insufficienti per creare una nuova scheda.'
-            : !manifestazioneForCreate
-              ? 'Manifestazione non disponibile.'
-              : undefined
-        }
-        onClick={() => void handleNuovoPazienteImmediato()}
-        className={opToolbarBtnSm}
-      >
-        {creating ? '…' : 'NUOVO PAZIENTE'}
-      </button>
-      <button
-        type="button"
-        disabled={!canOpenCodiciMinori}
-        title={
-          !manifestazioneForCodiciMinori
-            ? 'Manifestazione non disponibile per i codici minori.'
-            : !canOpenCodiciMinori
-              ? 'Permessi insufficienti.'
-              : undefined
-        }
-        onClick={() => setCodiciMinoriOpen(true)}
-        className={opToolbarBtnSm}
-      >
-        CODICI MINORI
-      </button>
-      <button
-        type="button"
-        disabled={!pmaId.trim()}
-        onClick={() => {
-          setDimessiModalOpen(true)
-          setDimessiModalSearch('')
-          setDimessiModalErr(null)
-        }}
-        className={opToolbarBtnSm}
-      >
-        PAZIENTI DIMESSI
-      </button>
-      <Link
-        to={`/pma/${encodeURIComponent(pmaId)}/impostazioni`}
-        aria-disabled={!pmaId.trim()}
-        onClick={(e) => {
-          if (!pmaId.trim()) e.preventDefault()
-        }}
-        className={`${opToolbarBtnSm} ${!pmaId.trim() ? 'pointer-events-none opacity-40' : ''}`}
-      >
-        IMPOSTAZIONI PMA
-      </Link>
-      {user.rank === 'Centrale' && dimessi.length > 0 ? (
-        <button
-          type="button"
-          disabled={zipBusy || !db}
-          onClick={() => void handleZipDimessi()}
-          className={`${opToolbarBtnSm} shrink-0`}
-        >
-          {zipBusy ? (
-            <>
-              <span
-                className={`mr-1 h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-slate-400 border-t-transparent`}
-                aria-hidden
-              />
-              ZIP
-            </>
-          ) : (
-            `ZIP (${dimessi.length})`
-          )}
-        </button>
-      ) : null}
-    </div>
-  )
-
-  const footerEl = (
-    <>
-      <button
-        type="button"
-        disabled={!canCreatePaziente || !manifestazioneForCreate || creating || !pmaId.trim()}
-        onClick={() => void handleNuovoPazienteImmediato()}
-        className="rounded-md bg-[#2563eb] px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
-      >
-        {creating ? '…' : '+ NUOVO PAZIENTE'}
-      </button>
-      <button
-        type="button"
-        disabled={!pmaId.trim()}
-        onClick={() => {
-          setDimessiModalOpen(true)
-          setDimessiModalSearch('')
-          setDimessiModalErr(null)
-        }}
-        className="rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-900 transition-colors hover:bg-slate-100"
-      >
-        PAZIENTI DIMESSI
-      </button>
-      <Link
-        to={`/pma/${encodeURIComponent(pmaId)}/impostazioni`}
-        className="inline-flex items-center justify-center gap-2 rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-900 transition-colors hover:bg-slate-100"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
-          <path
-            d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          />
-        </svg>
-        IMPOSTAZIONI PMA
-      </Link>
-    </>
-  )
 
   return (
     <>
@@ -761,25 +817,51 @@ export function PMADashboardPage() {
           <div className="flex w-full flex-col gap-1.5">
             {topToolbarEl}
             {canCreatePaziente && !manifestazioneForCreate ? (
-              <p className="text-[10px] text-amber-800">Manifestazione non disponibile: creazione disabilitata.</p>
+              <p className="text-sm text-amber-800">Manifestazione non disponibile: creazione disabilitata.</p>
             ) : null}
             {createErr ? (
-              <p className="text-[11px] text-red-700" role="alert">
+              <p className="text-sm text-red-700" role="alert">
                 {createErr}
-              </p>
-            ) : null}
-            {zipErr ? (
-              <p className="text-[11px] text-red-700" role="alert">
-                {zipErr}
               </p>
             ) : null}
           </div>
         }
-        footer={footerEl}
       >
+        <div className="pma-dashboard space-y-4">
         {listaError ? (
           <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
             {listaError}
+          </div>
+        ) : null}
+
+        {isPmaDashboardReadOnly ? (
+          <div
+            className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"
+            role="status"
+          >
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Sola lettura</span>
+            <p className="mt-1 font-medium text-slate-800">
+              Vista PMA in sola consultazione per il ruolo Centrale: nessuna creazione, modifica o eliminazione da
+              questa schermata.
+            </p>
+          </div>
+        ) : null}
+
+        {pmaAlertToast ? (
+          <div
+            className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm"
+            role="status"
+          >
+            <p className="min-w-0 flex-1">
+              <strong className="font-semibold">Allerta:</strong> {pmaAlertToast.msg}
+            </p>
+            <button
+              type="button"
+              className="shrink-0 inline-flex h-10 items-center justify-center rounded-md border border-amber-400 bg-white px-4 text-sm font-bold uppercase text-amber-950 hover:bg-amber-100"
+              onClick={() => setPmaAlertToast(null)}
+            >
+              Chiudi
+            </button>
           </div>
         ) : null}
 
@@ -793,8 +875,8 @@ export function PMADashboardPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
-            <div className="min-w-0 lg:w-[68%] lg:max-w-[70%] lg:flex-none">
-              <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Pazienti in Carico</h2>
+            <div className="min-w-0 lg:w-[68%] lg:max-w-[70%] lg:flex-none pma-card">
+              <div className="pma-card__hdr">Pazienti in carico</div>
               <ListaPazientiInCarico
                 lista={inCaricoListaDisplay}
                 pmaId={pmaId}
@@ -812,7 +894,7 @@ export function PMADashboardPage() {
                 titleLine2="IN ARRIVO"
                 lista={inArrivo}
                 pmaId={pmaId}
-                isTriage={isTriage}
+                showTakeCharge={showPrendiInCarico}
                 onInCarico={handleInCarico}
               />
               <ManagerQueueBox
@@ -820,12 +902,13 @@ export function PMADashboardPage() {
                 titleLine2="IN ATTESA"
                 lista={inAttesa}
                 pmaId={pmaId}
-                isTriage={isTriage}
+                showTakeCharge={false}
                 onInCarico={handleInCarico}
               />
             </div>
           </div>
         )}
+        </div>
       </PmaManagerShell>
 
       {dimessiModalOpen ? (
@@ -837,15 +920,15 @@ export function PMADashboardPage() {
           onClick={() => setDimessiModalOpen(false)}
         >
           <div
-            className="my-auto w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-xl"
+            className="my-auto w-full max-w-2xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
-              <div className="min-w-0">
-                <h2 id="dimessi-modal-title" className="text-lg font-semibold text-slate-900">
+            <div className="pma-bar flex-wrap items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <h2 id="dimessi-modal-title" className="pma-bar__id text-base font-semibold">
                   Pazienti dimessi
                 </h2>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <p className="mt-0.5 text-xs text-[#a8a8c8]">
                   {manifestazioneIdDimessiQuery
                     ? 'Elenco da manifestazione (query indicizzata), filtrato su questo PMA.'
                     : 'Elenco dal PMA corrente (nessun id manifestazione sul PMA).'}
@@ -853,21 +936,20 @@ export function PMADashboardPage() {
               </div>
               <button
                 type="button"
-                className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium uppercase text-slate-700 hover:bg-slate-50"
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold uppercase text-slate-700 hover:bg-slate-50"
                 onClick={() => setDimessiModalOpen(false)}
               >
                 Chiudi
               </button>
             </div>
             <div className="space-y-3 px-4 py-3 sm:px-5 sm:py-4">
-              <label className="block text-xs font-medium text-slate-700">
-                Cerca per nome, cognome o ID
+              <label className="pma-field">
+                <span className="pma-field__label">Cerca per nome, cognome o ID</span>
                 <input
                   type="search"
                   value={dimessiModalSearch}
                   onChange={(e) => setDimessiModalSearch(e.target.value)}
                   placeholder="Es. Rossi, ID visibile…"
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                 />
               </label>
               {dimessiModalErr ? (
@@ -894,6 +976,7 @@ export function PMADashboardPage() {
                 <ul className="max-h-[min(60vh,28rem)] divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
                   {dimessiModalFiltrati.map((pz) => {
                     const busy = dimessiModalBusyId === pz.id
+                    const riprendiBusy = dimessiRiprendiBusyId === pz.id
                     const nome = [pz.cognome, pz.nome].filter(Boolean).join(' ') || '—'
                     return (
                       <li
@@ -911,19 +994,29 @@ export function PMADashboardPage() {
                           </span>
                         </Link>
                         <div className="flex shrink-0 flex-wrap gap-2">
+                          {user?.rank === 'Medico' ? (
+                            <button
+                              type="button"
+                              disabled={riprendiBusy || busy || !db}
+                              onClick={() => void riprendiInCaricoDimesso(pz.id)}
+                              className="inline-flex h-10 items-center justify-center rounded-md border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold uppercase text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                            >
+                              {riprendiBusy ? '…' : 'RIPRENDI IN CARICO'}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
-                            disabled={busy || !db}
+                            disabled={busy || riprendiBusy || !db}
                             onClick={() => void downloadDimessoPdf(pz.id)}
-                            className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold uppercase text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                            className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold uppercase text-slate-800 hover:bg-slate-50 disabled:opacity-50"
                           >
                             {busy ? '…' : 'Scarica PDF'}
                           </button>
                           <button
                             type="button"
-                            disabled={busy || !db}
+                            disabled={busy || riprendiBusy || !db}
                             onClick={() => void mailDimessoPdf(pz.id)}
-                            className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold uppercase text-blue-900 hover:bg-blue-100 disabled:opacity-50"
+                            className="inline-flex h-10 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-bold uppercase text-blue-900 hover:bg-blue-100 disabled:opacity-50"
                           >
                             {busy ? '…' : 'Invia via mail'}
                           </button>
@@ -956,7 +1049,7 @@ export function PMADashboardPage() {
           aria-labelledby="del-title"
         >
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
-            <h2 id="del-title" className="text-lg font-semibold text-slate-900">
+            <h2 id="del-title" className="text-lg font-bold text-slate-900">
               {deleteModal.step === 1 ? 'Eliminare la scheda?' : 'Conferma definitiva'}
             </h2>
             <p className="mt-2 text-sm text-slate-600">
@@ -972,7 +1065,7 @@ export function PMADashboardPage() {
             <div className="mt-6 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium uppercase text-slate-800 hover:bg-slate-50"
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-sm font-bold uppercase text-slate-800 hover:bg-slate-50"
                 onClick={() => {
                   setDeleteModal(null)
                   setDeleteErr(null)
@@ -983,7 +1076,7 @@ export function PMADashboardPage() {
               {deleteModal.step === 1 ? (
                 <button
                   type="button"
-                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold uppercase text-white hover:bg-amber-700"
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-amber-600 px-4 text-sm font-bold uppercase text-white hover:bg-amber-700"
                   onClick={() => setDeleteModal({ ...deleteModal, step: 2 })}
                 >
                   Continua
@@ -991,7 +1084,7 @@ export function PMADashboardPage() {
               ) : (
                 <button
                   type="button"
-                  className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold uppercase text-white hover:bg-red-800"
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-red-700 px-4 text-sm font-bold uppercase text-white hover:bg-red-800"
                   onClick={() => void eseguiElimina()}
                 >
                   Elimina definitivamente

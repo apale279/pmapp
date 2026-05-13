@@ -162,7 +162,7 @@ function CodiceMinoreRow({ row, spinnerClass }: { row: CodiceMinore; spinnerClas
 
   const cell = 'border-b border-slate-100 px-1 py-0.5 align-middle'
   const inputCls =
-    'w-full min-w-0 rounded border border-slate-200 bg-white px-1 py-0.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30'
+    'w-full min-w-0 rounded border border-slate-200 bg-white px-1.5 py-1 text-sm font-medium text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30'
 
   return (
     <Fragment>
@@ -223,7 +223,7 @@ function CodiceMinoreRow({ row, spinnerClass }: { row: CodiceMinore; spinnerClas
               type="button"
               title="Imposta ora dimissione adesso"
               onClick={() => void setDimissioneNow()}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-slate-300 bg-slate-50 text-slate-700 hover:bg-emerald-50 hover:text-emerald-800"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-slate-300 bg-slate-50 text-slate-700 hover:bg-emerald-50 hover:text-emerald-800"
             >
               <IconClock className="shrink-0" />
             </button>
@@ -237,7 +237,7 @@ function CodiceMinoreRow({ row, spinnerClass }: { row: CodiceMinore; spinnerClas
       </tr>
       {err ? (
         <tr>
-          <td colSpan={6} className="border-b border-red-100 bg-red-50/90 px-2 py-0.5 text-[10px] text-red-800">
+          <td colSpan={6} className="border-b border-red-100 bg-red-50/90 px-2 py-0.5 text-xs text-red-800">
             {err}
           </td>
         </tr>
@@ -323,8 +323,8 @@ export function CodiciMinoriModal({
   if (!open) return null
 
   const inputCls =
-    'w-full min-w-0 rounded border border-blue-200 bg-white px-1 py-0.5 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500/30'
-  const th = 'sticky top-0 z-[1] border-b border-slate-200 bg-slate-100 px-1 py-1 text-left text-[10px] font-bold uppercase tracking-wide text-slate-600'
+    'w-full min-w-0 rounded border border-blue-200 bg-white px-1.5 py-1 text-sm font-medium text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500/30'
+  const th = 'sticky top-0 z-[1] border-b border-slate-200 bg-slate-100 px-1 py-1.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500'
   const draftCell = 'border-b border-blue-100 bg-blue-50/40 px-1 py-0.5 align-middle'
 
   return (
@@ -339,22 +339,22 @@ export function CodiciMinoriModal({
         className="mb-8 w-full max-w-6xl rounded-lg border border-slate-200 bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-2 py-2 sm:px-3">
-          <div className="min-w-0">
-            <h2 id="codici-minori-title" className="text-sm font-bold uppercase tracking-wide text-slate-900">
+        <div className="pma-bar flex-wrap items-start gap-3">
+          <div className="min-w-0 flex-1 flex-col">
+            <h2 id="codici-minori-title" className="pma-bar__id text-base font-semibold">
               Codici minori
             </h2>
-            <p className="mt-0.5 text-[10px] text-slate-500">
+            <p className="text-xs text-[#a8a8c8]">
               Registrazione rapida · sincronizzazione in tempo reale · ID record nascosto
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="pma-bar__right flex-wrap">
             <button
               type="button"
               disabled={draftBusy}
               title="Aggiungi riga vuota in elenco"
               onClick={() => void addBlankRow()}
-              className="inline-flex h-8 items-center gap-1 rounded border border-slate-300 bg-white px-2 text-[10px] font-bold uppercase tracking-wide text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex h-10 items-center gap-1 rounded border border-slate-300 bg-white px-4 text-sm font-bold uppercase text-slate-800 hover:bg-slate-50 disabled:opacity-50"
             >
               <IconPlus />
               Nuova riga
@@ -362,7 +362,7 @@ export function CodiciMinoriModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+              className="inline-flex h-10 items-center justify-center rounded border border-slate-300 bg-white px-4 text-sm font-bold uppercase text-slate-800 hover:bg-slate-50"
             >
               Chiudi
             </button>
@@ -435,7 +435,7 @@ export function CodiciMinoriModal({
                   />
                 </td>
                 <td className={draftCell}>
-                  <span className="text-[10px] text-slate-400">—</span>
+                  <span className="text-xs text-slate-400">—</span>
                 </td>
                 <td className={`${draftCell} w-7 text-center`}>
                   <button
@@ -443,7 +443,7 @@ export function CodiciMinoriModal({
                     disabled={draftBusy}
                     title="Registra (invia riga)"
                     onClick={() => void addFromDraft()}
-                    className="inline-flex h-7 min-w-[2rem] items-center justify-center rounded bg-blue-700 px-1.5 text-[10px] font-extrabold uppercase text-white hover:bg-blue-800 disabled:opacity-50"
+                    className="inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded bg-blue-700 px-2 text-sm font-bold uppercase text-white hover:bg-blue-800 disabled:opacity-50"
                   >
                     OK
                   </button>

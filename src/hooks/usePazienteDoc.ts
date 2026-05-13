@@ -12,10 +12,11 @@ import {
 import { parseLesioni } from '../lib/parseLesioni'
 import { isDimissioneEsito } from '../types/dimissione'
 import type { Paziente } from '../types/paziente'
+import { readEoColumnArraysFromDoc, totalEoColumnSelections } from '../lib/eoPazienteFields'
 import {
   isCodiceColorePaziente,
-  isPazienteStato,
   isTipoPaziente,
+  parsePazienteStatoFromFirestore,
 } from '../types/paziente'
 
 function numOrNull(v: unknown): number | null {
@@ -66,7 +67,7 @@ function dimissioneFirmaMedicoImmagine(d: Record<string, unknown>): string | nul
 function parsePaziente(id: string, d: Record<string, unknown>): Paziente {
   const tipo = isTipoPaziente(d.tipo_paziente) ? d.tipo_paziente : 'autopresentato'
   const colore = isCodiceColorePaziente(d.codice_colore) ? d.codice_colore : 'bianco'
-  const stato = isPazienteStato(d.stato) ? d.stato : 'in_carico'
+  const stato = parsePazienteStatoFromFirestore(d.stato)
 
   const apertura = d.apertura_scheda
   let aperturaTs: Timestamp | null =
@@ -108,6 +109,12 @@ function parsePaziente(id: string, d: Record<string, unknown>): Paziente {
   const invio_ps_codice_trasporto =
     ct === 'verde' || ct === 'giallo' || ct === 'rosso' ? ct : null
 
+  const eoCols = readEoColumnArraysFromDoc(d)
+  const eoFromColumns = totalEoColumnSelections(eoCols) > 0
+  const legacyEoFlat = parseEoQuick(d.eo_quick)
+  const eo_quick_legacy =
+    !eoFromColumns && legacyEoFlat.length > 0 ? legacyEoFlat : undefined
+
   return {
     id,
     id_manifestazione: idMan || id,
@@ -144,10 +151,22 @@ function parsePaziente(id: string, d: Record<string, unknown>): Paziente {
     apr: aprRaw === '' ? 'Nulla.' : aprRaw,
     allergie: allergieRaw === '' ? 'Nega.' : allergieRaw,
     app: strOrEmpty(d.app),
-    eo_quick: parseEoQuick(d.eo_quick),
+    EO_GENERALE: eoCols.EO_GENERALE,
+    EO_NEUROLOGICO: eoCols.EO_NEUROLOGICO,
+    EO_CUTE: eoCols.EO_CUTE,
+    EO_TORACE: eoCols.EO_TORACE,
+    EO_ADDOME: eoCols.EO_ADDOME,
+    EO_CAPO_COLLO: eoCols.EO_CAPO_COLLO,
+    ...(eo_quick_legacy ? { eo_quick_legacy } : {}),
     eo_note: strOrEmpty(d.eo_note),
     parametri_vitali: parseParametriVitali(d.parametri_vitali),
     prestazioni_sel: parsePrestazioniSel(d.prestazioni_sel),
+    ecg_cloudinary_url: (() => {
+      const u = optionalStr(d.ecg_cloudinary_url)
+      if (u == null) return null
+      const t = u.trim()
+      return t === '' ? null : t
+    })(),
     farmaci: parseFarmaci(d.farmaci),
     rivalutazioni: parseRivalutazioni(d.rivalutazioni),
     lesioni: parseLesioni(d.lesioni),
@@ -170,6 +189,7 @@ function parsePaziente(id: string, d: Record<string, unknown>): Paziente {
     firma_paziente_base64: firmaPazienteImmagine(d),
     dimissione_firma_medico_base64: dimissioneFirmaMedicoImmagine(d),
     dimesso_at: tsOrNull(d.dimesso_at),
+    ripreso_in_carico_at: tsOrNull(d.ripreso_in_carico_at),
 
     infermiere_rif: strOrEmpty(d.infermiere_rif),
     medico_rif: strOrEmpty(d.medico_rif),

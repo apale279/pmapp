@@ -11,6 +11,15 @@ export const STAFF_RANKS = [
 
 export type StaffRank = (typeof STAFF_RANKS)[number]
 
+/** Ruoli operativi su un singolo PMA (obbligatorio `id_pma` in anagrafica utente). */
+export const STAFF_RANKS_REQUIRING_PMA = ['Medico', 'Infermiere', 'Soccorritore', 'Triage'] as const
+
+export type StaffRankRequiringPma = (typeof STAFF_RANKS_REQUIRING_PMA)[number]
+
+export function staffRankRequiresPma(rank: StaffRank): rank is StaffRankRequiringPma {
+  return (STAFF_RANKS_REQUIRING_PMA as readonly string[]).includes(rank)
+}
+
 export function isStaffRank(value: unknown): value is StaffRank {
   return typeof value === 'string' && (STAFF_RANKS as readonly string[]).includes(value)
 }

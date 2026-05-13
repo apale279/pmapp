@@ -69,57 +69,47 @@ export function NewManifestazioneModal({ open, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
+        className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white p-0 shadow-xl"
       >
-        <h2 id={titleId} className="text-lg font-semibold text-slate-900">
-          Nuova manifestazione
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Il nome è l’identificativo univoco: niente spazi (né altri caratteri non validi per l’ID).
-        </p>
+        <div className="pma-bar flex-col items-start gap-1">
+          <h2 id={titleId} className="pma-bar__id text-base font-semibold">
+            Nuova manifestazione
+          </h2>
+          <p className="text-xs text-[#a8a8c8]">
+            Il nome è l’identificativo univoco: niente spazi (né altri caratteri non validi per l’ID).
+          </p>
+        </div>
 
-        <form className="mt-6 space-y-4" onSubmit={(e) => void handleSubmit(e)}>
-          <div>
-            <label htmlFor="nm-nome" className="block text-sm font-medium text-slate-700">
-              Nome (ID)
-            </label>
+        <form className="space-y-0" onSubmit={(e) => void handleSubmit(e)}>
+          <label className="pma-field" htmlFor="nm-nome">
+            <span className="pma-field__label">Nome (ID)</span>
             <input
               id="nm-nome"
               type="text"
               autoComplete="off"
               value={nome}
               onChange={(ev) => setNome(ev.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
               placeholder="es. MilanoMarathon2026"
               required
             />
-          </div>
-          <div>
-            <label htmlFor="nm-data" className="block text-sm font-medium text-slate-700">
-              Data
-            </label>
-            <input
-              id="nm-data"
-              type="date"
-              value={data}
-              onChange={(ev) => setData(ev.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
-              required
-            />
-          </div>
+          </label>
+          <label className="pma-field" htmlFor="nm-data">
+            <span className="pma-field__label">Data</span>
+            <input id="nm-data" type="date" value={data} onChange={(ev) => setData(ev.target.value)} required />
+          </label>
 
           {error ? (
-            <p className="text-sm text-red-600" role="alert">
+            <p className="px-3 py-2 text-sm text-red-600" role="alert">
               {error}
             </p>
           ) : null}
           {successDetail ? (
-            <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-700" role="status">
+            <p className="mx-3 mb-2 rounded-md bg-slate-50 p-3 text-sm text-slate-700" role="status">
               {successDetail}
             </p>
           ) : null}
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-3 py-3">
             <button
               type="button"
               className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"

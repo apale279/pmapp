@@ -1,6 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore'
-import { STAFF_RANKS, type StaffRank } from '../../types/userProfile'
+import { STAFF_RANKS, staffRankRequiresPma, type StaffRank } from '../../types/userProfile'
 import { db } from '../../lib/firebase'
 import { useSyncLive } from '../../context/SyncLiveContext'
 import {
@@ -95,6 +95,14 @@ export function AddUserModal({ open, onClose }: Props) {
       setError('Seleziona la manifestazione di appartenenza.')
       return
     }
+    if (staffRankRequiresPma(rank) && pmaLoading) {
+      setError('Attendi il caricamento dell’elenco PMA.')
+      return
+    }
+    if (staffRankRequiresPma(rank) && !idPma.trim()) {
+      setError('Per Medico, Infermiere, Soccorritore e Triage è obbligatorio un PMA della manifestazione.')
+      return
+    }
     if (password.length < 6) {
       setError('La password deve avere almeno 6 caratteri (requisito Firebase).')
       return
@@ -155,21 +163,21 @@ export function AddUserModal({ open, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto overflow-x-hidden rounded-xl border border-slate-200 bg-white p-0 shadow-xl"
       >
-        <h2 id={titleId} className="text-lg font-semibold text-slate-900">
-          Nuovo operatore
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Crea un account per il personale. La sessione del Superadmin non viene interrotta:
-          registrazione tramite API REST Identity Toolkit.
-        </p>
+        <div className="pma-bar flex-col items-start gap-1">
+          <h2 id={titleId} className="pma-bar__id text-base font-semibold">
+            Nuovo operatore
+          </h2>
+          <p className="text-xs text-[#a8a8c8]">
+            Crea un account per il personale. La sessione del Superadmin non viene interrotta:
+            registrazione tramite API REST Identity Toolkit.
+          </p>
+        </div>
 
-        <form className="mt-6 space-y-4" onSubmit={(e) => void handleSubmit(e)}>
-          <div>
-            <label htmlFor="au-email" className="block text-sm font-medium text-slate-700">
-              Email
-            </label>
+        <form className="space-y-0" onSubmit={(e) => void handleSubmit(e)}>
+          <label className="pma-field" htmlFor="au-email">
+            <span className="pma-field__label">Email</span>
             <input
               id="au-email"
               type="email"
@@ -177,13 +185,10 @@ export function AddUserModal({ open, onClose }: Props) {
               required
               value={email}
               onChange={(ev) => setEmail(ev.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
             />
-          </div>
-          <div>
-            <label htmlFor="au-password" className="block text-sm font-medium text-slate-700">
-              Password
-            </label>
+          </label>
+          <label className="pma-field" htmlFor="au-password">
+            <span className="pma-field__label">Password</span>
             <input
               id="au-password"
               type="password"
@@ -192,26 +197,20 @@ export function AddUserModal({ open, onClose }: Props) {
               minLength={6}
               value={password}
               onChange={(ev) => setPassword(ev.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
             />
-          </div>
-          <div>
-            <label htmlFor="au-nome" className="block text-sm font-medium text-slate-700">
-              Nome
-            </label>
+          </label>
+          <label className="pma-field" htmlFor="au-nome">
+            <span className="pma-field__label">Nome</span>
             <input
               id="au-nome"
               type="text"
               required
               value={nome}
               onChange={(ev) => setNome(ev.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
             />
-          </div>
-          <div>
-            <label htmlFor="au-rank" className="block text-sm font-medium text-slate-700">
-              Ruolo
-            </label>
+          </label>
+          <label className="pma-field" htmlFor="au-rank">
+            <span className="pma-field__label">Ruolo</span>
             <select
               id="au-rank"
               value={rank}
@@ -227,7 +226,6 @@ export function AddUserModal({ open, onClose }: Props) {
                   setFirmaConverting(false)
                 }
               }}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
             >
               {STAFF_RANKS.map((r) => (
                 <option key={r} value={r}>
@@ -235,9 +233,9 @@ export function AddUserModal({ open, onClose }: Props) {
                 </option>
               ))}
             </select>
-          </div>
-          <div>
-            <label htmlFor="au-man" className="block text-sm font-medium text-slate-700">
+          </label>
+          <div className="pma-field">
+            <label htmlFor="au-man" className="pma-field__label">
               Manifestazione (attive)
             </label>
             <select
@@ -247,7 +245,6 @@ export function AddUserModal({ open, onClose }: Props) {
                 setIdManifestazione(ev.target.value)
                 setIdPma('')
               }}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
               required
               disabled={manifestazioniLoading}
             >
@@ -273,18 +270,20 @@ export function AddUserModal({ open, onClose }: Props) {
           </div>
 
           {rank !== 'Centrale' ? (
-            <div>
-              <label htmlFor="au-pma" className="block text-sm font-medium text-slate-700">
-                PMA assegnato (opzionale)
+            <div className="pma-field">
+              <label htmlFor="au-pma" className="pma-field__label">
+                PMA assegnato
+                {staffRankRequiresPma(rank) ? (
+                  <span className="font-semibold text-slate-900"> (obbligatorio)</span>
+                ) : null}
               </label>
               <select
                 id="au-pma"
                 value={idPma}
                 onChange={(ev) => setIdPma(ev.target.value)}
                 disabled={!idManifestazione || pmaLoading}
-                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:opacity-60"
               >
-                <option value="">Non assegnato</option>
+                <option value="">{staffRankRequiresPma(rank) ? '— Seleziona PMA —' : 'Non assegnato'}</option>
                 {pmaOptions.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.nome}
@@ -303,11 +302,11 @@ export function AddUserModal({ open, onClose }: Props) {
           )}
 
           {rank === 'Medico' ? (
-            <div>
-              <label htmlFor="au-firma" className="block text-sm font-medium text-slate-700">
+            <div className="pma-field">
+              <label htmlFor="au-firma" className="pma-field__label">
                 Timbro / firma (JPEG o PNG, max 2 MB)
               </label>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mb-1 text-xs text-slate-500">
                 L’immagine viene convertita in Base64 e salvata su Firestore nel campo{' '}
                 <code className="rounded bg-slate-100 px-1">firmaMedicoBase64</code> (nessun
                 Storage).
@@ -316,7 +315,7 @@ export function AddUserModal({ open, onClose }: Props) {
                 id="au-firma"
                 type="file"
                 accept="image/jpeg,image/png,.jpg,.jpeg,.png"
-                className="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-800 hover:file:bg-slate-50"
+                className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-800 hover:file:bg-slate-50"
                 onChange={(ev) => {
                   const f = ev.target.files?.[0] ?? null
                   setFirmaPickError(null)
@@ -381,7 +380,7 @@ export function AddUserModal({ open, onClose }: Props) {
             </div>
           ) : null}
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-3 py-3">
             <button
               type="button"
               className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
@@ -396,7 +395,8 @@ export function AddUserModal({ open, onClose }: Props) {
                   submitting ||
                   manifestazioniLoading ||
                   manifestazioni.length === 0 ||
-                  firmaConverting
+                  firmaConverting ||
+                  (staffRankRequiresPma(rank) && (pmaLoading || !idPma.trim()))
                 }
                 className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
               >

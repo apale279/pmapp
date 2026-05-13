@@ -1,21 +1,27 @@
-import { type ReactNode } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { defaultOperativePath } from '../../lib/defaultOperativePath'
 import type { UserRank } from '../../types/userProfile'
 
 export type RankGuardProps = {
+  /** Rank ammessi a montare le rotte figlie (`<Outlet />`). */
   allow: readonly UserRank[]
-  children: ReactNode
 }
 
-export function RankGuard({ allow, children }: RankGuardProps) {
-  const { user } = useAuth()
-  if (!user) {
+/**
+ * Guard RBAC a livello router: valuta `user.rank` **prima** delle pagine figlie (pattern `<Outlet />`).
+ * Non autenticato / profilo non pronto: null (il genitore `ProtectedRoute` gestisce auth).
+ * Rank non in lista: redirect esplicito (nessun render della pagina protetta).
+ */
+export function RankGuard({ allow }: RankGuardProps) {
+  const { user, status } = useAuth()
+
+  if (status !== 'ready' || !user) {
     return null
   }
+
   if (!allow.includes(user.rank)) {
-    return <Navigate to={defaultOperativePath(user)} replace />
+    return <Navigate to="/unauthorized" replace />
   }
-  return <>{children}</>
+
+  return <Outlet />
 }

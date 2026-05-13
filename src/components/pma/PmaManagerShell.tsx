@@ -1,88 +1,59 @@
-import { useState, type ReactNode } from 'react'
-import type { UserProfile } from '../../types/userProfile'
-import { OperativeShellHeader } from '../layout/OperativeShellHeader'
-import { UnifiedEmojiSidebar } from '../layout/UnifiedEmojiSidebar'
-import { MobileEmojiNavOverlay, MobileNavHamburgerButton } from '../layout/MobileEmojiNav'
-import { FONT_UI } from '../layout/operativeTokens'
+import { useLayoutEffect, type ReactNode } from 'react'
+import { useOperativeChrome } from '../../context/OperativeChromeContext'
 
 export type PmaManagerShellProps = {
-  user: UserProfile
+  user: unknown
   pmaId: string
   manifestazioneId: string
   pmaDisplayTitle: string
-  logout: () => Promise<void>
+  logout: unknown
   topToolbar?: ReactNode
   triageStrip?: ReactNode
   children: ReactNode
   footer?: ReactNode
 }
 
+const PMA_BADGE = (
+  <div
+    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[#e2e8f0] bg-[#f8fafc] text-xs font-bold uppercase tracking-wide text-slate-600"
+    aria-hidden
+  >
+    PMA
+  </div>
+)
+
+/**
+ * Collega toolbar, strip triage e footer al chrome globale (`OperativeAppShell`).
+ * Non renderizza più sidebar/header duplicati (evita “pagina nella pagina”).
+ */
 export function PmaManagerShell({
-  user,
-  pmaId: _pmaId,
-  manifestazioneId: _manifestazioneId,
   pmaDisplayTitle,
-  logout,
-  topToolbar,
   triageStrip,
+  topToolbar,
   children,
   footer,
 }: PmaManagerShellProps) {
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const { setSlots, clearSlots } = useOperativeChrome()
   const hasFooter = footer != null
   const hasToolbar = topToolbar != null
 
-  return (
-    <div className={`flex min-h-screen bg-[#f8fafc] text-slate-900 ${FONT_UI}`}>
-      <div className="hidden shrink-0 md:block">
-        <UnifiedEmojiSidebar user={user} variant="rail" />
-      </div>
+  useLayoutEffect(() => {
+    setSlots({
+      headerPrepend: PMA_BADGE,
+      titleOverride: (
+        <h1 className="pma-bar__id truncate">PMA Manager - {pmaDisplayTitle}</h1>
+      ),
+      headerAfterTitle: triageStrip ?? null,
+      toolbar: hasToolbar ? topToolbar : null,
+      footer: hasFooter ? footer : null,
+      mainClassName: hasFooter
+        ? 'min-h-0 flex-1 overflow-auto px-4 pt-4 pb-28 sm:px-6'
+        : 'min-h-0 flex-1 overflow-auto px-4 pt-4 pb-10 sm:px-6',
+    })
+    return () => {
+      clearSlots()
+    }
+  }, [pmaDisplayTitle, triageStrip, topToolbar, footer, hasToolbar, hasFooter, setSlots, clearSlots])
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <OperativeShellHeader
-          user={user}
-          logout={logout}
-          hamburger={<MobileNavHamburgerButton onOpen={() => setMobileNavOpen(true)} />}
-          prepend={
-            <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[#e2e8f0] bg-[#f8fafc] text-[10px] font-bold text-slate-600"
-              aria-hidden
-            >
-              PMA
-            </div>
-          }
-          title={
-            <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-[15px]">
-              PMA Manager - {pmaDisplayTitle}
-            </h1>
-          }
-          afterTitle={triageStrip ?? undefined}
-        />
-
-        {hasToolbar ? (
-          <div className="border-b border-[#e2e8f0] bg-white px-4 py-2">{topToolbar}</div>
-        ) : null}
-
-        <main
-          className={`min-h-0 flex-1 overflow-auto px-4 pt-4 ${hasFooter ? 'pb-24' : 'pb-10'}`}
-        >
-          {children}
-        </main>
-
-        {hasFooter ? (
-          <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#e2e8f0] bg-white md:left-20">
-            <div className="mx-auto flex max-w-[1920px] items-center justify-center gap-4 px-4 py-3 sm:gap-10">
-              {footer}
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      <MobileEmojiNavOverlay
-        open={mobileNavOpen}
-        onClose={() => setMobileNavOpen(false)}
-        user={user}
-      />
-    </div>
-  )
+  return <>{children}</>
 }

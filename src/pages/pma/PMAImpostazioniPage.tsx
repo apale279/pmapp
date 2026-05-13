@@ -44,7 +44,14 @@ export function PMAImpostazioniPage() {
           return
         }
         const d = snap.data() as Record<string, unknown>
-        setFarmaciUsati(asStringArray(d.farmaci_usati))
+        const imp = d.impostazioni_pma
+        let fromNested: string[] = []
+        if (imp && typeof imp === 'object' && imp !== null && 'elenco_farmaci_usati' in imp) {
+          fromNested = asStringArray((imp as { elenco_farmaci_usati?: unknown }).elenco_farmaci_usati)
+        }
+        const fromLegacy = asStringArray(d.farmaci_usati)
+        const merged = [...new Set([...fromNested, ...fromLegacy])].sort((a, b) => a.localeCompare(b, 'it'))
+        setFarmaciUsati(merged)
         setLoading(false)
         bumpSync()
       },
@@ -62,43 +69,49 @@ export function PMAImpostazioniPage() {
   }
 
   const mainCol = (
-    <div className="space-y-6">
-      {error ? (
-        <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
+    <div className="pma-dashboard space-y-6">
+      <section className="pma-card">
+        <div className="pma-card__hdr">Elenco farmaci usati</div>
+        <p className="text-xs text-slate-500">Impostazioni PMA — consumi registrati</p>
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          {error ? (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+              {error}
+            </div>
+          ) : null}
+          {!error && loading ? <p className="text-sm text-slate-600">Caricamento…</p> : null}
+          {!error && !loading && farmaciUsati.length === 0 ? (
+            <p className="text-sm text-slate-600">Nessun farmaco registrato ancora.</p>
+          ) : null}
+          {!error && !loading && farmaciUsati.length > 0 ? (
+            <ul className="list-inside list-disc text-sm font-medium text-slate-900">
+              {farmaciUsati.map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
-      ) : null}
-      {loading ? (
-        <p className="text-sm text-slate-600">Caricamento…</p>
-      ) : farmaciUsati.length === 0 ? (
-        <p className="text-sm text-slate-600">Nessun farmaco registrato ancora.</p>
-      ) : (
-        <ul className="list-inside list-disc rounded-lg border border-[#e2e8f0] bg-white px-6 py-4 text-sm text-slate-900">
-          {farmaciUsati.map((f) => (
-            <li key={f}>{f}</li>
-          ))}
-        </ul>
-      )}
+      </section>
     </div>
   )
 
   const asideCol = (
     <div className="space-y-4">
-      <section className="rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
-        <h3 className="text-[12px] font-bold uppercase tracking-wide text-slate-500">Documento</h3>
-        <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
+      <section className="pma-card">
+        <div className="pma-card__hdr">Documento</div>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">
           Percorso Firestore:{' '}
           <code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1.5 py-0.5 font-mono text-xs text-slate-900">
             pma/{pmaId || '—'}
           </code>
         </p>
       </section>
-      <section className="rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
-        <h3 className="text-[12px] font-bold uppercase tracking-wide text-slate-500">Farmaci usati</h3>
-        <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
-          L&apos;elenco si aggiorna in automatico quando un farmaco viene aggiunto a una scheda paziente di
-          questo PMA (<code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1 text-xs">arrayUnion</code>{' '}
-          su <code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1 text-xs">farmaci_usati</code>).
+      <section className="pma-card">
+        <div className="pma-card__hdr">Origine dati</div>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">
+          Campo <code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1 text-xs">impostazioni_pma.elenco_farmaci_usati</code> sul documento PMA: si aggiorna quando un farmaco viene registrato su una scheda paziente (
+          <code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1 text-xs">arrayUnion</code>).
+          Se manca, viene letto anche il dato legacy <code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1 text-xs">farmaci_usati</code> in radice.
         </p>
       </section>
     </div>

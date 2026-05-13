@@ -1,7 +1,9 @@
-import { arrayUnion, doc, setDoc, type Firestore } from 'firebase/firestore'
+import { arrayUnion, doc, updateDoc, type Firestore } from 'firebase/firestore'
+
+const ELENCO_PATH = 'impostazioni_pma.elenco_farmaci_usati' as const
 
 /**
- * Aggiorna `farmaci_usati` sul documento `pma/{id}` (IMP_PMA — consumi PMA).
+ * Aggiorna `impostazioni_pma.elenco_farmaci_usati` sul documento `pma/{id}` (IMP_PMA — consumi PMA).
  * `arrayUnion` evita duplicati per la stessa stringa.
  */
 export async function registerPmaFarmacoUsato(
@@ -12,9 +14,7 @@ export async function registerPmaFarmacoUsato(
   const id = pmaId?.trim()
   const nome = nomeFarmaco.trim()
   if (!id || !nome) return
-  await setDoc(
-    doc(db, 'pma', id),
-    { farmaci_usati: arrayUnion(nome) },
-    { merge: true },
-  )
+  await updateDoc(doc(db, 'pma', id), {
+    [ELENCO_PATH]: arrayUnion(nome),
+  })
 }

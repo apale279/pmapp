@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { Timestamp } from 'firebase/firestore'
+import { deleteField, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
 import { useSyncLive } from '../../context/SyncLiveContext'
 import { useRankTheme } from '../../hooks/useRankTheme'
 import { useManifestazioneDoc } from '../../hooks/useManifestazioneDoc'
 import { usePmaListForManifestazione } from '../../hooks/usePmaListForManifestazione'
 import { useDimessiManifestazione } from '../../hooks/useDimessiManifestazione'
-import type { DimessoManifestazioneRow } from '../../hooks/useDimessiManifestazione'
 import { NewPmaModal } from '../../components/manifestazione/NewPmaModal'
 import { PmaCard } from '../../components/manifestazione/PmaCard'
 import { PmaOperationalCounts } from '../../components/manifestazione/PmaOperationalCounts'
@@ -17,6 +17,9 @@ import { OperativePageGrid } from '../../components/layout/OperativePageGrid'
 import type { CodiceColorePaziente } from '../../types/paziente'
 import { CODICE_COLORE_LABEL } from '../../types/paziente'
 import { opPrimaryBtn } from '../../components/layout/operativeTokens'
+import { manifestazioneDashboardAllows } from '../../lib/rankMatrix'
+import { db } from '../../lib/firebase'
+import { updateSchedaPazienteGranular } from '../../lib/updateSchedaPaziente'
 
 function formatDimessoBreve(ts: Timestamp | null): string {
   if (!ts || typeof ts.toDate !== 'function') return '—'
@@ -60,9 +63,19 @@ export function ManifestazioneDashboardPage() {
 
   const { user } = useAuth()
   const theme = useRankTheme()
-  const isSuperadmin = user?.rank === 'Superadmin'
-  const isCentrale = user?.rank === 'Centrale'
-  const showCoordinationBoard = isCentrale || isSuperadmin
+  const rank = user?.rank
+  const canMutateManifestDashboard =
+    rank != null &&
+    (manifestazioneDashboardAllows(rank, 'UPDATE') ||
+      manifestazioneDashboardAllows(rank, 'CREATE') ||
+      manifestazioneDashboardAllows(rank, 'DELETE'))
+  const showCoordinationBoard =
+    Boolean(manifestazioneId.trim() !== '' && rank != null) &&
+    (canMutateManifestDashboard ||
+      rank === 'Medico' ||
+      rank === 'Infermiere' ||
+      rank === 'Soccorritore' ||
+      rank === 'Triage')
 
   const { data: man, loading: manLoading, error: manError, exists: manExists } =
     useManifestazioneDoc(manifestazioneId || undefined)
@@ -77,6 +90,8 @@ export function ManifestazioneDashboardPage() {
   const [pmaModalOpen, setPmaModalOpen] = useState(false)
   const [pmaModalKey, setPmaModalKey] = useState(0)
   const [dimessiSearch, setDimessiSearch] = useState('')
+  const [riprendiBusyId, setRiprendiBusyId] = useState<string | null>(null)
+  const [riprendiErr, setRiprendiErr] = useState<string | null>(null)
 
   const { bumpSync } = useSyncLive()
   useEffect(() => {
@@ -110,33 +125,28 @@ export function ManifestazioneDashboardPage() {
       .slice(0, 150)
   }, [dimessiManifestazione, dimessiSearch, pmaNomeById])
 
-  const dimessiUltimi10PerPma = useMemo(() => {
-    const m = new Map<string, DimessoManifestazioneRow[]>()
-    for (const r of dimessiManifestazione) {
-      const k = r.id_pma.trim() !== '' ? r.id_pma : '_senza_pma'
-      if (!m.has(k)) m.set(k, [])
-      m.get(k)!.push(r)
+  async function riprendiInCaricoDimesso(patientId: string) {
+    if (!db || user?.rank !== 'Medico') return
+    setRiprendiErr(null)
+    setRiprendiBusyId(patientId)
+    try {
+      await updateSchedaPazienteGranular(db, patientId, {
+        stato: 'in_carico',
+        aperto: true,
+        dimesso_at: deleteField(),
+        ripreso_in_carico_at: serverTimestamp(),
+      })
+    } catch (e) {
+      setRiprendiErr(e instanceof Error ? e.message : 'Ripresa in carico non riuscita.')
+    } finally {
+      setRiprendiBusyId(null)
     }
-    const out = new Map<string, DimessoManifestazioneRow[]>()
-    for (const [k, arr] of m) {
-      const sorted = [...arr].sort(
-        (a, b) => (b.dimesso_at?.toMillis?.() ?? 0) - (a.dimesso_at?.toMillis?.() ?? 0),
-      )
-      out.set(k, sorted.slice(0, 10))
-    }
-    return out
-  }, [dimessiManifestazione])
-
-  const dimessiTickerRows = useMemo(() => {
-    return [...dimessiManifestazione]
-      .sort((a, b) => (b.dimesso_at?.toMillis?.() ?? 0) - (a.dimesso_at?.toMillis?.() ?? 0))
-      .slice(0, 28)
-  }, [dimessiManifestazione])
+  }
 
   return (
     <OperativePageGrid
       main={
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div className="pma-dashboard mx-auto max-w-6xl space-y-8">
       {manLoading ? (
         <div className="flex items-center gap-3 py-8 text-slate-600">
           <div
@@ -164,48 +174,22 @@ export function ManifestazioneDashboardPage() {
 
       {man && manExists ? (
         <>
-          <header className="rounded-lg border border-slate-200 bg-white px-6 py-6 sm:px-8">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <header className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="pma-bar flex-col items-start gap-3 sm:flex-row sm:items-start">
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9090b8]">
                   Manifestazione
-                </p>
-                <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#111827]">
-                  {man.nome}
-                </h1>
-                <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2 text-sm">
-                  <div>
-                    <dt className="text-slate-500">ID</dt>
-                    <dd className="font-medium text-slate-900">{manifestazioneId}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-slate-500">Data</dt>
-                    <dd className="font-medium text-slate-900">{formatManifestazioneData(man.data)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-slate-500">Stato</dt>
-                    <dd>
-                      <span
-                        className={
-                          man.stato === 'APERTA'
-                            ? 'rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-600/20'
-                            : 'rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-600/10'
-                        }
-                      >
-                        {man.stato}
-                      </span>
-                    </dd>
-                  </div>
-                </dl>
+                </div>
+                <div className="pma-bar__id mt-0.5 text-lg font-semibold leading-tight">{man.nome}</div>
               </div>
-              <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+              <div className="pma-bar__right flex flex-col items-stretch gap-2 sm:items-end">
                 <Link
                   to={`/manifestazione/${encodeURIComponent(manifestazioneId)}/impostazioni`}
-                  className="text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
+                  className="text-sm font-medium no-underline hover:opacity-90"
                 >
                   Impostazioni manifestazione
                 </Link>
-                {isSuperadmin ? (
+                {rank != null && manifestazioneDashboardAllows(rank, 'CREATE') ? (
                   <button
                     type="button"
                     onClick={() => {
@@ -219,37 +203,62 @@ export function ManifestazioneDashboardPage() {
                 ) : null}
               </div>
             </div>
+            <div className="border-t border-slate-100 px-4 py-4 sm:px-6">
+              <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+                <div>
+                  <dt className="text-slate-500">ID</dt>
+                  <dd className="font-medium text-slate-900">{manifestazioneId}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">Data</dt>
+                  <dd className="font-medium text-slate-900">{formatManifestazioneData(man.data)}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">Stato</dt>
+                  <dd>
+                    <span
+                      className={
+                        man.stato === 'APERTA'
+                          ? 'rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-600/20'
+                          : 'rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-600/10'
+                      }
+                    >
+                      {man.stato}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
           </header>
 
           {showCoordinationBoard && !pmaLoading && !pmaError && pmaList.length > 0 ? (
             <section
               aria-labelledby="coord-heading"
-              className="rounded-lg border border-slate-200 bg-white px-5 py-5 sm:px-8 sm:py-6"
+              className="pma-card"
             >
-              <h2
-                id="coord-heading"
-                className="text-xs font-bold uppercase tracking-widest text-slate-500"
-              >
+              <div className="pma-card__hdr" id="coord-heading">
                 Dashboard centrale — coordinamento PMA
-              </h2>
+              </div>
               <p className="mt-2 text-sm text-slate-600">
                 Vista rapida sul PMA prescelto (di solito un solo posto attivo), più tabella completa e ricerca
                 dimessi su tutta la manifestazione.
               </p>
 
               <div className="mt-6">
-                <PmaCentraleFocusPanel
-                  manifestazioneId={manifestazioneId}
-                  pmaList={pmaList}
-                  theme={{
-                    primaryCta: theme.primaryCta,
-                    primaryCtaHover: theme.primaryCtaHover,
-                    spinnerAccent: theme.spinnerAccent,
-                  }}
-                />
+                {canMutateManifestDashboard ? (
+                  <PmaCentraleFocusPanel
+                    manifestazioneId={manifestazioneId}
+                    pmaList={pmaList}
+                    theme={{
+                      primaryCta: theme.primaryCta,
+                      primaryCtaHover: theme.primaryCtaHover,
+                      spinnerAccent: theme.spinnerAccent,
+                    }}
+                  />
+                ) : null}
               </div>
 
-              <h3 className="mt-10 text-xs font-bold uppercase tracking-widest text-slate-500">
+              <h3 className="pma-card__hdr mt-8">
                 Tutti i PMA — tabella di coordinamento
               </h3>
               <p className="mt-2 text-sm text-slate-600">
@@ -296,7 +305,7 @@ export function ManifestazioneDashboardPage() {
                         <td className="px-4 py-3 text-right align-middle">
                           <Link
                             to={`/pma/${encodeURIComponent(pma.id)}`}
-                            className="inline-flex rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-800 shadow-sm hover:bg-slate-50"
+                            className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold uppercase text-slate-800 shadow-sm hover:bg-slate-50"
                           >
                             Apri PMA
                           </Link>
@@ -307,49 +316,17 @@ export function ManifestazioneDashboardPage() {
                 </table>
               </div>
 
-              {dimessiTickerRows.length > 0 ? (
-                <div
-                  className="mt-3 border-t border-slate-200 pt-3"
-                  role="region"
-                  aria-label="Ultimi pazienti dimessi, scorrimento automatico"
-                >
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                    Ultimi eventi — dimessi
-                  </p>
-                  <div className="mt-1.5 overflow-hidden rounded border border-slate-200 bg-slate-100 py-1.5">
-                    <div className="flex w-max animate-pmapp-ticker">
-                      {[0, 1].map((dup) => (
-                        <ul
-                          key={dup}
-                          className="flex shrink-0 items-center gap-x-10 px-4"
-                          aria-hidden={dup === 1}
-                        >
-                          {dimessiTickerRows.map((row) => (
-                            <li key={`${dup}-${row.id}`} className="whitespace-nowrap text-[11px] text-slate-600">
-                              <span className="font-mono text-slate-800">{row.id_paziente_visibile}</span>
-                              <span className="text-slate-400"> · </span>
-                              <span className="text-slate-800">
-                                {row.cognome} {row.nome}
-                              </span>
-                              <span className="text-slate-400"> · </span>
-                              dimesso {formatDimessoBreve(row.dimesso_at)}
-                              <span className="text-slate-400"> · </span>
-                              <span className="text-slate-500">
-                                {(pmaNomeById.get(row.id_pma) ?? row.id_pma) || '—'}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="mt-8 space-y-4 border-t border-slate-100 pt-6">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
-                  Ricerca dimessi (intera manifestazione)
-                </h3>
+              <details className="group mt-8 border-t border-slate-100 pt-6">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+                  <span className="pma-card__hdr mb-0">Ricerca dimessi (intera manifestazione)</span>
+                  <span
+                    className="shrink-0 text-slate-400 transition-transform group-open:rotate-180"
+                    aria-hidden
+                  >
+                    ▼
+                  </span>
+                </summary>
+                <div className="mt-4 space-y-4">
                 {dimessiError ? (
                   <div
                     className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
@@ -364,15 +341,22 @@ export function ManifestazioneDashboardPage() {
                     </p>
                   </div>
                 ) : null}
-                <label className="block max-w-md text-sm">
-                  <span className="font-medium text-slate-700">Filtra dimessi</span>
+                {riprendiErr ? (
+                  <div
+                    className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+                    role="alert"
+                  >
+                    {riprendiErr}
+                  </div>
+                ) : null}
+                <label className="pma-field max-w-md">
+                  <span className="pma-field__label">Filtra dimessi</span>
                   <input
                     type="search"
                     value={dimessiSearch}
                     onChange={(e) => setDimessiSearch(e.target.value)}
                     placeholder="ID, nome, cognome, PMA…"
                     disabled={dimessiLoading}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"
                   />
                 </label>
                 {dimessiLoading ? (
@@ -381,15 +365,15 @@ export function ManifestazioneDashboardPage() {
                   <p className="text-sm text-slate-500">Nessun dimesso in elenco o nessun risultato.</p>
                 ) : (
                   <div className="max-h-72 overflow-auto rounded-lg border border-slate-200 bg-slate-50/50">
-                    <table className="min-w-full text-left text-xs sm:text-sm">
-                      <thead className="sticky top-0 bg-slate-100 text-[10px] font-semibold uppercase tracking-wide text-slate-600 sm:text-xs">
+                    <table className="min-w-full text-left text-sm font-medium">
+                      <thead className="sticky top-0 bg-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-500">
                         <tr>
                           <th className="px-3 py-2">ID</th>
                           <th className="px-3 py-2">Paziente</th>
                           <th className="px-3 py-2">PMA</th>
                           <th className="px-3 py-2">Colore</th>
                           <th className="px-3 py-2">Dimesso</th>
-                          <th className="px-3 py-2 text-right">Scheda</th>
+                          <th className="px-3 py-2 text-right">Azioni</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 bg-white">
@@ -406,7 +390,7 @@ export function ManifestazioneDashboardPage() {
                             </td>
                             <td className="px-3 py-2">
                               <span
-                                className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${BADGE_COLORE[row.codice_colore]}`}
+                                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${BADGE_COLORE[row.codice_colore]}`}
                               >
                                 {CODICE_COLORE_LABEL[row.codice_colore]}
                               </span>
@@ -415,16 +399,28 @@ export function ManifestazioneDashboardPage() {
                               {formatDimessoBreve(row.dimesso_at)}
                             </td>
                             <td className="px-3 py-2 text-right">
-                              {row.id_pma ? (
-                                <Link
-                                  to={`/pma/${encodeURIComponent(row.id_pma)}/paziente/${encodeURIComponent(row.id)}`}
-                                  className="font-medium text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
-                                >
-                                  Apri
-                                </Link>
-                              ) : (
-                                <span className="text-slate-400">—</span>
-                              )}
+                              <div className="flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
+                                {rank === 'Medico' ? (
+                                  <button
+                                    type="button"
+                                    disabled={!db || riprendiBusyId === row.id}
+                                    onClick={() => void riprendiInCaricoDimesso(row.id)}
+                                    className="inline-flex items-center justify-center rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold uppercase text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                                  >
+                                    {riprendiBusyId === row.id ? '…' : 'RIPRENDI IN CARICO'}
+                                  </button>
+                                ) : null}
+                                {row.id_pma ? (
+                                  <Link
+                                    to={`/pma/${encodeURIComponent(row.id_pma)}/paziente/${encodeURIComponent(row.id)}?tab=generale`}
+                                    className="font-medium text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
+                                  >
+                                    Apri
+                                  </Link>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -432,80 +428,15 @@ export function ManifestazioneDashboardPage() {
                     </table>
                   </div>
                 )}
-              </div>
-
-              <div className="mt-8 space-y-4 border-t border-slate-100 pt-6">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
-                  Ultimi 10 dimessi per PMA
-                </h3>
-                <div className="space-y-6">
-                  {pmaList.map((pma) => {
-                    const ultimi = dimessiUltimi10PerPma.get(pma.id) ?? []
-                    return (
-                      <div
-                        key={`dim-${pma.id}`}
-                        className="rounded-lg border border-slate-200 bg-slate-50/40 p-4"
-                      >
-                        <div className="flex flex-wrap items-baseline justify-between gap-2">
-                          <p className="text-sm font-semibold text-slate-900">{pma.nome}</p>
-                          <Link
-                            to={`/pma/${encodeURIComponent(pma.id)}`}
-                            className="text-xs font-medium text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
-                          >
-                            Dashboard PMA
-                          </Link>
-                        </div>
-                        {ultimi.length === 0 ? (
-                          <p className="mt-2 text-xs text-slate-500">Nessun dimesso registrato.</p>
-                        ) : (
-                          <ul className="mt-3 divide-y divide-slate-200 rounded-md border border-slate-200 bg-white text-sm">
-                            {ultimi.map((row) => (
-                              <li
-                                key={row.id}
-                                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
-                              >
-                                <div className="min-w-0">
-                                  <span className="font-mono text-xs text-slate-600">
-                                    {row.id_paziente_visibile}
-                                  </span>
-                                  <span className="ml-2 text-slate-900">
-                                    {row.cognome} {row.nome}
-                                  </span>
-                                  <span
-                                    className={`ml-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${BADGE_COLORE[row.codice_colore]}`}
-                                  >
-                                    {CODICE_COLORE_LABEL[row.codice_colore]}
-                                  </span>
-                                </div>
-                                <div className="flex shrink-0 items-center gap-3 text-xs text-slate-500">
-                                  <span>{formatDimessoBreve(row.dimesso_at)}</span>
-                                  <Link
-                                    to={`/pma/${encodeURIComponent(pma.id)}/paziente/${encodeURIComponent(row.id)}`}
-                                    className="font-medium text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
-                                  >
-                                    Scheda
-                                  </Link>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )
-                  })}
                 </div>
-              </div>
+              </details>
+
             </section>
           ) : null}
 
-          <section aria-labelledby="pma-list-heading">
-            <div className="flex items-end justify-between gap-4">
-              <h2
-                id="pma-list-heading"
-                className="text-sm font-semibold uppercase tracking-wide text-slate-500"
-              >
-                Posti medici avanzati (PMA)
-              </h2>
+          <section aria-labelledby="pma-list-heading" className="pma-card">
+            <div className="pma-card__hdr" id="pma-list-heading">
+              Posti medici avanzati (PMA)
             </div>
 
             {pmaLoading ? (
@@ -535,12 +466,14 @@ export function ManifestazioneDashboardPage() {
             {!pmaLoading && !pmaError && pmaList.length === 0 ? (
               <p className="mt-4 text-sm text-slate-500">
                 Nessun PMA per questa manifestazione.{' '}
-                {isSuperadmin ? 'Usa “Crea nuovo PMA” per aggiungerne uno.' : null}
+                {rank != null && manifestazioneDashboardAllows(rank, 'CREATE')
+                  ? 'Usa “Crea nuovo PMA” per aggiungerne uno.'
+                  : null}
               </p>
             ) : null}
 
             {!pmaLoading && !pmaError && pmaList.length > 0 ? (
-              <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <ul className="pma-metrics-grid mt-4">
                 {pmaList.map((pma) => (
                   <li key={pma.id}>
                     <PmaCard pma={pma} />
@@ -564,7 +497,7 @@ export function ManifestazioneDashboardPage() {
         man && manExists ? (
           <div className="lg:sticky lg:top-4">
             <div className="rounded-lg border border-[#e2e8f0] bg-white p-4">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Riepilogo</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Riepilogo</p>
               <p className="mt-2 text-sm font-semibold text-slate-900">{man.nome}</p>
               <dl className="mt-4 space-y-2 text-xs text-slate-600">
                 <div>

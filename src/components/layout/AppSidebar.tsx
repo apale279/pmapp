@@ -258,9 +258,9 @@ function NavBlock({
 
   return (
     <div className="mt-1 border-t border-slate-100 pt-2 first:mt-0 first:border-t-0 first:pt-0">
-      <p className="px-2 pb-0.5 text-[8px] font-semibold uppercase tracking-[0.2em] text-slate-400">{title}</p>
+      <p className="px-2 pb-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</p>
       {subtitle ? (
-        <p className="mb-1 truncate px-2 text-[11px] font-medium text-slate-500" title={subtitle ?? undefined}>
+        <p className="mb-1 truncate px-2 text-xs font-medium text-slate-500" title={subtitle ?? undefined}>
           {subtitle}
         </p>
       ) : null}
@@ -336,7 +336,7 @@ export function AppSidebar({ user, theme, layout = 'rail', onNavigate }: AppSide
             <IconCalendar className="h-3.5 w-3.5" />
           </div>
           <div
-            className="mt-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-700 ring-1 ring-slate-300/80"
+            className="mt-1.5 flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-700 ring-1 ring-slate-300/80"
             title={`${user.nome} · ${rank}`}
           >
             {operatoreInitial}
@@ -351,7 +351,7 @@ export function AppSidebar({ user, theme, layout = 'rail', onNavigate }: AppSide
               <IconCalendar className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className={`text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-400`}>
+              <div className={`text-xs font-semibold uppercase tracking-wider text-slate-500`}>
                 Manifestazione
               </div>
               <div className={`mt-0.5 truncate text-xs font-semibold leading-snug ${theme.headerText}`}>
@@ -360,12 +360,12 @@ export function AppSidebar({ user, theme, layout = 'rail', onNavigate }: AppSide
             </div>
           </div>
           <div className={`mt-3 border-t pt-2 ${theme.bannerDivider}`}>
-            <div className={`text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-400`}>Operatore</div>
+            <div className={`text-xs font-semibold uppercase tracking-wider text-slate-500`}>Operatore</div>
             <div className="mt-1 flex min-w-0 items-center gap-2">
               {rank === 'Medico' ? <StethoscopeIcon /> : null}
               <span className={`min-w-0 truncate text-xs font-medium ${theme.headerText}`}>{user.nome}</span>
               <span
-                className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${theme.rankBadge}`}
+                className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${theme.rankBadge}`}
               >
                 {rank}
               </span>
@@ -390,7 +390,7 @@ export function AppSidebar({ user, theme, layout = 'rail', onNavigate }: AppSide
           />
           {isSuperadmin ? (
             <NavItem
-              to="/utenti"
+              to="/admin/utenti"
               end
               rank={rank}
               icon={<IconUsers className="shrink-0" />}

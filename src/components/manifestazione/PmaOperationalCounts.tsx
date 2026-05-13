@@ -30,6 +30,7 @@ export function PmaOperationalCounts({ pmaId, layout = 'inline' }: Props) {
     let in_attesa = 0
     let in_carico = 0
     let altri = 0
+    let in_sospeso = 0
     const colore: Record<CodiceColorePaziente, number> = {
       rosso: 0,
       giallo: 0,
@@ -45,10 +46,11 @@ export function PmaOperationalCounts({ pmaId, layout = 'inline' }: Props) {
       if (p.stato === 'in_arrivo') in_arrivo += 1
       else if (p.stato === 'in_attesa') in_attesa += 1
       else if (p.stato === 'in_carico') in_carico += 1
+      else if (p.stato === 'in_sospeso') in_sospeso += 1
       else altri += 1
     }
     const attivi = items.length - dimessi
-    return { attivi, dimessi, in_arrivo, in_attesa, in_carico, altri, colore }
+    return { attivi, dimessi, in_arrivo, in_attesa, in_carico, in_sospeso, altri, colore }
   }, [items])
 
   if (loading) return <span className="text-xs text-slate-500">…</span>
@@ -64,7 +66,7 @@ export function PmaOperationalCounts({ pmaId, layout = 'inline' }: Props) {
   }
 
   return (
-    <div className="space-y-2 text-xs text-slate-700">
+    <div className="space-y-2 text-sm font-medium text-slate-700">
       <div className="flex flex-wrap gap-1.5">
         <span className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 font-medium text-slate-800">
           Arr {stats.in_arrivo}
@@ -75,13 +77,16 @@ export function PmaOperationalCounts({ pmaId, layout = 'inline' }: Props) {
         <span className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 font-medium text-slate-800">
           Car {stats.in_carico}
         </span>
+        <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-950">
+          Sosp {stats.in_sospeso}
+        </span>
         {stats.altri > 0 ? (
           <span className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium text-slate-700">
             Altro {stats.altri}
           </span>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-600">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-slate-600">
         {CODICI_ORDINE.map((c) => (
           <span key={c} className="inline-flex items-center gap-1">
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${COLORE_DOT[c]}`} aria-hidden />
@@ -90,7 +95,7 @@ export function PmaOperationalCounts({ pmaId, layout = 'inline' }: Props) {
           </span>
         ))}
       </div>
-      <div className="text-[11px] text-slate-500">
+      <div className="text-sm font-medium text-slate-500">
         <span className="font-medium text-slate-700">{stats.attivi}</span> attivi ·{' '}
         <span className="font-medium text-slate-700">{stats.dimessi}</span> dimessi
       </div>

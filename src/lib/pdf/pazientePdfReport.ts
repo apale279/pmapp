@@ -10,10 +10,23 @@ import {
 import { DIMISSIONE_ESITO_LABEL } from '../../types/dimissione'
 import { FARMACO_VIA_LABEL } from '../../types/cartellaClinica'
 import { buildLesioniPngDataUrl } from './lesioniFigurePng'
+import { resolveEoColumnsForDisplay, EO_PAZIENTE_FIRESTORE_FIELDS } from '../eoPazienteFields'
+import { EO_CLINICAL_TABS } from '../multilineList'
+import { defaultEoQuickGroupRows } from '../eoQuickDefaults'
 
 export type PazientePdfContext = {
   manifestazioneNome: string
   pmaNome: string
+  /**
+   * Firma medico da profilo (data URL / Base64 / URL) se non ancora salvata in
+   * `dimissione_firma_medico_base64` sul documento paziente.
+   */
+  firmaMedicoProfiloDataUrl?: string | null
+  /** Da `impostazioni` manifestazione: inclusi nel PDF se valorizzati. */
+  consensoGenericoCure?: string | null
+  consensoPrivacy?: string | null
+  /** Incluso se esito dimissione = rifiuta invio in PS e il testo è valorizzato. */
+  rifiutoInvioPsText?: string | null
 }
 
 export function sanitizeFilePart(s: string): string {
@@ -48,7 +61,14 @@ function tsItDate(ts: Timestamp | null | undefined): string {
 async function normalizeImageSrcForPdf(src: string): Promise<string | null> {
   const s = src.trim()
   if (!s) return null
-  if (s.startsWith('data:image')) return s
+  if (s.startsWith('data:image')) {
+    const comma = s.indexOf(',')
+    if (comma === -1) return null
+    const meta = s.slice(0, comma)
+    const b64 = s.slice(comma + 1).replace(/\s/g, '')
+    if (!b64) return null
+    return `${meta},${b64}`
+  }
   if (/^[A-Za-z0-9+/=\s]+$/.test(s) && s.length > 80) {
     return `data:image/png;base64,${s.replace(/\s/g, '')}`
   }
@@ -70,16 +90,15 @@ async function normalizeImageSrcForPdf(src: string): Promise<string | null> {
   return null
 }
 
-async function addImageDataUrl(
-  doc: jsPDF,
+/** Dimensioni immagine scalata come in `addImageDataUrl` (senza disegnare). */
+async function getScaledImageDimensions(
   dataUrl: string,
-  x: number,
-  y: number,
   maxW: number,
   maxH: number,
-): Promise<number> {
+): Promise<{ w: number; h: number; fmt: 'PNG' | 'JPEG' }> {
+  const lower = dataUrl.toLowerCase()
   const fmt: 'PNG' | 'JPEG' =
-    dataUrl.includes('image/jpeg') || dataUrl.includes('image/jpg') ? 'JPEG' : 'PNG'
+    lower.includes('image/jpeg') || lower.includes('image/jpg') ? 'JPEG' : 'PNG'
   const img = new Image()
   await new Promise<void>((res, rej) => {
     img.onload = () => res()
@@ -94,7 +113,23 @@ async function addImageDataUrl(
     h = maxH
     w = (iw / ih) * h
   }
-  doc.addImage(dataUrl, fmt, x, y, w, h)
+  return { w, h, fmt }
+}
+
+async function addImageDataUrl(
+  doc: jsPDF,
+  dataUrl: string,
+  x: number,
+  y: number,
+  maxW: number,
+  maxH: number,
+): Promise<number> {
+  const { w, h, fmt } = await getScaledImageDimensions(dataUrl, maxW, maxH)
+  try {
+    doc.addImage(dataUrl, fmt, x, y, w, h)
+  } catch {
+    doc.addImage(dataUrl, 'PNG', x, y, w, h)
+  }
   return h
 }
 
@@ -127,34 +162,76 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
     y = M
   }
 
+  const pageInnerH = H - 2 * M
+
   const ensure = (h: number) => {
     if (y + h > H - M) newPage()
   }
 
-  const writeTitle = (t: string, size = 10) => {
-    ensure(size + 2)
+  /**
+   * Evita di spezzare un blocco con l’interruzione di pagina: se non entra nello spazio residuo,
+   * inizia il blocco in cima a una nuova pagina. Se il blocco è più alto di una pagina intera,
+   * almeno inizia in alto (nuova pagina se siamo troppo in basso per un chunk sensato).
+   */
+  const ensureBlockHeight = (blockMm: number) => {
+    if (blockMm <= 0) return
+    if (blockMm <= pageInnerH) {
+      if (y + blockMm > H - M) newPage()
+    } else {
+      const chunk = Math.min(blockMm, pageInnerH)
+      if (y + chunk > H - M) newPage()
+    }
+  }
+
+  const titleLineHeightMm = (size: number) => size * 0.45 + 2
+
+  /** Titolo di sezione: non resta “appiccicato” in fondo pagina senza spazio per il contenuto. */
+  const writeTitle = (t: string, size = 10, minFollowingMm = 12) => {
+    const th = titleLineHeightMm(size)
+    ensureBlockHeight(th + minFollowingMm)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(size)
     doc.text(t, M, y)
-    y += size * 0.45 + 2
+    y += th
     setSmall()
   }
 
+  const bodyLineH = 3.6
+  const paragraphTitleGap = 4
+
+  /**
+   * Titolo + testo come un unico blocco quando possibile (titolo mai separato dall’inizio del valore).
+   * Se il testo supera un’intera pagina, il titolo resta con almeno la prima riga; poi il testo fluisce.
+   */
   const writeParagraph = (title: string, body: string) => {
-    ensure(8)
+    const bodyText = (body || '').trim() || '—'
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    const lines = doc.splitTextToSize(bodyText, textW)
+    const titleH = paragraphTitleGap
+    const bodyH = lines.length * bodyLineH
+    const tail = 1.5
+    const total = titleH + bodyH + tail
+
+    if (total <= pageInnerH) {
+      ensureBlockHeight(total)
+    } else {
+      const head = titleH + bodyLineH
+      ensureBlockHeight(Math.min(head, pageInnerH))
+    }
+
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9)
     doc.text(title, M, y)
-    y += 4
+    y += titleH
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
-    const lines = doc.splitTextToSize((body || '').trim() || '—', textW)
     for (const line of lines) {
-      ensure(3.6)
+      if (y + bodyLineH > H - M) newPage()
       doc.text(line, M, y)
-      y += 3.6
+      y += bodyLineH
     }
-    y += 1.5
+    y += tail
   }
 
   // Intestazione
@@ -193,11 +270,16 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
     `Tipo: ${TIPO_PAZIENTE_LABEL[p.tipo_paziente]}`,
     `Pettorale: ${p.pettorale != null ? String(p.pettorale) : '—'}`,
   ]
+  const nAnagRows = Math.max(leftCol.length, rightCol.length)
+  ensureBlockHeight(nAnagRows * 4 + 2)
   let ya = y
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
-  for (let i = 0; i < Math.max(leftCol.length, rightCol.length); i++) {
-    ensure(4)
+  for (let i = 0; i < nAnagRows; i++) {
+    if (ya + 4 > H - M) {
+      newPage()
+      ya = y
+    }
     if (leftCol[i]) doc.text(leftCol[i], M, ya)
     if (rightCol[i]) doc.text(rightCol[i], x2, ya)
     ya += 4
@@ -215,8 +297,29 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
   writeParagraph('Allergie', p.allergie)
   writeParagraph('APP', p.app)
   writeParagraph('EO — note', p.eo_note)
-  const eoList = (p.eo_quick ?? []).length ? p.eo_quick.join(', ') : '—'
-  writeParagraph('EO — selezione rapida', eoList)
+  const eoCols = resolveEoColumnsForDisplay(p, defaultEoQuickGroupRows())
+  writeTitle('EO — selezione rapida', 9)
+  const eoCellW = textW / EO_CLINICAL_TABS.length
+  const eoColStyles: Record<number, { cellWidth: number }> = {}
+  for (let i = 0; i < EO_CLINICAL_TABS.length; i++) {
+    eoColStyles[i] = { cellWidth: eoCellW }
+  }
+  autoTable(doc, {
+    startY: y,
+    head: [EO_CLINICAL_TABS.map((t) => t)],
+    body: [
+      EO_PAZIENTE_FIRESTORE_FIELDS.map((field) => {
+        const arr = eoCols[field] ?? []
+        return arr.length ? arr.join('\n') : '—'
+      }),
+    ],
+    margin: { left: M, right: M },
+    tableWidth: textW,
+    styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak', valign: 'top' },
+    headStyles: { fillColor: [51, 65, 85], fontSize: 7, halign: 'center' },
+    columnStyles: eoColStyles,
+  })
+  y = afterAutoTableY(doc, y)
 
   // Parametri vitali
   ensure(12)
@@ -266,14 +369,18 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
 
   // Prestazioni / farmaci
   const prest = (p.prestazioni_sel ?? []).length ? p.prestazioni_sel.map((x) => `• ${x}`).join('\n') : '—'
-  writeTitle('Prestazioni', 9)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   const prestLines = doc.splitTextToSize(prest, textW)
+  const prestTitleSz = 9
+  ensureBlockHeight(titleLineHeightMm(prestTitleSz) + prestLines.length * bodyLineH + 2)
+  writeTitle('Prestazioni', prestTitleSz, 0)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
   for (const line of prestLines) {
-    ensure(3.6)
+    if (y + bodyLineH > H - M) newPage()
     doc.text(line, M, y)
-    y += 3.6
+    y += bodyLineH
   }
   y += 2
 
@@ -314,40 +421,79 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
   y = afterAutoTableY(doc, y)
 
   // Lesioni
-  writeTitle('Lesioni (schema)', 9)
+  const lesTitSz = 9
+  const lesTitH = titleLineHeightMm(lesTitSz)
+  const lesListLineH = 3.5
+
   if (p.lesioni.length) {
     const png = await buildLesioniPngDataUrl(p.lesioni)
+    let imgBlockH = 0
+    let imgDims: { h: number } | null = null
     if (png) {
-      ensure(58)
+      imgDims = await getScaledImageDimensions(png, Math.min(textW, 118), 56)
+      imgBlockH = imgDims.h + 4
+    }
+    const sorted = [...p.lesioni].sort((a, b) => a.n - b.n)
+    let listBlockH = 0
+    for (const L of sorted) {
+      const line = `${L.n}. [${L.vista === 'front' ? 'Fronte' : 'Retro'}] ${L.descrizione?.trim() || '—'}`
+      const wrapped = doc.splitTextToSize(line, textW)
+      listBlockH += wrapped.length * lesListLineH
+    }
+    listBlockH += 2
+
+    const lesioniTotal = lesTitH + imgBlockH + listBlockH
+    if (lesioniTotal <= pageInnerH) {
+      ensureBlockHeight(lesioniTotal)
+    } else {
+      const keepHead = lesTitH + imgBlockH
+      ensureBlockHeight(Math.min(Math.max(keepHead, lesTitH + lesListLineH), pageInnerH))
+    }
+
+    writeTitle('Lesioni (schema)', lesTitSz, 0)
+    if (png && imgDims) {
       const hImg = await addImageDataUrl(doc, png, M, y, Math.min(textW, 118), 56)
       y += hImg + 4
     }
     doc.setFontSize(8)
     doc.setFont('helvetica', 'normal')
-    const sorted = [...p.lesioni].sort((a, b) => a.n - b.n)
     for (const L of sorted) {
       const line = `${L.n}. [${L.vista === 'front' ? 'Fronte' : 'Retro'}] ${L.descrizione?.trim() || '—'}`
       const wrapped = doc.splitTextToSize(line, textW)
       for (const ln of wrapped) {
-        ensure(3.5)
+        if (y + lesListLineH > H - M) newPage()
         doc.text(ln, M, y)
-        y += 3.5
+        y += lesListLineH
       }
     }
     y += 2
   } else {
+    ensureBlockHeight(lesTitH + 6)
+    writeTitle('Lesioni (schema)', lesTitSz, 0)
     doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
     doc.text('Nessun marker lesioni.', M, y)
     y += 5
   }
 
   // Dimissione
   writeTitle('Dimissione (Sez. 4)', 10)
+  ensureBlockHeight(8)
   const esitoLabel = p.dimissione_esito ? DIMISSIONE_ESITO_LABEL[p.dimissione_esito] : '—'
   doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(30, 30, 30)
   doc.text(`Esito: ${esitoLabel}`, M, y)
   y += 4
   writeParagraph('Note dimissione', p.dimissione_note)
+  const cgPdf = ctx.consensoGenericoCure?.trim()
+  if (cgPdf) writeParagraph('Consenso generico alle cure', cgPdf)
+  const cpPdf = ctx.consensoPrivacy?.trim()
+  if (cpPdf) writeParagraph('Consenso privacy', cpPdf)
+  if (p.dimissione_esito === 'rifiuta_invio_ps') {
+    const rifPdf = ctx.rifiutoInvioPsText?.trim()
+    if (rifPdf) writeParagraph('Rifiuto invio in PS', rifPdf)
+  }
   if (p.dimissione_esito === 'riaffidato') {
     writeParagraph(
       'Affidatario',
@@ -355,14 +501,18 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
     )
   }
   if (p.dimesso_at) {
+    ensureBlockHeight(5)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(30, 30, 30)
     doc.text(`Dimesso il: ${tsIt(p.dimesso_at)}`, M, y)
     y += 5
   }
 
   // Invio PS
   if (p.dimissione_esito === 'invio_ps') {
-    writeTitle('Invio in PS (Sez. 5)', 9)
-    const lines = [
+    const invTitSz = 9
+    const invLines = [
       `Missione AREU: ${p.invio_ps_missione_areu ?? '—'}`,
       `Data/ora: ${tsIt(p.invio_ps_data_ora)}`,
       `Mezzo: ${p.invio_ps_mezzo || '—'}`,
@@ -370,54 +520,106 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
       `Codice trasporto: ${p.invio_ps_codice_trasporto ?? '—'}`,
       `Note: ${p.invio_ps_note || '—'}`,
     ]
-    for (const ln of lines) {
-      ensure(4)
+    const invLineH = 4
+    ensureBlockHeight(titleLineHeightMm(invTitSz) + invLines.length * invLineH + 2)
+    writeTitle('Invio in PS (Sez. 5)', invTitSz, 0)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    for (const ln of invLines) {
+      if (y + invLineH > H - M) newPage()
       doc.text(ln, M, y)
-      y += 4
+      y += invLineH
     }
     y += 2
   }
 
-  // Firme
-  writeTitle('Firme', 10)
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'italic')
-  doc.text('Firma paziente', M, y)
-  y += 4
-  doc.setFont('helvetica', 'normal')
-  if (p.firma_paziente_base64?.trim()) {
-    const u = await normalizeImageSrcForPdf(p.firma_paziente_base64)
-    if (u) {
-      ensure(42)
-      const h = await addImageDataUrl(doc, u, M, y, 75, 38)
-      y += h + 3
-    } else {
-      doc.text('(firma presente ma non caricabile)', M, y)
-      y += 5
+  // Firme (paziente e medico affiancati): titolo + etichette + immagini come blocco
+  const halfGap = 6
+  const halfColW = (textW - halfGap) / 2
+  const xRight = M + halfColW + halfGap
+  const imgMaxW = halfColW * 0.75
+  const imgMaxH = 36 * 0.75
+
+  const firmeTitleSz = 10
+  const firmeTitleH = titleLineHeightMm(firmeTitleSz)
+  const labelRowH = 4
+
+  const firmaPazSrc = p.firma_paziente_base64?.trim() ?? ''
+  let hLeftMeas = 5
+  if (firmaPazSrc) {
+    try {
+      const u = await normalizeImageSrcForPdf(firmaPazSrc)
+      if (u) hLeftMeas = (await getScaledImageDimensions(u, imgMaxW, imgMaxH)).h
+    } catch {
+      hLeftMeas = 5
     }
-  } else {
-    doc.text('—', M, y)
-    y += 5
   }
 
+  const firmaMedDoc = p.dimissione_firma_medico_base64?.trim() ?? ''
+  const firmaMedProf = ctx.firmaMedicoProfiloDataUrl?.trim() ?? ''
+  const firmaMedCombined = firmaMedDoc || firmaMedProf
+  let hRightMeas = 5
+  if (firmaMedCombined) {
+    try {
+      const u = await normalizeImageSrcForPdf(firmaMedCombined)
+      if (u) hRightMeas = (await getScaledImageDimensions(u, imgMaxW, imgMaxH)).h
+    } catch {
+      hRightMeas = 5
+    }
+  }
+
+  const imgRowH = Math.max(hLeftMeas, hRightMeas, 5)
+  ensureBlockHeight(firmeTitleH + labelRowH + imgRowH + 6)
+  writeTitle('Firme', firmeTitleSz, 0)
+  doc.setFontSize(8)
+  const yLabels = y
   doc.setFont('helvetica', 'italic')
-  doc.text('Firma / timbro medico (dimissione)', M, y)
-  y += 4
+  doc.text('Firma paziente', M, yLabels)
+  doc.text('Firma / timbro medico (dimissione o profilo)', xRight, yLabels)
+  y = yLabels + labelRowH
   doc.setFont('helvetica', 'normal')
-  if (p.dimissione_firma_medico_base64?.trim()) {
-    const u = await normalizeImageSrcForPdf(p.dimissione_firma_medico_base64)
-    if (u) {
-      ensure(42)
-      const h = await addImageDataUrl(doc, u, M, y, 75, 38)
-      y += h + 3
-    } else {
-      doc.text('(firma presente ma non caricabile)', M, y)
-      y += 5
+
+  const yImg = y
+  let hLeft = 0
+  let hRight = 0
+
+  if (firmaPazSrc) {
+    try {
+      const u = await normalizeImageSrcForPdf(firmaPazSrc)
+      if (u) {
+        hLeft = await addImageDataUrl(doc, u, M, yImg, imgMaxW, imgMaxH)
+      } else {
+        doc.text('(formato non supportato)', M, yImg)
+        hLeft = 5
+      }
+    } catch {
+      doc.text('(errore firma paziente)', M, yImg)
+      hLeft = 5
     }
   } else {
-    doc.text('—', M, y)
-    y += 5
+    doc.text('—', M, yImg)
+    hLeft = 5
   }
+
+  if (firmaMedCombined) {
+    try {
+      const u = await normalizeImageSrcForPdf(firmaMedCombined)
+      if (u) {
+        hRight = await addImageDataUrl(doc, u, xRight, yImg, imgMaxW, imgMaxH)
+      } else {
+        doc.text('(formato non supportato)', xRight, yImg)
+        hRight = 5
+      }
+    } catch {
+      doc.text('(errore firma medico)', xRight, yImg)
+      hRight = 5
+    }
+  } else {
+    doc.text('—', xRight, yImg)
+    hRight = 5
+  }
+
+  y = yImg + Math.max(hLeft, hRight, 5) + 4
 
   doc.setFontSize(8)
   doc.setTextColor(100, 100, 100)

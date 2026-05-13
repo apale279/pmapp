@@ -2,7 +2,7 @@ import { useEffect, useId, useState, type FormEvent } from 'react'
 import { deleteField, doc, updateDoc } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import type { UtenteListRow } from '../../types/utenteList'
-import { STAFF_RANKS, isStaffRank, type StaffRank } from '../../types/userProfile'
+import { STAFF_RANKS, isStaffRank, staffRankRequiresPma, type StaffRank } from '../../types/userProfile'
 import type { ManifestazioneSelectOption } from '../../hooks/useManifestazioniSelectOptions'
 import { usePmaOptionsForManifestazione } from '../../hooks/usePmaOptionsForManifestazione'
 import { readImageFileAsDataUrl, validateFirmaFile } from '../../lib/firmaMedicoImage'
@@ -86,6 +86,17 @@ function EditUserModalInner({
       }
     }
 
+    if (staffRankRequiresPma(rank)) {
+      if (pmaLoading) {
+        setError('Attendi il caricamento dell’elenco PMA.')
+        return
+      }
+      if (!pmaNew) {
+        setError('Per Medico, Infermiere, Soccorritore e Triage è obbligatorio un PMA della manifestazione.')
+        return
+      }
+    }
+
     const manOrig = row.id_manifestazione ?? ''
     const pmaOrig = row.id_pma ?? ''
 
@@ -152,34 +163,31 @@ function EditUserModalInner({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto overflow-x-hidden rounded-xl border border-slate-200 bg-white p-0 shadow-xl"
       >
-        <h2 id={titleId} className="text-lg font-semibold text-slate-900">
-          Modifica utente
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Email (sola lettura): <span className="font-medium text-slate-800">{row.email}</span>
-        </p>
+        <div className="pma-bar flex-col items-start gap-1">
+          <h2 id={titleId} className="pma-bar__id text-base font-semibold">
+            Modifica utente
+          </h2>
+          <p className="text-xs text-[#a8a8c8]">
+            Email (sola lettura): <span className="font-medium text-[#e8e8f8]">{row.email}</span>
+          </p>
+        </div>
 
-        <form className="mt-6 space-y-4" onSubmit={(e) => void handleSubmit(e)}>
-          <div>
-            <label htmlFor="eu-nome" className="block text-sm font-medium text-slate-700">
-              Nome
-            </label>
+        <form className="space-y-0" onSubmit={(e) => void handleSubmit(e)}>
+          <label className="pma-field" htmlFor="eu-nome">
+            <span className="pma-field__label">Nome</span>
             <input
               id="eu-nome"
               type="text"
               required
               value={nome}
               onChange={(ev) => setNome(ev.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
             />
-          </div>
+          </label>
 
-          <div>
-            <label htmlFor="eu-rank" className="block text-sm font-medium text-slate-700">
-              Rank
-            </label>
+          <label className="pma-field" htmlFor="eu-rank">
+            <span className="pma-field__label">Rank</span>
             <select
               id="eu-rank"
               value={rank}
@@ -196,7 +204,6 @@ function EditUserModalInner({
                   setFirmaConverting(false)
                 }
               }}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
             >
               {STAFF_RANKS.map((r) => (
                 <option key={r} value={r}>
@@ -204,10 +211,10 @@ function EditUserModalInner({
                 </option>
               ))}
             </select>
-          </div>
+          </label>
 
-          <div>
-            <label htmlFor="eu-man" className="block text-sm font-medium text-slate-700">
+          <div className="pma-field">
+            <label htmlFor="eu-man" className="pma-field__label">
               Manifestazione
             </label>
             <select
@@ -218,7 +225,6 @@ function EditUserModalInner({
                 setIdPma('')
               }}
               disabled={manifestazioniLoading}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:opacity-60"
             >
               <option value="">
                 {manifestazioniLoading ? 'Caricamento…' : '— Seleziona —'}
@@ -233,9 +239,12 @@ function EditUserModalInner({
           </div>
 
           {rank !== 'Centrale' ? (
-            <div>
-              <label htmlFor="eu-pma" className="block text-sm font-medium text-slate-700">
+            <div className="pma-field">
+              <label htmlFor="eu-pma" className="pma-field__label">
                 PMA assegnato
+                {staffRankRequiresPma(rank) ? (
+                  <span className="font-semibold text-slate-900"> (obbligatorio)</span>
+                ) : null}
               </label>
               <select
                 id="eu-pma"
@@ -244,9 +253,8 @@ function EditUserModalInner({
                 }
                 onChange={(ev) => setIdPma(ev.target.value)}
                 disabled={!manForQuery || pmaLoading}
-                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:opacity-60"
               >
-                <option value="">Non assegnato</option>
+                <option value="">{staffRankRequiresPma(rank) ? '— Seleziona PMA —' : 'Non assegnato'}</option>
                 {pmaOptions.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.nome}
@@ -268,17 +276,17 @@ function EditUserModalInner({
           )}
 
           {showFirma ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4">
-              <p className="text-sm font-medium text-slate-800">Timbro / firma (solo Medico)</p>
-              <p className="mt-1 text-xs text-slate-500">
+            <div className="pma-card mx-3 mb-2">
+              <div className="pma-card__hdr">Timbro / firma (solo Medico)</div>
+              <p className="text-xs text-slate-500">
                 JPEG o PNG, massimo 2 MB. Conversione in Base64 e salvataggio su Firestore (
                 <code className="rounded bg-white px-1">firmaMedicoBase64</code>
                 ). Priorità di visualizzazione: Base64, poi URL legacy (
                 <code className="rounded bg-white px-1">firmaUrl</code>
                 ).
               </p>
-              <label htmlFor="eu-firma" className="mt-3 block text-sm font-medium text-slate-700">
-                Carica nuova immagine
+              <label htmlFor="eu-firma" className="mt-2 block">
+                <span className="pma-field__label">Carica nuova immagine</span>
               </label>
               <input
                 id="eu-firma"
@@ -369,7 +377,7 @@ function EditUserModalInner({
             </div>
           ) : null}
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2 border-t border-slate-100 px-3 py-3">
             <button
               type="button"
               className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"

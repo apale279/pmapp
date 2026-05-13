@@ -13,9 +13,16 @@ import type { Pma } from '../types/pma'
 function parsePma(docId: string, d: Record<string, unknown>): Pma {
   const imp = d.impostazioni_pma
   let posti = 0
-  if (imp && typeof imp === 'object' && imp !== null && 'posti_letto' in imp) {
-    const n = Number((imp as { posti_letto?: unknown }).posti_letto)
+  let elencoFarmaci: string[] = []
+  if (imp && typeof imp === 'object' && imp !== null) {
+    const o = imp as { posti_letto?: unknown; elenco_farmaci_usati?: unknown }
+    const n = Number(o.posti_letto)
     if (Number.isFinite(n)) posti = n
+    if (Array.isArray(o.elenco_farmaci_usati)) {
+      elencoFarmaci = o.elenco_farmaci_usati.filter(
+        (x): x is string => typeof x === 'string' && x.trim() !== '',
+      )
+    }
   }
 
   return {
@@ -24,7 +31,7 @@ function parsePma(docId: string, d: Record<string, unknown>): Pma {
     luogo: typeof d.luogo === 'string' ? d.luogo : '—',
     id_manifestazione:
       typeof d.id_manifestazione === 'string' ? d.id_manifestazione : '',
-    impostazioni_pma: { posti_letto: posti },
+    impostazioni_pma: { posti_letto: posti, elenco_farmaci_usati: elencoFarmaci },
     ...(d.createdAt &&
     typeof (d.createdAt as Timestamp).toMillis === 'function'
       ? { createdAt: d.createdAt as Timestamp }

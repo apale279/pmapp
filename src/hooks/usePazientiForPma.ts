@@ -9,7 +9,7 @@ import {
 import { db } from '../lib/firebase'
 import { useSyncLive } from '../context/SyncLiveContext'
 import type { CodiceColorePaziente, PazienteStato } from '../types/paziente'
-import { isCodiceColorePaziente, isPazienteStato } from '../types/paziente'
+import { isCodiceColorePaziente, parsePazienteStatoFromFirestore } from '../types/paziente'
 
 export type PazienteListItem = {
   id: string
@@ -30,7 +30,7 @@ export type PazienteListItem = {
 }
 
 function parseListItem(id: string, d: Record<string, unknown>): PazienteListItem {
-  const stato = isPazienteStato(d.stato) ? d.stato : 'in_carico'
+  const stato = parsePazienteStatoFromFirestore(d.stato)
   const colore = isCodiceColorePaziente(d.codice_colore) ? d.codice_colore : 'bianco'
   const ap = d.apertura_scheda
   const apertura =

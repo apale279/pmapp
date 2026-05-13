@@ -10,6 +10,8 @@ type Props = {
    */
   preloadImageSrc?: string | null
   className?: string
+  /** Area firma compatta (es. tab Dimissione). */
+  variant?: 'default' | 'compact'
   onSaveDataUrl: (dataUrl: string) => Promise<void>
 }
 
@@ -86,8 +88,10 @@ export function SignatureCanvas({
   savedImageSrc,
   preloadImageSrc,
   className = '',
+  variant = 'default',
   onSaveDataUrl,
 }: Props) {
+  const compact = variant === 'compact'
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
   const [busy, setBusy] = useState(false)
@@ -269,7 +273,11 @@ export function SignatureCanvas({
         <img
           src={savedImageSrc}
           alt="Firma paziente acquisita"
-          className="max-h-72 w-full object-contain sm:max-h-80 md:max-h-96"
+          className={
+            compact
+              ? 'max-h-36 w-full object-contain sm:max-h-40'
+              : 'max-h-72 w-full object-contain sm:max-h-80 md:max-h-96'
+          }
         />
       </div>
     )
@@ -278,7 +286,11 @@ export function SignatureCanvas({
   if (disabled && !savedImageSrc) {
     return (
       <div
-        className={`flex min-h-56 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500 md:min-h-64 ${className}`}
+        className={
+          compact
+            ? `flex min-h-32 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500 sm:min-h-36 ${className}`
+            : `flex min-h-56 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500 md:min-h-64 ${className}`
+        }
       >
         Nessuna firma paziente registrata.
       </div>
@@ -287,7 +299,13 @@ export function SignatureCanvas({
 
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
-      <div className="relative h-64 w-full max-w-4xl rounded-lg border-2 border-slate-300 bg-white shadow-inner sm:h-72 md:h-80 lg:h-96">
+      <div
+        className={
+          compact
+            ? 'relative h-36 w-full max-w-md rounded-lg border-2 border-slate-300 bg-white shadow-inner sm:h-40'
+            : 'relative h-64 w-full max-w-4xl rounded-lg border-2 border-slate-300 bg-white shadow-inner sm:h-72 md:h-80 lg:h-96'
+        }
+      >
         <canvas
           ref={canvasRef}
           className="absolute inset-0 h-full w-full touch-none cursor-crosshair"

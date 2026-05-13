@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Timestamp } from 'firebase/firestore'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { db } from '../../lib/firebase'
 import { calculateEtaAnni, patchEtaFromDataNascita } from '../../lib/calculateEtaAnni'
@@ -12,6 +12,11 @@ import {
 } from '../../lib/schedaDatetimeLocal'
 import { updateSchedaPazienteGranular } from '../../lib/updateSchedaPaziente'
 import { staffSoftRefFromUser } from '../../lib/staffSoftRef'
+import {
+  canWriteInvioPsFields,
+  schedaStatoInArrivoAllows,
+  schedaTabDimissioneAllows,
+} from '../../lib/rankMatrix'
 import { usePazienteDoc } from '../../hooks/usePazienteDoc'
 import type { CodiceColorePaziente, PazienteStato, TipoPaziente } from '../../types/paziente'
 import {
@@ -28,6 +33,8 @@ import { schedaPazienteTabsFor, type SchedaPazienteTabId } from './schedaPazient
 import { useManifestazioneListeCliniche } from '../../hooks/useManifestazioneListeCliniche'
 import { useManifestazioneDoc } from '../../hooks/useManifestazioneDoc'
 import { usePmaDocSnapshot } from '../../hooks/usePmaDocNome'
+import { usePmaListForManifestazione } from '../../hooks/usePmaListForManifestazione'
+import { createPmaAlert } from '../../lib/createPmaAlert'
 import { SchedaPazienteShell } from '../pma/SchedaPazienteShell'
 
 type Props = {
@@ -38,26 +45,17 @@ type Props = {
 const CODICI_UI: CodiceColorePaziente[] = ['bianco', 'verde', 'giallo', 'rosso']
 const TIPI: TipoPaziente[] = ['trasportato', 'autopresentato']
 
-const STATI_UI: PazienteStato[] = ['in_arrivo', 'in_attesa', 'in_carico', 'errore', 'dimesso']
+const STATI_UI: PazienteStato[] = ['in_arrivo', 'in_attesa', 'in_carico', 'in_sospeso']
 
-function statoManagerClass(_s: PazienteStato, selected: boolean): string {
-  const base =
-    'min-h-10 min-w-[7.5rem] flex-1 rounded-md border px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wide transition disabled:opacity-40'
-  if (selected) return `${base} border-[#111827] bg-[#111827] text-white`
-  return `${base} border-slate-200 bg-white text-[#111827] hover:border-slate-300 hover:bg-slate-50`
+function pillCodiceColore(c: CodiceColorePaziente, on: boolean): string {
+  if (c === 'bianco') return `pma-pill ${on ? 'pma-pill--bianco-on' : 'pma-pill--bianco-off'}`
+  if (c === 'verde') return `pma-pill ${on ? 'pma-pill--verde-on' : 'pma-pill--verde-off'}`
+  if (c === 'giallo') return `pma-pill ${on ? 'pma-pill--giallo-on' : 'pma-pill--giallo-off'}`
+  return `pma-pill ${on ? 'pma-pill--rosso-on' : 'pma-pill--rosso-off'}`
 }
 
-function codiceColoreManagerClass(c: CodiceColorePaziente, selected: boolean): string {
-  const base =
-    'min-h-[4.5rem] flex-1 rounded-lg border-2 px-3 py-4 text-center text-sm font-bold transition disabled:opacity-40'
-  const off: Record<CodiceColorePaziente, string> = {
-    bianco: 'border-slate-200 bg-slate-50 text-[#111827]',
-    verde: 'border-emerald-200 bg-emerald-50 text-[#111827]',
-    giallo: 'border-amber-200 bg-amber-50 text-[#111827]',
-    rosso: 'border-red-200 bg-red-50 text-[#111827]',
-  }
-  if (selected) return `${base} border-[#111827] bg-white text-[#111827] shadow-[inset_0_0_0_1px_#111827]`
-  return `${base} ${off[c]}`
+function pillStato(on: boolean): string {
+  return `pma-pill ${on ? 'pma-pill--stato-on' : 'pma-pill--stato-off'}`
 }
 
 function emailTelLegacy(email: string, telefono: string): string {
@@ -67,15 +65,14 @@ function emailTelLegacy(email: string, telefono: string): string {
   return e || t
 }
 
-function statiSelezionabili(isMedico: boolean, statoCorrente: PazienteStato): PazienteStato[] {
-  const base: PazienteStato[] = ['in_arrivo', 'in_attesa', 'in_carico', 'errore']
-  if (statoCorrente === 'dimesso') return ['dimesso']
-  if (isMedico) return [...base, 'dimesso']
-  return base
+function statiSelezionabili(canSelectInArrivo: boolean, statoCorrente: PazienteStato): PazienteStato[] {
+  const mid: PazienteStato[] = ['in_attesa', 'in_carico', 'in_sospeso']
+  return canSelectInArrivo || statoCorrente === 'in_arrivo' ? ['in_arrivo', ...mid] : [...mid]
 }
 
 export function SchedaPaziente({ pazienteId }: Props) {
   const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const { id: pmaRouteId } = useParams<{ id: string }>()
   const { data: p, loading, error, exists } = usePazienteDoc(pazienteId)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -84,6 +81,8 @@ export function SchedaPaziente({ pazienteId }: Props) {
   const [activeTab, setActiveTab] = useState<SchedaPazienteTabId>('generale')
   const [dataNascitaDraft, setDataNascitaDraft] = useState('')
   const [contact, setContact] = useState({ email: '', telefono: '' })
+  const [allertaBusy, setAllertaBusy] = useState(false)
+  const [allertaErr, setAllertaErr] = useState<string | null>(null)
 
   const isCentrale = user?.rank === 'Centrale'
   const isMedico = user?.rank === 'Medico'
@@ -107,6 +106,85 @@ export function SchedaPaziente({ pazienteId }: Props) {
   const etaCalcolata = useMemo(() => calculateEtaAnni(p?.data_nascita ?? undefined), [p?.data_nascita])
 
   const manifestCore = useManifestazioneListeCliniche(p?.id_manifestazione)
+  const { items: pmaDestList, loading: pmaDestLoading } = usePmaListForManifestazione(
+    p?.id_manifestazione?.trim() || undefined,
+  )
+
+  const inviaAllertaPma = useCallback(async () => {
+    if (!db || !user || user.rank !== 'Centrale' || !p) return
+    const idPma = (p.id_pma ?? '').trim()
+    if (!idPma) {
+      setAllertaErr('Seleziona il PMA destinazione.')
+      return
+    }
+    setAllertaBusy(true)
+    setAllertaErr(null)
+    try {
+      const nomeLine = [p.cognome, p.nome].filter(Boolean).join(' ').trim()
+      await createPmaAlert(db, {
+        idPma,
+        idManifestazione: p.id_manifestazione,
+        pazienteId: p.id,
+        idPazienteVisibile: p.id_paziente_visibile,
+        messaggio: `Allerta Centrale — ${p.id_paziente_visibile}${nomeLine ? ` (${nomeLine})` : ''}`,
+        creatoDaUid: user.uid,
+      })
+    } catch (e) {
+      setAllertaErr(e instanceof Error ? e.message : 'Invio allerta non riuscito.')
+    } finally {
+      setAllertaBusy(false)
+    }
+  }, [user, p])
+
+  /** Allinea ai primi valori delle liste manifestazione (stesso ordine salvato in IMP). */
+  useEffect(() => {
+    if (!db || !p?.aperto || !canEdit) return
+    if (manifestCore.loading) return
+    const tipi = manifestCore.tipoEventoList
+    if (tipi.length === 0) return
+
+    const tipoDb = p.tipo_evento?.trim() ?? ''
+    const detDb = p.dettaglio_evento?.trim() ?? ''
+
+    if (!tipoDb) {
+      const t0 = tipi[0]
+      const det0 = (manifestCore.dettaglioEventoPerTipo[t0] ?? [])[0] ?? ''
+      void write({ tipo_evento: t0, dettaglio_evento: det0 })
+      return
+    }
+
+    if (!tipi.includes(tipoDb)) return
+
+    const opts = manifestCore.dettaglioEventoPerTipo[tipoDb] ?? []
+    if (opts.length === 0) return
+
+    if (detDb) {
+      if (!opts.includes(detDb)) {
+        void write({ dettaglio_evento: opts[0] })
+      }
+      return
+    }
+
+    void write({ dettaglio_evento: opts[0] })
+  }, [
+    db,
+    p?.aperto,
+    p?.id,
+    p?.tipo_evento,
+    p?.dettaglio_evento,
+    canEdit,
+    manifestCore.loading,
+    manifestCore.tipoEventoList,
+    manifestCore.dettaglioEventoPerTipo,
+    write,
+  ])
+
+  useEffect(() => {
+    if (!db || !p?.aperto || !canEdit || !isCentrale || pmaDestLoading) return
+    if (pmaDestList.length !== 1) return
+    if ((p.id_pma ?? '').trim() !== '') return
+    void write({ id_pma: pmaDestList[0].id })
+  }, [db, p?.aperto, p?.id, p?.id_pma, canEdit, isCentrale, pmaDestLoading, pmaDestList, write])
 
   const manReport = useManifestazioneDoc(p?.id_manifestazione || undefined)
   const pmaIdForReport =
@@ -114,14 +192,17 @@ export function SchedaPaziente({ pazienteId }: Props) {
     undefined
   const pmaReport = usePmaDocSnapshot(pmaIdForReport)
 
+  const rankForTabs = user?.rank ?? 'Soccorritore'
+
   const tabs = useMemo(() => {
-    if (!p) return schedaPazienteTabsFor({ dimissione_esito: null })
-    return schedaPazienteTabsFor(p)
-  }, [p])
+    if (!p) return schedaPazienteTabsFor({ dimissione_esito: null }, rankForTabs)
+    return schedaPazienteTabsFor(p, rankForTabs)
+  }, [p, rankForTabs])
 
   const writeInvioPs = useCallback(
     async (patch: Record<string, unknown>) => {
-      if (!db || !p || p.dimissione_esito !== 'invio_ps') return
+      if (!db || !p || p.dimissione_esito !== 'invio_ps' || !user) return
+      if (!canWriteInvioPsFields(user.rank, p.aperto)) return
       setSaveError(null)
       try {
         await updateSchedaPazienteGranular(db, pazienteId, patch)
@@ -129,7 +210,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
         setSaveError(e instanceof Error ? e.message : 'Salvataggio non riuscito.')
       }
     },
-    [pazienteId, p],
+    [pazienteId, p, user],
   )
 
   useEffect(() => {
@@ -138,6 +219,11 @@ export function SchedaPaziente({ pazienteId }: Props) {
       setActiveTab('dimissione')
     }
   }, [p, activeTab])
+
+  useEffect(() => {
+    if (tabs.some((t) => t.id === activeTab)) return
+    setActiveTab(tabs[0]?.id ?? 'generale')
+  }, [tabs, activeTab])
 
   useEffect(() => {
     tabFromUrlApplied.current = null
@@ -224,7 +310,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
         manifestazioneId={manShellId}
         pazienteIdVisibile={pazienteId}
       >
-        <div className="flex items-center gap-3 px-8 py-20 text-[13px] text-slate-600">
+        <div className="flex items-center gap-3 px-8 py-20 text-sm text-slate-600">
           <span
             className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-[#111827]"
             aria-hidden
@@ -268,7 +354,9 @@ export function SchedaPaziente({ pazienteId }: Props) {
   }
 
   async function onStatoChange(next: PazienteStato) {
-    if (next === 'dimesso' && !isMedico) return
+    if (!user) return
+    if (next === 'dimesso') return
+    if (next === 'in_arrivo' && !schedaStatoInArrivoAllows(user.rank)) return
     await write({ stato: next })
   }
 
@@ -287,6 +375,10 @@ export function SchedaPaziente({ pazienteId }: Props) {
   const pmaIdForShell = p.id_pma?.trim() || pmaShellId || '—'
   const manIdForShell = p.id_manifestazione?.trim() || manShellId || ''
 
+  const canEditDimissioneTab = schedaTabDimissioneAllows(user.rank, 'UPDATE')
+  const canSetStatoInArrivo = schedaStatoInArrivoAllows(user.rank)
+  const invioPsReadOnly = !canWriteInvioPsFields(user.rank, p.aperto)
+
   return (
     <SchedaPazienteShell
       user={user}
@@ -295,7 +387,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
       manifestazioneId={manIdForShell}
       pazienteIdVisibile={visShell}
     >
-      <div className="w-full min-w-0 px-6 pb-12 pt-6 sm:px-10">
+      <div className="w-full min-w-0 px-3 pb-6 pt-3 sm:px-5">
         <DettaglioPaziente
         p={p}
         tabs={tabs}
@@ -303,46 +395,56 @@ export function SchedaPaziente({ pazienteId }: Props) {
         onTabChange={setActiveTab}
         saveError={
           saveError ? (
-            <div className="mb-6 border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800" role="alert">
+            <div className="mb-3 border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
               {saveError}
             </div>
           ) : null
         }
         panels={{
           generale: (
-            <div className="space-y-8">
+            <div className="space-y-4">
               {!p.aperto ? (
-                <p className="text-[13px] text-slate-600">Scheda in sola lettura (chiusa).</p>
+                <p className="text-sm text-slate-600">Scheda in sola lettura (chiusa).</p>
               ) : null}
 
-              <section className="rounded-lg border border-slate-200 bg-white px-6 py-8 sm:px-10">
-                <h2 className="text-[13px] font-bold uppercase tracking-[0.08em] text-[#111827]">
-                  Sezione 1 — Dati generali
-                </h2>
+              <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <div className="pma-section-hdr">Sezione 1 — Dati generali</div>
 
-                <dl className="mt-10 grid gap-10 border-b border-slate-200 pb-10 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      Infermiere di riferimento
-                    </dt>
-                    <dd className="mt-2 text-sm font-semibold text-[#111827]">
+                <div className="pma-row pma-row--2 border-b border-slate-200">
+                  <div className="pma-field pma-field--br">
+                    <span className="pma-field__label">Infermiere di riferimento</span>
+                    <span
+                      className={`pma-field__value${!p.infermiere_rif.trim() ? ' pma-field__value--muted' : ''}`}
+                    >
                       {p.infermiere_rif.trim() || '—'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      Medico di riferimento
-                    </dt>
-                    <dd className="mt-2 text-sm font-semibold text-[#111827]">
-                      {p.medico_rif.trim() || '—'}
-                    </dd>
-                  </div>
-                </dl>
-                <div className="mt-10 grid gap-8 sm:grid-cols-2">
-                  <label className="block text-sm sm:col-span-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      Apertura scheda
                     </span>
+                  </div>
+                  <div className="pma-field">
+                    <span className="pma-field__label">Medico di riferimento</span>
+                    <span className={`pma-field__value${!p.medico_rif.trim() ? ' pma-field__value--muted' : ''}`}>
+                      {p.medico_rif.trim() || '—'}
+                    </span>
+                  </div>
+                </div>
+                {p.ripreso_in_carico_at && typeof p.ripreso_in_carico_at.toDate === 'function' ? (
+                  <div className="pma-row border-b border-slate-200">
+                    <div className="pma-field">
+                      <span className="pma-field__label">Ripreso in carico</span>
+                      <span className="pma-field__value">
+                        {p.ripreso_in_carico_at.toDate().toLocaleString('it-IT', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="pma-row">
+                  <label className="pma-field">
+                    <span className="pma-field__label">Apertura scheda</span>
                     <input
                       type="datetime-local"
                       disabled={!canEdit}
@@ -351,19 +453,16 @@ export function SchedaPaziente({ pazienteId }: Props) {
                         const ts = datetimeLocalToTimestamp(e.target.value)
                         if (ts) void write({ apertura_scheda: ts })
                       }}
-                      className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                     />
                   </label>
-
-                  <label className="block text-sm">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      Tipo paziente
-                    </span>
+                </div>
+                <div className="pma-row">
+                  <label className="pma-field">
+                    <span className="pma-field__label">Tipo paziente</span>
                     <select
                       disabled={!canEdit}
                       value={p.tipo_paziente}
                       onChange={(e) => void onTipoChange(e.target.value as TipoPaziente)}
-                      className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                     >
                       {TIPI.map((t) => (
                         <option key={t} value={t}>
@@ -372,12 +471,12 @@ export function SchedaPaziente({ pazienteId }: Props) {
                       ))}
                     </select>
                   </label>
+                </div>
 
-                  <div className="block text-sm sm:col-span-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      Codice colore
-                    </span>
-                    <div className="mt-6 flex flex-wrap gap-4" role="group" aria-label="Codice colore">
+                <div className="pma-row">
+                    <div className="pma-field">
+                      <span className="pma-field__label">Codice colore</span>
+                      <div className="pma-pills pma-pills--grid" role="group" aria-label="Codice colore">
                       {CODICI_UI.map((c) => {
                         const selected = p.codice_colore === c
                         return (
@@ -387,29 +486,28 @@ export function SchedaPaziente({ pazienteId }: Props) {
                             disabled={!canEdit}
                             aria-pressed={selected}
                             onClick={() => void write({ codice_colore: c })}
-                            className={codiceColoreManagerClass(c, selected)}
+                            className={`${pillCodiceColore(c, selected)} ${!canEdit ? 'opacity-40' : ''}`}
                           >
                             {CODICE_COLORE_LABEL[c]}
                           </button>
                         )
                       })}
                     </div>
+                    </div>
                   </div>
 
                   {manifestCore.tipoEventoList.length > 0 ? (
-                    <>
-                      <label className="block text-sm sm:col-span-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                          Tipo evento
-                        </span>
+                    <div className="pma-row pma-row--1-1-2">
+                      <label className="pma-field pma-field--br">
+                        <span className="pma-field__label">Tipo evento</span>
                         <select
                           disabled={!canEdit}
                           value={p.tipo_evento}
                           onChange={(e) => {
                             const v = e.target.value
-                            void write({ tipo_evento: v, dettaglio_evento: '' })
+                            const opts = manifestCore.dettaglioEventoPerTipo[v] ?? []
+                            void write({ tipo_evento: v, dettaglio_evento: opts[0] ?? '' })
                           }}
-                          className="mt-2 w-full max-w-xl rounded-md border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                         >
                           <option value="">— Seleziona —</option>
                           {manifestCore.tipoEventoList.map((t) => (
@@ -419,15 +517,12 @@ export function SchedaPaziente({ pazienteId }: Props) {
                           ))}
                         </select>
                       </label>
-                      <label className="block text-sm sm:col-span-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                          Dettaglio evento
-                        </span>
+                      <label className="pma-field">
+                        <span className="pma-field__label">Dettaglio evento</span>
                         <select
                           disabled={!canEdit}
                           value={p.dettaglio_evento}
                           onChange={(e) => void write({ dettaglio_evento: e.target.value })}
-                          className="mt-2 w-full max-w-xl rounded-md border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                         >
                           <option value="">— Seleziona —</option>
                           {(manifestCore.dettaglioEventoPerTipo[p.tipo_evento] ?? []).map((opt) => (
@@ -437,99 +532,127 @@ export function SchedaPaziente({ pazienteId }: Props) {
                           ))}
                         </select>
                       </label>
-                    </>
+                    </div>
                   ) : (
-                    <>
-                      <label className="block text-sm sm:col-span-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                          Tipo evento
-                        </span>
+                    <div className="pma-row pma-row--1-1-2">
+                      <label className="pma-field pma-field--br">
+                        <span className="pma-field__label">Tipo evento</span>
                         <input
                           key={`te-${p.id}-${p.tipo_evento}`}
                           type="text"
                           disabled={!canEdit}
                           defaultValue={p.tipo_evento}
                           onBlur={(e) => void write({ tipo_evento: e.target.value })}
-                          className="mt-2 w-full max-w-xl rounded-md border border-slate-200 px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                         />
                       </label>
-                      <label className="block text-sm sm:col-span-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                          Dettaglio evento
-                        </span>
+                      <label className="pma-field">
+                        <span className="pma-field__label">Dettaglio evento</span>
                         <input
                           key={`de-${p.id}-${p.dettaglio_evento}`}
                           type="text"
                           disabled={!canEdit}
                           defaultValue={p.dettaglio_evento}
                           onBlur={(e) => void write({ dettaglio_evento: e.target.value })}
-                          className="mt-2 w-full max-w-xl rounded-md border border-slate-200 px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                         />
                       </label>
-                    </>
+                    </div>
                   )}
 
-                  <label className="block text-sm sm:col-span-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      Breve descrizione
-                    </span>
-                    <textarea
-                      key={`breve-${p.id}-${p.breve_descrizione}`}
-                      disabled={!canEdit}
-                      rows={4}
-                      defaultValue={p.breve_descrizione}
-                      onBlur={(e) => void write({ breve_descrizione: e.target.value })}
-                      className="mt-2 w-full rounded-md border border-slate-200 px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
-                    />
-                  </label>
+                  <div className="pma-row">
+                    <label className="pma-field">
+                      <span className="pma-field__label">Breve descrizione</span>
+                      <textarea
+                        key={`breve-${p.id}-${p.breve_descrizione}`}
+                        disabled={!canEdit}
+                        rows={4}
+                        defaultValue={p.breve_descrizione}
+                        onBlur={(e) => void write({ breve_descrizione: e.target.value })}
+                      />
+                    </label>
+                  </div>
 
                   {showCentraleFields ? (
                     <>
-                      <label className="block text-sm sm:col-span-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                          Trasportato da
-                        </span>
-                        <input
-                          key={`tda-${p.id}-${p.trasportato_da ?? ''}`}
-                          type="text"
-                          disabled={!canEdit}
-                          defaultValue={p.trasportato_da ?? ''}
-                          onBlur={(e) =>
-                            void write({
-                              trasportato_da:
-                                e.target.value.trim() === '' ? null : e.target.value.trim(),
-                            })
-                          }
-                          className="mt-2 w-full rounded-md border border-slate-200 px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
-                        />
-                      </label>
-                      <label className="block text-sm sm:col-span-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                          Note centrale
-                        </span>
-                        <input
-                          key={`nc-${p.id}-${p.note_centrale ?? ''}`}
-                          type="text"
-                          disabled={!canEdit}
-                          defaultValue={p.note_centrale ?? ''}
-                          onBlur={(e) =>
-                            void write({
-                              note_centrale:
-                                e.target.value.trim() === '' ? null : e.target.value.trim(),
-                            })
-                          }
-                          className="mt-2 w-full rounded-md border border-slate-200 px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
-                        />
-                      </label>
+                      <div className="pma-row">
+                        <label className="pma-field">
+                          <span className="pma-field__label">Trasportato da</span>
+                          <input
+                            key={`tda-${p.id}-${p.trasportato_da ?? ''}`}
+                            type="text"
+                            disabled={!canEdit}
+                            defaultValue={p.trasportato_da ?? ''}
+                            onBlur={(e) =>
+                              void write({
+                                trasportato_da:
+                                  e.target.value.trim() === '' ? null : e.target.value.trim(),
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+                      <div className="pma-row">
+                        <label className="pma-field">
+                          <span className="pma-field__label">Note centrale</span>
+                          <input
+                            key={`nc-${p.id}-${p.note_centrale ?? ''}`}
+                            type="text"
+                            disabled={!canEdit}
+                            defaultValue={p.note_centrale ?? ''}
+                            onBlur={(e) =>
+                              void write({
+                                note_centrale:
+                                  e.target.value.trim() === '' ? null : e.target.value.trim(),
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+                      <div className="pma-row">
+                        <label className="pma-field">
+                          <span className="pma-field__label">PMA destinazione</span>
+                          <select
+                            disabled={!canEdit || pmaDestLoading || pmaDestList.length === 0}
+                            value={(p.id_pma ?? '').trim()}
+                            onChange={(e) => {
+                              const v = e.target.value.trim()
+                              void (async () => {
+                                await write({ id_pma: v })
+                                const routePma = pmaRouteId ? decodeURIComponent(pmaRouteId).trim() : ''
+                                if (routePma && v && v !== routePma) {
+                                  navigate(
+                                    `/pma/${encodeURIComponent(v)}/paziente/${encodeURIComponent(pazienteId)}?tab=generale`,
+                                    { replace: true },
+                                  )
+                                }
+                              })()
+                            }}
+                          >
+                          {pmaDestList.length > 1 && !(p.id_pma ?? '').trim() ? (
+                            <option value="">— Seleziona PMA —</option>
+                          ) : null}
+                          {pmaDestList.length === 0 ? (
+                            <option value="">— Nessun PMA —</option>
+                          ) : (
+                            pmaDestList.map((pm) => (
+                              <option key={pm.id} value={pm.id}>
+                                {pm.nome}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                        <p className="mt-1 text-xs pma-field__value--muted">
+                          Il paziente risulta in questo PMA. Con un solo PMA sulla manifestazione viene impostato
+                          automaticamente se mancante.
+                        </p>
+                        </label>
+                      </div>
                     </>
                   ) : null}
 
                   {showEtaPma ? (
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                          ETA PMA (minuti da ora)
-                        </span>
+                    <div className="pma-row">
+                      <label className="pma-field">
+                        <span className="pma-field__label">ETA PMA (minuti da ora)</span>
                         <input
                           key={`eta-${p.id}-${p.eta_pma_minuti ?? 'x'}-${p.eta_pma_deadline?.toMillis?.() ?? 0}`}
                           type="number"
@@ -548,60 +671,91 @@ export function SchedaPaziente({ pazienteId }: Props) {
                             const deadline = Timestamp.fromMillis(Date.now() + n * 60_000)
                             void write({ eta_pma_minuti: Math.floor(n), eta_pma_deadline: deadline })
                           }}
-                          className="mt-2 w-full max-w-xs rounded-md border border-slate-200 px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                         />
+                        <p className="mt-2 text-xs pma-field__value--muted">
+                          Conferma i minuti uscendo dal campo: viene salvata la scadenza rispetto all&apos;ora
+                          corrente.
+                        </p>
+                        <EtaPmaCountdown deadline={p.eta_pma_deadline} />
                       </label>
-                      <p className="mt-2 text-xs text-slate-600">
-                        Conferma i minuti uscendo dal campo: viene salvata la scadenza rispetto all&apos;ora
-                        corrente.
-                      </p>
-                      <EtaPmaCountdown deadline={p.eta_pma_deadline} />
                     </div>
                   ) : null}
 
-                  <div className="block text-sm sm:col-span-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Stato</span>
-                    {!isMedico && p.stato !== 'dimesso' ? (
-                      <p className="mt-2 text-xs text-slate-600">
-                        Solo un utente con ruolo Medico può impostare lo stato &quot;Dimesso&quot;.
-                      </p>
-                    ) : null}
-                    <div className="mt-4 flex flex-wrap gap-3" role="group" aria-label="Stato paziente">
-                      {STATI_UI.map((s) => {
-                        const allowed = statiSelezionabili(isMedico, p.stato)
-                        const canPick = allowed.includes(s)
-                        const selected = p.stato === s
-                        const disabled =
-                          !canEdit ||
-                          (!isMedico && p.stato === 'dimesso') ||
-                          (!canPick && !selected)
-                        return (
-                          <button
-                            key={s}
-                            type="button"
-                            disabled={disabled}
-                            aria-pressed={selected}
-                            onClick={() => void onStatoChange(s)}
-                            className={statoManagerClass(s, selected)}
-                          >
-                            {PAZIENTE_STATO_LABEL[s]}
-                          </button>
-                        )
-                      })}
+                  <div className="pma-row">
+                    <div className="pma-field">
+                    <span className="pma-field__label">Stato</span>
+                    {p.stato === 'dimesso' ? (
+                      <div className="mt-3">
+                        <span className="pma-pill pma-pill--stato-off pointer-events-none text-sm font-bold uppercase tracking-wide">
+                          {PAZIENTE_STATO_LABEL.dimesso}
+                        </span>
+                        <p className="mt-2 text-xs pma-field__value--muted">
+                          Impostato solo tramite &quot;Dimetti paziente&quot; nella tab Dimissioni (Medico).
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {!canSetStatoInArrivo && p.stato !== 'in_arrivo' ? (
+                          <p className="mt-2 text-xs pma-field__value--muted">
+                            Solo Centrale può impostare lo stato &quot;In arrivo&quot; dalla scheda.
+                          </p>
+                        ) : null}
+                        <div className="pma-pills mt-3" role="group" aria-label="Stato paziente">
+                          {STATI_UI.map((s) => {
+                            const allowed = statiSelezionabili(canSetStatoInArrivo, p.stato)
+                            const canPick = allowed.includes(s)
+                            const selected = p.stato === s
+                            const disabled = !canEdit || (!canPick && !selected)
+                            return (
+                              <button
+                                key={s}
+                                type="button"
+                                disabled={disabled}
+                                aria-pressed={selected}
+                                onClick={() => void onStatoChange(s)}
+                                className={`${pillStato(selected)} ${!canEdit || disabled ? 'opacity-40' : ''}`}
+                              >
+                                {PAZIENTE_STATO_LABEL[s]}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        {isCentrale && p.aperto ? (
+                          <div className="mt-4 border-t border-slate-100 pt-4">
+                            <button
+                              type="button"
+                              disabled={!db || allertaBusy || !(p.id_pma ?? '').trim()}
+                              onClick={() => void inviaAllertaPma()}
+                              className="inline-flex h-10 w-full max-w-md items-center justify-center rounded-lg border border-amber-400 bg-amber-100 px-4 text-sm font-bold uppercase text-amber-950 shadow-sm hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {allertaBusy ? 'Invio…' : 'Allerta PMA'}
+                            </button>
+                            {allertaErr ? (
+                              <p className="mt-2 text-xs text-red-600" role="alert">
+                                {allertaErr}
+                              </p>
+                            ) : (
+                              <p className="mt-2 max-w-xl text-xs pma-field__value--muted">
+                                Segnale in tempo reale verso il PMA destinazione (Firestore). Sul PMA compare un
+                                avviso; se abiliti le notifiche del browser nella dashboard PMA, ricevi anche un
+                                pop-up.
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
+                      </>
+                    )}
                     </div>
                   </div>
-                </div>
               </section>
             </div>
           ),
           anagrafica: (
-            <section className="rounded-lg border border-slate-200 bg-white px-6 py-8 sm:px-10">
-              <h2 className="text-[13px] font-bold uppercase tracking-[0.08em] text-[#111827]">
-                Sezione 2 — Dati anagrafici
-              </h2>
-              <div className="mt-10 grid gap-8 sm:grid-cols-2">
-                <label className="block text-sm">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Pettorale</span>
+            <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+              <div className="pma-section-hdr">Sezione 2 — Dati anagrafici</div>
+              <div className="pma-row pma-row--2">
+                <label className="pma-field pma-field--br">
+                  <span className="pma-field__label">Pettorale</span>
                   <input
                     key={`pet-${p.id}-${p.pettorale ?? 'x'}`}
                     type="number"
@@ -617,46 +771,49 @@ export function SchedaPaziente({ pazienteId }: Props) {
                       const n = Number(v)
                       if (Number.isFinite(n)) void write({ pettorale: Math.floor(n) })
                     }}
-                    className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                   />
                 </label>
-                <div className="text-sm">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Età</span>
-                  <div className="mt-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-[13px] font-semibold text-[#111827]">
+                <div className="pma-field">
+                  <span className="pma-field__label">Età</span>
+                  <span
+                    className={
+                      etaCalcolata !== null || (p.eta !== null && p.eta !== undefined)
+                        ? 'pma-field__value'
+                        : 'pma-field__value pma-field__value--muted'
+                    }
+                  >
                     {etaCalcolata !== null
                       ? `${etaCalcolata} anni`
                       : p.eta !== null && p.eta !== undefined
                         ? `${p.eta} anni`
                         : '—'}
-                  </div>
+                  </span>
                   <p className="mt-2 text-xs text-slate-600">Calcolata dalla data di nascita.</p>
                 </div>
-                <label className="block text-sm">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Nome</span>
+                <label className="pma-field pma-field--br">
+                  <span className="pma-field__label">Nome</span>
                   <input
                     key={`nome-${p.id}-${p.nome}`}
                     type="text"
                     disabled={!canEdit}
                     defaultValue={p.nome}
                     onBlur={(e) => void write({ nome: e.target.value })}
-                    className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                   />
                 </label>
-                <label className="block text-sm">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Cognome</span>
+                <label className="pma-field">
+                  <span className="pma-field__label">Cognome</span>
                   <input
                     key={`cog-${p.id}-${p.cognome}`}
                     type="text"
                     disabled={!canEdit}
                     defaultValue={p.cognome}
                     onBlur={(e) => void write({ cognome: e.target.value })}
-                    className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                   />
                 </label>
-                <label className="block text-sm sm:col-span-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Data di nascita
-                  </span>
+              </div>
+              <div className="pma-row">
+                <label className="pma-field">
+                  <span className="pma-field__label">Data di nascita</span>
                   <input
                     type="date"
                     disabled={!canEdit}
@@ -675,11 +832,12 @@ export function SchedaPaziente({ pazienteId }: Props) {
                       }
                       void write({ data_nascita: ts, ...patchEtaFromDataNascita(ts) })
                     }}
-                    className="mt-2 w-full max-w-xs rounded-md border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                   />
                 </label>
-                <label className="block text-sm sm:col-span-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Email</span>
+              </div>
+              <div className="pma-row">
+                <label className="pma-field">
+                  <span className="pma-field__label">Email</span>
                   <input
                     type="email"
                     disabled={!canEdit}
@@ -693,11 +851,12 @@ export function SchedaPaziente({ pazienteId }: Props) {
                       })
                     }
                     autoComplete="email"
-                    className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                   />
                 </label>
-                <label className="block text-sm sm:col-span-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Telefono</span>
+              </div>
+              <div className="pma-row">
+                <label className="pma-field">
+                  <span className="pma-field__label">Telefono</span>
                   <input
                     type="tel"
                     disabled={!canEdit}
@@ -712,7 +871,6 @@ export function SchedaPaziente({ pazienteId }: Props) {
                     }
                     autoComplete="tel"
                     placeholder="+39 …"
-                    className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-[#111827] focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
                   />
                 </label>
               </div>
@@ -733,15 +891,21 @@ export function SchedaPaziente({ pazienteId }: Props) {
               p={p}
               user={user}
               isMedico={isMedico}
+              canEditDimissioneTab={canEditDimissioneTab}
               canEditScheda={Boolean(canEdit)}
               write={write}
               reportManifestazioneNome={manReport.data?.nome ?? ''}
               reportPmaNome={pmaReport.nome ?? ''}
+              consensoGenericoCure={manReport.data?.consensoGenericoCure}
+              consensoPrivacy={manReport.data?.consensoPrivacy}
+              rifiutoInvioPs={manReport.data?.rifiutoInvioPs}
+              presetDimissione={manReport.data?.presetDimissione}
             />
           ),
           invio_ps: (
             <InvioOspedaleSection
               p={p}
+              readOnly={invioPsReadOnly}
               writeInvio={writeInvioPs}
             />
           ),

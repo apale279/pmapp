@@ -36,6 +36,7 @@ export async function createPmaDocument(
     id_manifestazione: manifestazioneId,
     impostazioni_pma: {
       posti_letto: Math.floor(postiLetto),
+      elenco_farmaci_usati: [],
     },
   })
 

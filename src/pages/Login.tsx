@@ -19,13 +19,13 @@ export function Login() {
 
   if (firebaseDisabled || status === 'firebase_disabled') {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-100 px-4">
-        <div className="w-full max-w-md rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
-          <h1 className="text-lg font-semibold text-amber-900">Firebase non configurato</h1>
-          <p className="mt-2 text-sm text-amber-800">
-            Imposta le variabili <code className="rounded bg-amber-100 px-1">VITE_FIREBASE_*</code> in{' '}
-            <code className="rounded bg-amber-100 px-1">.env.local</code> e riavvia{' '}
-            <code className="rounded bg-amber-100 px-1">npm run dev</code>.
+      <div className="pma-dashboard flex min-h-screen flex-col items-center justify-center px-4 py-10">
+        <div className="pma-card max-w-md border-amber-200 bg-amber-50 text-center">
+          <div className="pma-card__hdr text-amber-900">Firebase non configurato</div>
+          <p className="mt-2 text-sm text-amber-900">
+            Imposta le variabili <code className="rounded bg-amber-100/80 px-1">VITE_FIREBASE_*</code> in{' '}
+            <code className="rounded bg-amber-100/80 px-1">.env.local</code> e riavvia{' '}
+            <code className="rounded bg-amber-100/80 px-1">npm run dev</code>.
           </p>
         </div>
       </div>
@@ -33,7 +33,7 @@ export function Login() {
   }
 
   if (status === 'ready' && user) {
-    return <Navigate to="/" replace />
+    return <Navigate to={user.rank === 'Superadmin' ? '/admin' : '/'} replace />
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -91,18 +91,17 @@ export function Login() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-white px-4 py-10">
-      <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8">
-        <div className="text-center">
-          <h1 className="text-xl font-bold tracking-tight text-[#111827]">PMApp</h1>
-          <p className="mt-1 text-sm text-slate-500">Accedi con email e password</p>
+    <div className="pma-dashboard flex min-h-screen flex-col items-center justify-center px-4 py-10">
+      <div className="w-full max-w-md overflow-hidden rounded-lg p-0 pma-card">
+        <div className="pma-bar justify-center">
+          <div className="pma-bar__id text-center text-base">PMApp</div>
         </div>
+        <div className="px-6 pb-8 pt-5">
+          <p className="text-center text-sm text-slate-500">Accedi con email e password</p>
 
-        <form className="mt-8 space-y-4" onSubmit={(e) => void handleSubmit(e)}>
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-slate-700">
-              Email
-            </label>
+        <form className="mt-6 space-y-0" onSubmit={(e) => void handleSubmit(e)}>
+          <label className="pma-field">
+            <span className="pma-field__label">Email</span>
             <input
               id="email"
               type="email"
@@ -110,13 +109,10 @@ export function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm text-[#111827] focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
             />
-          </div>
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-slate-700">
-              Password
-            </label>
+          </label>
+          <label className="pma-field">
+            <span className="pma-field__label">Password</span>
             <input
               id="password"
               type="password"
@@ -124,14 +120,14 @@ export function Login() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm text-[#111827] focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
             />
-          </div>
+          </label>
           {formError ? (
-            <p className="text-sm text-red-600" role="alert">
+            <p className="px-3 py-2 text-sm text-red-600" role="alert">
               {formError}
             </p>
           ) : null}
+          <div className="p-3 pt-4">
           <button
             type="submit"
             disabled={pending || !isFirebaseReady()}
@@ -139,10 +135,11 @@ export function Login() {
           >
             {pending ? 'Accesso in corso…' : 'Accedi'}
           </button>
+          </div>
         </form>
 
         {import.meta.env.DEV ? (
-          <div className="mt-8 border-t border-slate-200 pt-6">
+          <div className="mt-6 border-t border-slate-200 pt-6">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
               Solo sviluppo
             </p>
@@ -177,6 +174,7 @@ export function Login() {
             </button>
           </div>
         ) : null}
+        </div>
       </div>
     </div>
   )

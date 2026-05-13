@@ -12,6 +12,10 @@ interface ImportMetaEnv {
   readonly VITE_BOOTSTRAP_SUPERADMIN_PASSWORD?: string
   /** Regione Cloud Functions (es. europe-west1). Deve coincidere con il deploy. */
   readonly VITE_FIREBASE_FUNCTIONS_REGION?: string
+  /** Cloudinary: cloud name (unsigned upload da browser). */
+  readonly VITE_CLOUDINARY_CLOUD_NAME?: string
+  /** Cloudinary: upload preset di tipo unsigned. */
+  readonly VITE_CLOUDINARY_UPLOAD_PRESET?: string
 }
 
 interface ImportMeta {

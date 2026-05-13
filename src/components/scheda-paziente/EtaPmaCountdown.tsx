@@ -40,14 +40,14 @@ export function EtaPmaCountdown({ deadline, hiddenLabel = 'Countdown ETA' }: Pro
   })
 
   return (
-    <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-      <div className="font-medium text-slate-700">Arrivo previsto</div>
-      <div className="text-xs text-slate-500">{arrivoPrevisto}</div>
+    <div className="pma-card mt-2 text-sm">
+      <div className="pma-field__value font-medium">Arrivo previsto</div>
+      <div className="text-xs pma-field__value--muted">{arrivoPrevisto}</div>
       <div
         className={
           scaduto
             ? 'mt-1 animate-pulse font-semibold text-red-600'
-            : 'mt-1 font-medium text-slate-800'
+            : 'mt-1 font-medium pma-field__value'
         }
         aria-live="polite"
         aria-label={hiddenLabel}

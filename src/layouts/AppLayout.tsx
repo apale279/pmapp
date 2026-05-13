@@ -1,41 +1,15 @@
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { RankThemeProvider } from '../context/RankThemeContext'
 import { OperativeAppShell } from '../components/layout/OperativeAppShell'
-import { useAppShellTitle } from '../hooks/useAppShellTitle'
 import type { UserProfile } from '../types/userProfile'
 
-function PmaSelfContainedOutlet() {
+function AppChrome({ user, logout }: { user: UserProfile; logout: () => Promise<void> }) {
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
-      <Outlet />
-    </div>
-  )
-}
-
-function StandardAppChrome({ user, logout }: { user: UserProfile; logout: () => Promise<void> }) {
-  const title = useAppShellTitle()
-
-  return (
-    <OperativeAppShell user={user} logout={logout} title={title}>
+    <OperativeAppShell user={user} logout={logout}>
       <Outlet />
     </OperativeAppShell>
   )
-}
-
-function AppLayoutShell({ user, logout }: { user: UserProfile; logout: () => Promise<void> }) {
-  const location = useLocation()
-  const path = location.pathname
-
-  const isPmaDashboard = /^\/pma\/[^/]+$/.test(path)
-  const isSchedaPaziente = /^\/pma\/[^/]+\/paziente\/[^/]+$/.test(path)
-  const isPmaImpostazioni = /^\/pma\/[^/]+\/impostazioni\/?$/.test(path)
-
-  if (isPmaDashboard || isSchedaPaziente || isPmaImpostazioni) {
-    return <PmaSelfContainedOutlet />
-  }
-
-  return <StandardAppChrome user={user} logout={logout} />
 }
 
 export function AppLayout() {
@@ -47,7 +21,7 @@ export function AppLayout() {
 
   return (
     <RankThemeProvider rank={user.rank}>
-      <AppLayoutShell user={user} logout={logout} />
+      <AppChrome user={user} logout={logout} />
     </RankThemeProvider>
   )
 }

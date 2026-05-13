@@ -7,6 +7,7 @@ import {
 } from '../lib/prestazioniFarmaciDefaults'
 import { sortRecordKeysAndValuesIt, sortStringsIt } from '../lib/sortLocaleIt'
 import { EO_CLINICAL_TABS } from '../lib/multilineList'
+import { defaultEoQuickGroupRows, type EoQuickGroupRow } from '../lib/eoQuickDefaults'
 import { EO_OPZIONI_RAPIDE } from '../types/cartellaClinica'
 import { useSyncLive } from '../context/SyncLiveContext'
 
@@ -51,8 +52,6 @@ function firstNonEmptyDettaglio(
   return {}
 }
 
-export type EoQuickGroupRow = { title: string; labels: string[] }
-
 function buildEoQuickGroups(
   d: Record<string, unknown>,
   imp: Record<string, unknown>,
@@ -84,13 +83,6 @@ function flattenLabelsFromGroups(groups: EoQuickGroupRow[]): string[] {
     }
   }
   return flat.length ? flat : [...EO_OPZIONI_RAPIDE]
-}
-
-function defaultEoQuickGroups(): EoQuickGroupRow[] {
-  const fallback = [...EO_OPZIONI_RAPIDE]
-  return EO_CLINICAL_TABS.map((title, i) =>
-    i === 0 ? { title, labels: fallback } : { title, labels: [] as string[] },
-  )
 }
 
 function eoQuickDefaultFromDoc(d: Record<string, unknown>, imp: Record<string, unknown>): string | null {
@@ -127,7 +119,7 @@ export type ManifestazioneCoreListe = {
   eoQuickLabels: string[]
   /** Opzioni rapide EO raggruppate per categoria (v4: GENERALE per prima). */
   eoQuickGroups: EoQuickGroupRow[]
-  /** Valore pre-selezionato in cartella (EO rapido) se `eo_quick` è vuoto. */
+  /** Valore pre-selezionato in cartella (EO rapido) se la colonna GENERALE è vuota. */
   eoQuickDefaultLabel: string | null
   loading: boolean
 }
@@ -135,6 +127,8 @@ export type ManifestazioneCoreListe = {
 /**
  * Liste cliniche + IMP_GENERALI (Core v3) da `manifestazioni/{id}` in tempo reale.
  */
+export type { EoQuickGroupRow } from '../lib/eoQuickDefaults'
+
 export function useManifestazioneListeCliniche(manifestazioneId: string | undefined): ManifestazioneCoreListe {
   const { bumpSync } = useSyncLive()
   const [prestazioni, setPrestazioni] = useState<string[]>(() =>
@@ -143,8 +137,8 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
   const [farmaci, setFarmaci] = useState<string[]>(() => sortStringsIt([...FARMACI_LISTA_DEFAULT]))
   const [tipoEventoList, setTipoEventoList] = useState<string[]>([])
   const [dettaglioEventoPerTipo, setDettaglioEventoPerTipo] = useState<Record<string, string[]>>({})
-  const [eoQuickLabels, setEoQuickLabels] = useState<string[]>(() => flattenLabelsFromGroups(defaultEoQuickGroups()))
-  const [eoQuickGroups, setEoQuickGroups] = useState<EoQuickGroupRow[]>(() => defaultEoQuickGroups())
+  const [eoQuickLabels, setEoQuickLabels] = useState<string[]>(() => flattenLabelsFromGroups(defaultEoQuickGroupRows()))
+  const [eoQuickGroups, setEoQuickGroups] = useState<EoQuickGroupRow[]>(() => defaultEoQuickGroupRows())
   const [eoQuickDefaultLabel, setEoQuickDefaultLabel] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -155,7 +149,7 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
         setFarmaci(sortStringsIt([...FARMACI_LISTA_DEFAULT]))
         setTipoEventoList([])
         setDettaglioEventoPerTipo({})
-        const defG = defaultEoQuickGroups()
+        const defG = defaultEoQuickGroupRows()
         setEoQuickGroups(defG)
         setEoQuickLabels(flattenLabelsFromGroups(defG))
         setEoQuickDefaultLabel(null)
@@ -175,7 +169,7 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
           setFarmaci(sortStringsIt([...FARMACI_LISTA_DEFAULT]))
           setTipoEventoList([])
           setDettaglioEventoPerTipo({})
-          const defG2 = defaultEoQuickGroups()
+          const defG2 = defaultEoQuickGroupRows()
           setEoQuickGroups(defG2)
           setEoQuickLabels(flattenLabelsFromGroups(defG2))
           setEoQuickDefaultLabel(null)
@@ -228,7 +222,7 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
         setFarmaci(sortStringsIt([...FARMACI_LISTA_DEFAULT]))
         setTipoEventoList([])
         setDettaglioEventoPerTipo({})
-        const defG3 = defaultEoQuickGroups()
+        const defG3 = defaultEoQuickGroupRows()
         setEoQuickGroups(defG3)
         setEoQuickLabels(flattenLabelsFromGroups(defG3))
         setEoQuickDefaultLabel(null)

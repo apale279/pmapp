@@ -1,10 +1,17 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { arrayUnion, Timestamp } from 'firebase/firestore'
 import { datetimeLocalToTimestamp, toDatetimeLocal } from '../../lib/schedaDatetimeLocal'
 import { registerPmaFarmacoUsato } from '../../lib/registerPmaFarmacoUsato'
 import { db } from '../../lib/firebase'
+import { cloudinaryUnsignedUpload } from '../../lib/cloudinaryUnsignedUpload'
 import { useManifestazioneListeCliniche } from '../../hooks/useManifestazioneListeCliniche'
 import type { Paziente } from '../../types/paziente'
+import { EO_CLINICAL_TABS, type EoTabKey } from '../../lib/multilineList'
+import {
+  EO_PAZIENTE_FIRESTORE_FIELDS,
+  firestoreFieldForEoTab,
+  resolveEoColumnsForDisplay,
+} from '../../lib/eoPazienteFields'
 import type {
   FarmacoSomministrato,
   FarmacoVia,
@@ -39,7 +46,7 @@ function sortRivDesc(rows: RivalutazioneVoce[]) {
 }
 
 const PV_INPUT =
-  'mt-0.5 w-full min-w-0 rounded-md border border-slate-300 px-1.5 py-1 text-xs disabled:bg-slate-100'
+  'mt-0.5 w-full min-w-0 rounded-md border border-slate-300 px-2 py-1.5 text-sm font-medium disabled:bg-slate-100'
 
 type PvTone = 'critical' | 'warn' | null
 
@@ -98,7 +105,7 @@ function MonitorCell({
         : 'border-slate-200 bg-white'
   return (
     <div className={`rounded-md border px-1.5 py-1 ${shell}`}>
-      <div className="text-[9px] font-semibold uppercase tracking-wide text-slate-600">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</div>
       <div className="mt-0.5 min-w-0">{children}</div>
     </div>
   )
@@ -306,14 +313,14 @@ function FarmacoRow({
   onPatch: (id: string, next: FarmacoSomministrato) => void
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-2 text-sm">
+    <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
       <div className="max-w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
         <div className="flex w-max min-w-full items-end gap-2">
-          <div className="min-w-[7rem] shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+          <div className="min-w-[7rem] shrink-0 text-sm font-medium text-slate-900">
             {row.nome}
           </div>
-          <label className="shrink-0 text-[10px] min-w-[4.5rem]">
-            <span className="text-slate-600">Dose</span>
+          <label className="shrink-0 min-w-[4.5rem] text-xs">
+            <span className="font-semibold uppercase tracking-wider text-slate-500">Dose</span>
             <input
               type="text"
               disabled={!canEditFarmaci}
@@ -322,8 +329,8 @@ function FarmacoRow({
               className={PV_INPUT}
             />
           </label>
-          <label className="shrink-0 text-[10px] min-w-[3.5rem]">
-            <span className="text-slate-600">Via</span>
+          <label className="shrink-0 min-w-[3.5rem] text-xs">
+            <span className="font-semibold uppercase tracking-wider text-slate-500">Via</span>
             <select
               disabled={!canEditFarmaci}
               value={row.via}
@@ -340,8 +347,8 @@ function FarmacoRow({
               ))}
             </select>
           </label>
-          <label className="shrink-0 text-[10px] min-w-[10.5rem]">
-            <span className="text-slate-600">Orario</span>
+          <label className="shrink-0 min-w-[10.5rem] text-xs">
+            <span className="font-semibold uppercase tracking-wider text-slate-500">Orario</span>
             <input
               type="datetime-local"
               disabled={!canEditFarmaci}
@@ -372,6 +379,7 @@ export function CartellaClinicaSection({
     farmaci: farmaciLista,
     eoQuickGroups,
     eoQuickDefaultLabel,
+    loading: manifestListeLoading,
   } = useManifestazioneListeCliniche(p.id_manifestazione)
 
   const gruppiEoUi = useMemo(
@@ -379,10 +387,62 @@ export function CartellaClinicaSection({
     [eoQuickGroups],
   )
 
+  const hideClinicalBlocks = user?.rank === 'Triage'
+
+  const eoResolved = useMemo(() => resolveEoColumnsForDisplay(p, eoQuickGroups), [p, eoQuickGroups])
+
+  const eoSelectedByTab = useMemo((): Record<EoTabKey, string[]> => {
+    const o = {} as Record<EoTabKey, string[]>
+    for (let i = 0; i < EO_CLINICAL_TABS.length; i++) {
+      const tab = EO_CLINICAL_TABS[i]
+      const field = EO_PAZIENTE_FIRESTORE_FIELDS[i]
+      o[tab] = [...(eoResolved[field] ?? [])]
+    }
+    return o
+  }, [eoResolved])
+
+  const eoQuickKeySuffix = useMemo(
+    () =>
+      `${EO_CLINICAL_TABS.map((t) => eoSelectedByTab[t].join('\u0001')).join('\u0002')}\u0003${eoQuickGroups.map((g) => g.title + g.labels.join(',')).join('|')}\u0003${eoQuickDefaultLabel ?? ''}`,
+    [eoSelectedByTab, eoQuickGroups, eoQuickDefaultLabel],
+  )
+
+  /** Opzioni EO da snapshot manifestazione: ogni colonna vuota riceve il primo valore dell'elenco. */
+  useEffect(() => {
+    if (!canEdit || hideClinicalBlocks) return
+    if (manifestListeLoading) return
+
+    const patch: Record<string, unknown> = {}
+    for (const tab of EO_CLINICAL_TABS) {
+      const field = firestoreFieldForEoTab(tab)
+      const col = eoSelectedByTab[tab] ?? []
+      const group = eoQuickGroups.find((g) => g.title === tab)
+      const labels = (group?.labels ?? []).map((x) => x.trim()).filter(Boolean)
+      if (labels.length === 0 || col.length > 0) continue
+      patch[field] = [labels[0]]
+    }
+    if (Object.keys(patch).length === 0) return
+    void write(patch)
+  }, [
+    canEdit,
+    hideClinicalBlocks,
+    manifestListeLoading,
+    eoQuickGroups,
+    eoSelectedByTab,
+    write,
+    p.id,
+  ])
+
+  const patchEoColumn = useCallback(
+    (tab: EoTabKey, next: string[]) => {
+      void write({ [firestoreFieldForEoTab(tab)]: next } as Record<string, unknown>)
+    },
+    [write],
+  )
+
   const canEditFarmaci =
     canEdit && user && (user.rank === 'Medico' || user.rank === 'Infermiere')
 
-  const hideClinicalBlocks = user?.rank === 'Triage'
   const canEditRivalutazioniEsistenti = Boolean(canEdit && user?.rank === 'Medico')
 
   const pvSorted = useMemo(() => sortPvDesc(p.parametri_vitali), [p.parametri_vitali])
@@ -421,6 +481,9 @@ export function CartellaClinicaSection({
   )
 
   const [rivDraft, setRivDraft] = useState('')
+  const [ecgUploadBusy, setEcgUploadBusy] = useState(false)
+  const [ecgUploadErr, setEcgUploadErr] = useState<string | null>(null)
+  const ecgFileInputRef = useRef<HTMLInputElement>(null)
   const [farmNomeInput, setFarmNomeInput] = useState('')
   const [farmDose, setFarmDose] = useState('')
   const [farmVia, setFarmVia] = useState<FarmacoVia>('EV')
@@ -493,90 +556,100 @@ export function CartellaClinicaSection({
     [p.rivalutazioni, write],
   )
 
+  async function onEcgFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !canEdit) return
+    if (!file.type.startsWith('image/')) {
+      setEcgUploadErr('Seleziona un file immagine (foto ECG).')
+      return
+    }
+    setEcgUploadErr(null)
+    setEcgUploadBusy(true)
+    try {
+      const { secure_url } = await cloudinaryUnsignedUpload(file)
+      await write({ ecg_cloudinary_url: secure_url })
+    } catch (err) {
+      setEcgUploadErr(err instanceof Error ? err.message : 'Upload ECG non riuscito.')
+    } finally {
+      setEcgUploadBusy(false)
+    }
+  }
+
   const selPrest = new Set(p.prestazioni_sel)
 
   return (
     <section
       className={
         embedded
-          ? 'min-w-0 space-y-6'
-          : 'min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm'
+          ? 'min-w-0 space-y-0'
+          : 'min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white'
       }
     >
-      <h2
-        className={
-          embedded
-            ? 'border-b border-slate-200 pb-1.5 text-base font-semibold text-slate-900'
-            : 'text-[11px] font-semibold uppercase tracking-wide text-slate-500'
-        }
-      >
+      <div className="pma-section-hdr">
         {embedded ? 'Cartella clinica' : 'Sezione 3 — Cartella clinica'}
-      </h2>
+      </div>
 
-      <div className={embedded ? 'space-y-6' : 'mt-4 space-y-6'}>
+      <div className={embedded ? 'space-y-0' : ''}>
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">4.1 Valutazione e anamnesi</h3>
-          <div className="mt-3 space-y-3">
-            <label className="block text-[13px]">
-              <span className="font-medium text-slate-700">APR (anamnesi patologica remota)</span>
+          <div className="pma-section-hdr">4.1 Valutazione e anamnesi</div>
+          <div className="space-y-0">
+            <label className="pma-field">
+              <span className="pma-field__label">APR (anamnesi patologica remota)</span>
               <textarea
                 key={`apr-${pazienteId}-${p.apr}`}
                 disabled={!canEdit}
                 rows={3}
                 defaultValue={p.apr}
                 onBlur={(e) => void write({ apr: e.target.value })}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-[13px] leading-snug disabled:bg-slate-50"
               />
             </label>
-            <label className="block text-[13px]">
-              <span className="font-medium text-slate-700">Allergie</span>
+            <label className="pma-field">
+              <span className="pma-field__label">Allergie</span>
               <textarea
                 key={`all-${pazienteId}-${p.allergie}`}
                 disabled={!canEdit}
                 rows={2}
                 defaultValue={p.allergie}
                 onBlur={(e) => void write({ allergie: e.target.value })}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-[13px] leading-snug disabled:bg-slate-50"
               />
             </label>
-            <label className="block text-[13px]">
-              <span className="font-medium text-slate-700">APP (anamnesi patologica prossima)</span>
+            <label className="pma-field">
+              <span className="pma-field__label">APP (anamnesi patologica prossima)</span>
               <textarea
                 key={`app-${pazienteId}-${p.app}`}
                 disabled={!canEdit}
                 rows={3}
                 defaultValue={p.app}
                 onBlur={(e) => void write({ app: e.target.value })}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-[13px] leading-snug disabled:bg-slate-50"
               />
             </label>
             {!hideClinicalBlocks ? (
               <>
-                <div>
-                  <span className="text-[13px] font-medium text-slate-700">Esame obiettivo (EO)</span>
-                  <p className="mt-0.5 text-[11px] text-slate-500">
+                <div className="pma-card overflow-hidden">
+                  <div className="pma-card__hdr">Esame obiettivo (EO)</div>
+                  <p className="px-3 pb-2 text-xs text-slate-500">
                     Sei colonne per categoria (GENERALE, NEUROLOGICO, CUTE, TORACE, ADDOME, CAPO/COLLO). Su schermi
                     piccoli scorri in orizzontale.
                   </p>
-                  <div className="mt-2 rounded-md border border-slate-200 bg-slate-50/80 p-2">
+                  <div className="border-t border-slate-100 bg-slate-50/80 p-2">
                     <QuickExamField
-                      key={`qe-${pazienteId}-${p.eo_note}\0${p.eo_quick.join('\0')}\0${eoQuickGroups.map((g) => g.title + g.labels.join(',')).join('|')}\0${eoQuickDefaultLabel ?? ''}`}
-                      selected={p.eo_quick}
+                      key={`qe-${pazienteId}-${p.eo_note}\0${eoQuickKeySuffix}`}
                       note={p.eo_note}
                       disabled={!canEdit}
                       gruppiRapidi={gruppiEoUi}
-                      defaultQuickSelection={eoQuickDefaultLabel}
-                      onSelectionChange={(next) => void write({ eo_quick: next })}
+                      selectedByTab={eoSelectedByTab}
+                      onColumnSelectionChange={patchEoColumn}
                       onNoteBlur={(text) => void write({ eo_note: text })}
                     />
                   </div>
                 </div>
-                <div>
-                  <span className="text-[13px] font-medium text-slate-700">Lesioni</span>
-                  <p className="mt-0.5 text-[11px] text-slate-500">
+                <div className="pma-card mt-3 overflow-hidden">
+                  <div className="pma-card__hdr">Lesioni</div>
+                  <p className="px-3 pb-2 text-xs pma-field__value--muted">
                     Vista frontale e posteriore: clic sul corpo per marker numerati; descrizione al blur.
                   </p>
-                  <div className="mt-2 rounded-md border border-slate-200 bg-slate-50/80 p-2">
+                  <div className="border-t border-slate-100 bg-slate-50/80 p-2">
                     <LesioniBodyMap
                       lesioni={p.lesioni}
                       disabled={!canEdit}
@@ -586,7 +659,7 @@ export function CartellaClinicaSection({
                 </div>
               </>
             ) : (
-              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs pma-field__value--muted">
                 Sezioni cliniche avanzate (EO, lesioni, parametri vitali, terapie) non sono disponibili per
                 il profilo Triage.
               </p>
@@ -597,15 +670,15 @@ export function CartellaClinicaSection({
         {!hideClinicalBlocks ? (
           <>
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">4.2 Parametri vitali</h3>
-          <p className="mt-0.5 text-[11px] text-slate-500">
+              <div className="pma-section-hdr">4.2 Parametri vitali</div>
+          <p className="mt-0.5 text-xs pma-field__value--muted">
             Blocchi tipo monitor: valori critici evidenziati in colore. Salvataggio in uscita dai campi (onBlur).
           </p>
           {canEdit ? (
             <button
               type="button"
               onClick={() => void aggiungiPv()}
-              className="mt-2 rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-slate-800"
+              className="mt-2 inline-flex h-10 items-center justify-center rounded-md border border-slate-800 bg-slate-900 px-4 text-sm font-bold uppercase text-white hover:bg-slate-800"
             >
               Aggiungi parametri
             </button>
@@ -626,33 +699,101 @@ export function CartellaClinicaSection({
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">4.3 Terapie e prestazioni</h3>
+          <div className="pma-section-hdr">4.3 Terapie e prestazioni</div>
           <div className="mt-4">
-            <span className="text-sm font-medium text-slate-700">Prestazioni</span>
-            <p className="mt-1 text-xs text-slate-500">Selezione multipla dall&apos;elenco manifestazione.</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {prestazioniLista.map((label) => {
-                const on = selPrest.has(label)
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    disabled={!canEdit}
-                    onClick={() => togglePrestazione(label)}
-                    className={
-                      on
-                        ? 'rounded-full bg-emerald-700 px-3 py-1 text-xs font-medium text-white ring-1 ring-emerald-800/20 disabled:opacity-50'
-                        : 'rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-800 ring-1 ring-slate-600/15 hover:bg-slate-200 disabled:opacity-50'
-                    }
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <span className="pma-field__label">Prestazioni</span>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <input
+                  ref={ecgFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="sr-only"
+                  aria-hidden
+                  tabIndex={-1}
+                  onChange={(e) => void onEcgFileChange(e)}
+                />
+                <button
+                  type="button"
+                  disabled={!canEdit || ecgUploadBusy}
+                  title="Carica foto ECG su Cloudinary e collega alla scheda"
+                  onClick={() => ecgFileInputRef.current?.click()}
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-bold uppercase tracking-wide text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg width="18" height="14" viewBox="0 0 24 18" fill="none" aria-hidden className="shrink-0 text-red-600">
+                    <path
+                      d="M1 9h2l2-6 3 12 3-8 2 5h2l2-3h3"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  {ecgUploadBusy ? '…' : 'ALLEGA ECG'}
+                </button>
+                {p.ecg_cloudinary_url ? (
+                  <a
+                    href={p.ecg_cloudinary_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
                   >
-                    {label}
-                  </button>
-                )
-              })}
+                    Apri ECG
+                  </a>
+                ) : null}
+              </div>
             </div>
+            <p className="mt-1 text-xs pma-field__value--muted">
+              Menu a tendina: seleziona una o più voci dall&apos;elenco manifestazione.
+            </p>
+            {ecgUploadErr ? (
+              <p className="mt-1 text-xs text-red-600" role="alert">
+                {ecgUploadErr}
+              </p>
+            ) : null}
+            <details className="mt-2 max-w-xl rounded-lg border border-slate-300 bg-white shadow-sm [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50">
+                <span>
+                  {selPrest.size === 0
+                    ? 'Nessuna selezione — clicca per aprire e scegliere'
+                    : selPrest.size === 1
+                      ? '1 prestazione selezionata'
+                      : `${selPrest.size} prestazioni selezionate`}
+                </span>
+                <span className="shrink-0 text-slate-400" aria-hidden>
+                  ▼
+                </span>
+              </summary>
+              <div className="max-h-60 overflow-y-auto border-t border-slate-200 p-2">
+                {prestazioniLista.length === 0 ? (
+                  <p className="px-2 py-3 text-sm text-slate-500">
+                    Nessuna prestazione configurata sulla manifestazione.
+                  </p>
+                ) : (
+                  prestazioniLista.map((label) => (
+                    <label
+                      key={label}
+                      className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-2 text-sm hover:bg-slate-50"
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600"
+                        checked={selPrest.has(label)}
+                        disabled={!canEdit}
+                        onChange={() => togglePrestazione(label)}
+                      />
+                      <span className="min-w-0 leading-snug text-slate-800">{label}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </details>
           </div>
 
-          <div className="mt-8">
+          <div className="mt-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-medium text-slate-700">Farmaci somministrati</span>
               {!canEditFarmaci ? (
@@ -684,8 +825,8 @@ export function CartellaClinicaSection({
                 </datalist>
                 <div className="mt-2 max-w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
                   <div className="flex w-max min-w-full flex-wrap items-end gap-2 sm:flex-nowrap">
-                    <label className="block min-w-[10rem] max-w-[min(100%,20rem)] shrink-0 text-[10px] sm:min-w-[12rem] sm:max-w-[14rem]">
-                      <span className="text-slate-600">Nome</span>
+                    <label className="block min-w-[10rem] max-w-[min(100%,20rem)] shrink-0 text-xs sm:min-w-[12rem] sm:max-w-[14rem]">
+                      <span className="font-semibold uppercase tracking-wider text-slate-500">Nome</span>
                       <input
                         type="text"
                         list={farmDatalistId}
@@ -696,8 +837,8 @@ export function CartellaClinicaSection({
                         placeholder="Farmaco…"
                       />
                     </label>
-                    <label className="block min-w-[4.5rem] shrink-0 text-[10px]">
-                      <span className="text-slate-600">Dose</span>
+                    <label className="block min-w-[4.5rem] shrink-0 text-xs">
+                      <span className="font-semibold uppercase tracking-wider text-slate-500">Dose</span>
                       <input
                         type="text"
                         value={farmDose}
@@ -705,8 +846,8 @@ export function CartellaClinicaSection({
                         className={PV_INPUT}
                       />
                     </label>
-                    <label className="block min-w-[3.75rem] shrink-0 text-[10px]">
-                      <span className="text-slate-600">Via</span>
+                    <label className="block min-w-[3.75rem] shrink-0 text-xs">
+                      <span className="font-semibold uppercase tracking-wider text-slate-500">Via</span>
                       <select
                         value={farmVia}
                         onChange={(e) => {
@@ -722,8 +863,8 @@ export function CartellaClinicaSection({
                         ))}
                       </select>
                     </label>
-                    <label className="block min-w-[10.5rem] shrink-0 text-[10px]">
-                      <span className="text-slate-600">Orario</span>
+                    <label className="block min-w-[10.5rem] shrink-0 text-xs">
+                      <span className="font-semibold uppercase tracking-wider text-slate-500">Orario</span>
                       <input
                         type="datetime-local"
                         value={farmTs}
@@ -748,40 +889,45 @@ export function CartellaClinicaSection({
         ) : null}
 
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">4.4 Rivalutazione</h3>
+          <div className="pma-section-hdr">4.4 Rivalutazione</div>
           <div className="mt-4 space-y-3">
             {rivSorted.map((r) => (
-              <div key={r.id} className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm">
-                <div className="text-xs text-slate-500">
+              <div key={r.id} className="pma-card text-sm">
+                <div className="text-xs pma-field__value--muted">
                   {r.creato_at.toDate().toLocaleString('it-IT')} · {r.firma_nome}
                 </div>
                 {canEditRivalutazioniEsistenti ? (
-                  <textarea
-                    key={`riv-edit-${r.id}-${r.testo.slice(0, 40)}`}
-                    defaultValue={r.testo}
-                    rows={4}
-                    onBlur={(e) => {
-                      const v = e.target.value
-                      if (v !== r.testo) patchRivalutazioneTesto(r.id, v)
-                    }}
-                    className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                  />
+                  <label className="mt-2 block">
+                    <span className="sr-only">Testo rivalutazione</span>
+                    <textarea
+                      key={`riv-edit-${r.id}-${r.testo.slice(0, 40)}`}
+                      defaultValue={r.testo}
+                      rows={4}
+                      onBlur={(e) => {
+                        const v = e.target.value
+                        if (v !== r.testo) patchRivalutazioneTesto(r.id, v)
+                      }}
+                      className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    />
+                  </label>
                 ) : (
-                  <p className="mt-1 whitespace-pre-wrap text-slate-900">{r.testo}</p>
+                  <p className="mt-1 whitespace-pre-wrap pma-field__value">{r.testo}</p>
                 )}
               </div>
             ))}
-            {rivSorted.length === 0 ? <p className="text-sm text-slate-500">Nessuna rivalutazione.</p> : null}
+            {rivSorted.length === 0 ? (
+              <p className="text-sm pma-field__value--muted">Nessuna rivalutazione.</p>
+            ) : null}
           </div>
           {canEdit ? (
-            <div className="mt-4 rounded-lg border border-slate-200 p-4">
-              <label className="block text-sm">
-                <span className="font-medium text-slate-700">Nuova nota</span>
+            <div className="pma-card mt-4">
+              <label className="block">
+                <span className="pma-field__label">Nuova nota</span>
                 <textarea
                   value={rivDraft}
                   onChange={(e) => setRivDraft(e.target.value)}
                   rows={3}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
                   placeholder="Testo rivalutazione…"
                 />
               </label>
@@ -789,7 +935,7 @@ export function CartellaClinicaSection({
                 type="button"
                 disabled={!rivDraft.trim()}
                 onClick={() => void aggiungiRivalutazione()}
-                className="mt-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+                className="mt-3 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-40"
               >
                 Aggiungi rivalutazione
               </button>

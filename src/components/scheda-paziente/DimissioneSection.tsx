@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { deleteField, serverTimestamp } from 'firebase/firestore'
 import { saveAs } from 'file-saver'
 import type { Paziente } from '../../types/paziente'
@@ -14,39 +14,67 @@ import {
   buildPazientePdfBlob,
   defaultPdfFilename,
 } from '../../lib/pdf/pazientePdfReport'
+import type { PresetDimissioneVoce } from '../../types/manifestazioneImpostazioni'
 
 type Props = {
   p: Paziente
   user: UserProfile | null
   isMedico: boolean
+  /** Matrice Rank.xlsx: Superadmin, Centrale, Medico con scheda aperta. */
+  canEditDimissioneTab: boolean
   /** `p.aperto && user` — scheda modificabile a livello documento */
   canEditScheda: boolean
   write: (patch: Record<string, unknown>) => Promise<void>
   /** Intestazione PDF (manifestazione / PMA). */
   reportManifestazioneNome: string
   reportPmaNome: string
+  /** Da impostazioni manifestazione (solo lettura in tab dimissione). */
+  consensoGenericoCure?: string
+  consensoPrivacy?: string
+  rifiutoInvioPs?: string
+  presetDimissione?: PresetDimissioneVoce[]
 }
 
 /**
  * Sezione 4 — Dimissione (SchedaPaziente v2, §5 MD).
- * Editabile solo da **Medico** con scheda aperta; altrimenti sola lettura.
- * Firme persistite come stringhe (data URL / Base64) su Firestore, senza Storage.
+ * Campi dimissione editabili da **Superadmin, Centrale o Medico** con scheda aperta (matrice Rank).
+ * Chiusura definitiva (**Dimetti**) e stato **Dimesso**: solo **Medico** con scheda aperta (tab Dimissioni).
  */
 export function DimissioneSection({
   p,
   user,
   isMedico,
+  canEditDimissioneTab,
   canEditScheda,
   write,
   reportManifestazioneNome,
   reportPmaNome,
+  consensoGenericoCure = '',
+  consensoPrivacy = '',
+  rifiutoInvioPs = '',
+  presetDimissione = [],
 }: Props) {
-  const medicoEdit = isMedico && canEditScheda
+  const dimissioneEdit = canEditDimissioneTab && canEditScheda
+  const canChiudiDimetti = Boolean(canEditScheda && user && user.rank === 'Medico')
+  const [noteDraft, setNoteDraft] = useState(p.dimissione_note)
   const [dimettiOpen, setDimettiOpen] = useState(false)
   const [dimettiBusy, setDimettiBusy] = useState(false)
   const [replaceFirma, setReplaceFirma] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfErr, setPdfErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    setNoteDraft(p.dimissione_note)
+  }, [p.id])
+  useEffect(() => {
+    if (!dimissioneEdit) setNoteDraft(p.dimissione_note)
+  }, [dimissioneEdit, p.dimissione_note])
+
+  const pdfManifestazioneTesti = {
+    consensoGenericoCure: consensoGenericoCure.trim() || undefined,
+    consensoPrivacy: consensoPrivacy.trim() || undefined,
+    rifiutoInvioPsText: rifiutoInvioPs.trim() || undefined,
+  }
 
   const firmaMedicoProfilo =
     isMedico && user
@@ -63,7 +91,7 @@ export function DimissioneSection({
   }
 
   async function handleDimettiConfirm() {
-    if (!medicoEdit || !user) return
+    if (!canChiudiDimetti || !user) return
     setDimettiBusy(true)
     try {
       const snap =
@@ -90,6 +118,8 @@ export function DimissioneSection({
       const blob = await buildPazientePdfBlob(p, {
         manifestazioneNome: reportManifestazioneNome,
         pmaNome: reportPmaNome,
+        firmaMedicoProfiloDataUrl: firmaMedicoProfilo,
+        ...pdfManifestazioneTesti,
       })
       saveAs(blob, defaultPdfFilename(p))
     } catch (e) {
@@ -100,7 +130,7 @@ export function DimissioneSection({
   }
 
   async function handleInviaEmailPdf() {
-    if (!isMedico) return
+    if (!dimissioneEdit) return
     let to = p.email?.trim() ?? ''
     if (!to) {
       const entered = window.prompt(
@@ -115,6 +145,8 @@ export function DimissioneSection({
       const blob = await buildPazientePdfBlob(p, {
         manifestazioneNome: reportManifestazioneNome,
         pmaNome: reportPmaNome,
+        firmaMedicoProfiloDataUrl: firmaMedicoProfilo,
+        ...pdfManifestazioneTesti,
       })
       const fname = defaultPdfFilename(p)
       saveAs(blob, fname)
@@ -134,17 +166,13 @@ export function DimissioneSection({
   const firmaPaz = p.firma_paziente_base64
 
   return (
-    <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Sezione 4 — Dimissione
-          </h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Modificabile <strong>solo dal Medico</strong> con scheda aperta. Dopo la dimissione
-            definitiva la scheda è chiusa per tutti i ruoli.
-          </p>
-        </div>
+    <section className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="pma-section-hdr">Sezione 4 — Dimissione</div>
+      <div className="flex flex-col gap-2 border-b border-slate-100 px-3 py-2 sm:flex-row sm:items-start sm:justify-between">
+        <p className="text-sm text-slate-600">
+          Modificabile da <strong>Superadmin, Centrale o Medico</strong> con scheda aperta. Dopo la dimissione
+          definitiva la scheda è chiusa per tutti i ruoli.
+        </p>
         {p.dimesso_at ? (
           <p className="shrink-0 text-xs text-slate-500">
             Chiusura:{' '}
@@ -155,100 +183,151 @@ export function DimissioneSection({
         ) : null}
       </div>
 
-      {!medicoEdit ? (
-        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          {isMedico && !p.aperto
+      {!dimissioneEdit ? (
+        <p className="mx-3 mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          {canEditDimissioneTab && !p.aperto
             ? 'Scheda chiusa dopo dimissione: dimissione e firme in sola lettura.'
-            : 'Sola lettura: solo un utente con ruolo Medico può compilare la dimissione su una scheda aperta.'}
+            : 'Sola lettura: la dimissione su scheda aperta è riservata a Superadmin, Centrale o Medico.'}
         </p>
       ) : null}
 
-      <div className="mt-6 space-y-8">
-        <label className="block max-w-xl text-sm">
-          <span className="font-medium text-slate-700">Esito</span>
-          <select
-            disabled={!medicoEdit}
-            value={p.dimissione_esito ?? ''}
-            onChange={(e) => {
-              const v = e.target.value
-              void write({
-                dimissione_esito: v === '' ? null : (v as DimissioneEsito),
-              })
-            }}
-            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-50"
-          >
-            <option value="">— Seleziona —</option>
-            {DIMISSIONE_ESITO_VALUES.map((id) => (
-              <option key={id} value={id}>
-                {DIMISSIONE_ESITO_LABEL[id]}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="space-y-0">
+        <div className="pma-row">
+          <label className="pma-field max-w-xl">
+            <span className="pma-field__label">Esito</span>
+            <select
+              disabled={!dimissioneEdit}
+              value={p.dimissione_esito ?? ''}
+              onChange={(e) => {
+                const v = e.target.value
+                void write({
+                  dimissione_esito: v === '' ? null : (v as DimissioneEsito),
+                })
+              }}
+            >
+              <option value="">— Seleziona —</option>
+              {DIMISSIONE_ESITO_VALUES.map((id) => (
+                <option key={id} value={id}>
+                  {DIMISSIONE_ESITO_LABEL[id]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
         {p.dimissione_esito === 'riaffidato' ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Dati affidatario</h3>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="font-medium text-slate-700">Nome</span>
+          <div className="border-b border-slate-100">
+            <div className="pma-section-hdr">Dati affidatario</div>
+            <div className="pma-row pma-row--2">
+              <label className="pma-field pma-field--br">
+                <span className="pma-field__label">Nome</span>
                 <input
                   key={`afn-${p.id}-${p.affidatario_nome}`}
                   type="text"
-                  disabled={!medicoEdit}
+                  disabled={!dimissioneEdit}
                   defaultValue={p.affidatario_nome}
                   onBlur={(e) => void write({ affidatario_nome: e.target.value })}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"
                 />
               </label>
-              <label className="block text-sm">
-                <span className="font-medium text-slate-700">Cognome</span>
+              <label className="pma-field">
+                <span className="pma-field__label">Cognome</span>
                 <input
                   key={`afc-${p.id}-${p.affidatario_cognome}`}
                   type="text"
-                  disabled={!medicoEdit}
+                  disabled={!dimissioneEdit}
                   defaultValue={p.affidatario_cognome}
                   onBlur={(e) => void write({ affidatario_cognome: e.target.value })}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"
                 />
               </label>
-              <label className="block text-sm sm:col-span-2">
-                <span className="font-medium text-slate-700">Legame</span>
+            </div>
+            <div className="pma-row">
+              <label className="pma-field">
+                <span className="pma-field__label">Legame</span>
                 <input
                   key={`afl-${p.id}-${p.affidatario_legame}`}
                   type="text"
-                  disabled={!medicoEdit}
+                  disabled={!dimissioneEdit}
                   defaultValue={p.affidatario_legame}
                   onBlur={(e) => void write({ affidatario_legame: e.target.value })}
                   placeholder="es. Genitore, accompagnatore…"
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"
                 />
               </label>
             </div>
           </div>
         ) : null}
 
-        <label className="block text-sm">
-          <span className="font-medium text-slate-700">Note di dimissione</span>
+        <div className="pma-field max-w-3xl">
+          <label htmlFor={`dimissione-note-${p.id}`} className="pma-field__label">
+            Note di dimissione
+          </label>
+          {dimissioneEdit && presetDimissione.length > 0 ? (
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-500">Importa preset:</span>
+              {presetDimissione.map((preset, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    const t = preset.testo.trim()
+                    if (!t) return
+                    setNoteDraft((prev) => {
+                      const base = prev.trimEnd()
+                      const next = base ? `${base}\n\n${t}` : t
+                      void write({ dimissione_note: next })
+                      return next
+                    })
+                  }}
+                  className="pma-pill pma-pill--stato-off text-xs"
+                >
+                  {preset.titolo.trim() || `Preset ${idx + 1}`}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <textarea
-            key={`dn-${p.id}-${p.dimissione_note}`}
-            disabled={!medicoEdit}
-            rows={6}
-            defaultValue={p.dimissione_note}
-            onBlur={(e) => void write({ dimissione_note: e.target.value })}
-            className="mt-1 w-full max-w-3xl rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"
+            id={`dimissione-note-${p.id}`}
+            disabled={!dimissioneEdit}
+            rows={5}
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            onBlur={() => void write({ dimissione_note: noteDraft })}
           />
-        </label>
+        </div>
+
+        {consensoGenericoCure.trim() ? (
+          <div className="pma-card max-w-3xl">
+            <div className="pma-card__hdr">Consenso generico alle cure</div>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
+              {consensoGenericoCure.trim()}
+            </p>
+          </div>
+        ) : null}
+        {consensoPrivacy.trim() ? (
+          <div className="pma-card max-w-3xl">
+            <div className="pma-card__hdr">Consenso privacy</div>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
+              {consensoPrivacy.trim()}
+            </p>
+          </div>
+        ) : null}
+        {p.dimissione_esito === 'rifiuta_invio_ps' && rifiutoInvioPs.trim() ? (
+          <div className="pma-card max-w-3xl">
+            <div className="pma-card__hdr">Rifiuto invio in PS</div>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
+              {rifiutoInvioPs.trim()}
+            </p>
+          </div>
+        ) : null}
 
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Firma paziente</h3>
-          <p className="mt-1 text-xs text-slate-500">
+          <div className="pma-section-hdr">Firma paziente</div>
+          <p className="px-3 py-2 text-xs text-slate-500">
             Area ampia per tablet; la firma viene salvata come immagine (Base64) nel documento
             paziente, senza Firebase Storage. Con scheda aperta il Medico può sempre tracciare o
             aggiornare la firma; dopo la dimissione definitiva questa sezione è solo lettura.
           </p>
-          <div className="mt-3">
-            {medicoEdit ? (
+          <div className="px-3 pb-3">
+            {dimissioneEdit ? (
               <div className="space-y-3">
                 {firmaPaz ? (
                   <div className="flex flex-wrap gap-2">
@@ -287,6 +366,7 @@ export function DimissioneSection({
                 ) : null}
                 <SignatureCanvas
                   key={`firma-${p.id}-${replaceFirma}`}
+                  variant="compact"
                   preloadImageSrc={!replaceFirma ? firmaPaz : null}
                   onSaveDataUrl={handleSaveFirmaPaziente}
                 />
@@ -294,6 +374,7 @@ export function DimissioneSection({
             ) : (
               <SignatureCanvas
                 disabled
+                variant="compact"
                 savedImageSrc={firmaPaz}
                 onSaveDataUrl={handleSaveFirmaPaziente}
               />
@@ -302,18 +383,18 @@ export function DimissioneSection({
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Firma medico</h3>
-          <p className="mt-1 text-xs text-slate-500">
+          <div className="pma-section-hdr">Firma medico</div>
+          <p className="px-3 py-2 text-xs text-slate-500">
             Anteprima dal profilo utente (firma in Base64 o URL legacy) o copia salvata alla
             dimissione definitiva.
           </p>
-          <div className="mt-3">
+          <div className="px-3 pb-3">
             {firmaMedicoPreview ? (
-              <div className="inline-block max-w-full rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+              <div className="inline-block max-w-full rounded-lg border border-slate-200 bg-white p-1.5 shadow-sm">
                 <img
                   src={firmaMedicoPreview}
                   alt="Firma medico"
-                  className="max-h-48 max-w-full object-contain sm:max-h-56 md:max-h-64"
+                  className="max-h-28 max-w-full object-contain sm:max-h-32"
                 />
               </div>
             ) : (
@@ -327,9 +408,9 @@ export function DimissioneSection({
           </div>
         </div>
 
-        <div className="mt-8 border-t border-slate-200 pt-6">
-          <h3 className="text-sm font-semibold text-slate-800">Report PDF</h3>
-          <p className="mt-1 text-xs text-slate-600">
+        <div className="border-t border-slate-200">
+          <div className="pma-section-hdr">Report PDF</div>
+          <p className="px-3 py-2 text-xs text-slate-600">
             Esportazione A4 densa (anagrafica, cartella clinica, parametri vitali, farmaci, rivalutazioni,
             lesioni, dimissione, firme).
           </p>
@@ -338,12 +419,12 @@ export function DimissioneSection({
               {pdfErr}
             </p>
           ) : null}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 px-3 pb-4">
             <button
               type="button"
               disabled={pdfBusy}
               onClick={() => void handleDownloadPdf()}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold uppercase text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
             >
               {pdfBusy ? 'Generazione…' : 'Scarica PDF'}
             </button>
@@ -352,7 +433,7 @@ export function DimissioneSection({
                 type="button"
                 disabled={pdfBusy}
                 onClick={() => void handleInviaEmailPdf()}
-                className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-900 disabled:opacity-50"
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-slate-800 px-4 text-sm font-bold uppercase text-white shadow-sm hover:bg-slate-900 disabled:opacity-50"
               >
                 Invia via Email
               </button>
@@ -369,12 +450,12 @@ export function DimissioneSection({
           </div>
         </div>
 
-        {medicoEdit ? (
-          <div className="border-t border-slate-200 pt-6">
+        {canChiudiDimetti ? (
+          <div className="border-t border-slate-200 px-3 py-4">
             <button
               type="button"
               onClick={() => setDimettiOpen(true)}
-              className="w-full rounded-lg bg-red-700 px-4 py-4 text-base font-bold tracking-wide text-white shadow-md hover:bg-red-800 sm:max-w-md"
+              className="inline-flex h-10 w-full max-w-md items-center justify-center rounded-lg bg-red-700 px-4 text-sm font-bold uppercase text-white shadow-md hover:bg-red-800"
             >
               DIMETTI PAZIENTE
             </button>
@@ -394,7 +475,7 @@ export function DimissioneSection({
           aria-labelledby="dimetti-title"
         >
           <div className="max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
-            <h3 id="dimetti-title" className="text-lg font-semibold text-slate-900">
+            <h3 id="dimetti-title" className="text-lg font-bold text-slate-900">
               Conferma dimissione
             </h3>
             <p className="mt-3 text-sm text-slate-600">
@@ -406,7 +487,7 @@ export function DimissioneSection({
                 type="button"
                 disabled={dimettiBusy}
                 onClick={() => setDimettiOpen(false)}
-                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold uppercase text-slate-800 hover:bg-slate-50 disabled:opacity-50"
               >
                 Annulla
               </button>
@@ -414,7 +495,7 @@ export function DimissioneSection({
                 type="button"
                 disabled={dimettiBusy}
                 onClick={() => void handleDimettiConfirm()}
-                className="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+                className="inline-flex h-10 items-center justify-center rounded-md bg-red-700 px-4 text-sm font-bold uppercase text-white hover:bg-red-800 disabled:opacity-50"
               >
                 {dimettiBusy ? 'Chiusura…' : 'Conferma e chiudi scheda'}
               </button>

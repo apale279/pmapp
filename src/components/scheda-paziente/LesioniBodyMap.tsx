@@ -95,7 +95,7 @@ export function LesioniBodyMap({ lesioni, disabled, onLesioniChange }: Props) {
         <path d="M 52 95 L 28 165 L 38 172 L 58 115 Z" />
         <path d="M 148 95 L 172 165 L 162 172 L 142 115 Z" />
       </g>
-      <text x={100} y={24} textAnchor="middle" className="fill-slate-500 text-[10px] font-semibold">
+      <text x={100} y={24} textAnchor="middle" className="fill-slate-500 text-xs font-semibold">
         {vista === 'front' ? 'Fronte' : 'Retro'}
       </text>
       <defs>
@@ -110,7 +110,7 @@ export function LesioniBodyMap({ lesioni, disabled, onLesioniChange }: Props) {
             x={0}
             y={5}
             textAnchor="middle"
-            className="fill-white text-[13px] font-bold"
+            className="fill-white text-sm font-bold"
             style={{ pointerEvents: 'none' }}
           >
             {m.n}

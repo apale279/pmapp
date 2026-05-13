@@ -1,17 +1,26 @@
+import { useMemo } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import type { UserProfile } from '../../types/userProfile'
+import type { UserProfile, UserRank } from '../../types/userProfile'
 import { useManifestazioneDoc } from '../../hooks/useManifestazioneDoc'
 import { usePmaDocSnapshot } from '../../hooks/usePmaDocNome'
-import { parseManifestazioneIdFromPath, parsePmaIdFromPath } from '../../lib/routeScopeFromPath'
 
 const RAIL_CLASS =
-  'sticky top-0 z-20 flex h-screen w-20 shrink-0 flex-col items-center gap-1 border-r border-[#e2e8f0] bg-[#f8fafc] py-3'
+  'sticky top-0 z-20 flex h-screen w-14 shrink-0 flex-col items-center gap-1 border-r border-[#e2e8f0] bg-[#f8fafc] py-3'
 
 const EMOJI_BTN =
-  'flex h-12 w-12 shrink-0 items-center justify-center rounded-md text-[1.45rem] leading-none text-slate-600 transition-colors hover:bg-white hover:text-[#2563eb] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]'
+  'flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-xl leading-none text-slate-600 transition-colors hover:bg-white hover:text-[#2563eb] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]'
 
 const EMOJI_BTN_ACTIVE =
-  'relative flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-white text-[#2563eb] shadow-[inset_3px_0_0_0_#2563eb]'
+  'relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white text-[#2563eb] shadow-[inset_3px_0_0_0_#2563eb]'
+
+function parsePathIds(pathname: string): { manFromUrl: string; pmaFromUrl: string } {
+  const man = pathname.match(/^\/manifestazione\/([^/]+)/)
+  const pma = pathname.match(/^\/pma\/([^/]+)/)
+  return {
+    manFromUrl: man ? decodeURIComponent(man[1]) : '',
+    pmaFromUrl: pma ? decodeURIComponent(pma[1]) : '',
+  }
+}
 
 function RailLink({
   to,
@@ -98,39 +107,71 @@ export type UnifiedEmojiSidebarProps = {
   onNavigate?: () => void
 }
 
+const RANKS_WITH_MANIFEST_EVENTO_SETTINGS: readonly UserRank[] = [
+  'Superadmin',
+  'Centrale',
+  'Medico',
+  'Infermiere',
+  'Soccorritore',
+  'Triage',
+]
+
+const RANKS_PMA_DASH: readonly UserRank[] = [
+  'Medico',
+  'Infermiere',
+  'Soccorritore',
+  'Triage',
+]
+
+/**
+ * Navigazione globale: contesto da **profilo** (`id_pma`, `id_manifestazione`) integrato con la **URL**
+ * corrente (`/manifestazione/...`, `/pma/...`). Il Superadmin usa `AdminEmojiSidebar` nell'app shell.
+ */
 export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiSidebarProps) {
-  const { pathname } = useLocation()
   const rank = user.rank
+  const location = useLocation()
 
-  const pmaIdFromPath = parsePmaIdFromPath(pathname)
-  const pmaIdResolved = pmaIdFromPath ?? user.id_pma?.trim() ?? undefined
-  const pmaSnap = usePmaDocSnapshot(pmaIdResolved)
+  const { manFromUrl, pmaFromUrl } = useMemo(
+    () => parsePathIds(location.pathname),
+    [location.pathname],
+  )
 
-  const manifestazioneIdResolved =
-    parseManifestazioneIdFromPath(pathname) ??
-    user.id_manifestazione?.trim() ??
-    pmaSnap.idManifestazione?.trim() ??
-    undefined
+  const pmaProfile = user.id_pma?.trim() || ''
+  const manProfile = user.id_manifestazione?.trim() || ''
 
-  const { data: manActive } = useManifestazioneDoc(manifestazioneIdResolved)
+  const pmaIdForSnapshot = (pmaFromUrl || pmaProfile).trim() || undefined
+  const pmaSnap = usePmaDocSnapshot(pmaIdForSnapshot)
+
+  const effectiveManId = useMemo(() => {
+    if (manFromUrl) return manFromUrl
+    if (manProfile) return manProfile
+    if (pmaIdForSnapshot && pmaSnap.idManifestazione?.trim()) {
+      return pmaSnap.idManifestazione.trim()
+    }
+    return ''
+  }, [manFromUrl, manProfile, pmaIdForSnapshot, pmaSnap.idManifestazione])
+
+  const effectivePmaId = (pmaFromUrl || pmaProfile).trim()
+
+  const manSeg = effectiveManId ? encodeURIComponent(effectiveManId) : ''
+  const pmaSeg = effectivePmaId ? encodeURIComponent(effectivePmaId) : ''
+
+  const manifestazioneDocId = effectiveManId || undefined
+  const { data: manActive } = useManifestazioneDoc(manifestazioneDocId)
   const manifestazioneNome =
-    manifestazioneIdResolved && manActive?.nome ? manActive.nome : manifestazioneIdResolved || null
+    manifestazioneDocId && manActive?.nome ? manActive.nome : manifestazioneDocId || null
 
-  const manSeg = manifestazioneIdResolved ? encodeURIComponent(manifestazioneIdResolved) : ''
-  const pmaSeg = pmaIdResolved ? encodeURIComponent(pmaIdResolved) : ''
-
-  const showDashCentrale = rank === 'Superadmin' || rank === 'Centrale'
-  const showDashPma =
-    (rank === 'Superadmin' || rank === 'Medico' || rank === 'Infermiere' || rank === 'Triage') &&
-    Boolean(pmaSeg)
+  const showDashCentrale = rank === 'Centrale'
+  const showDashPma = RANKS_PMA_DASH.includes(rank) && Boolean(pmaSeg)
   const showImpPma =
     (rank === 'Superadmin' ||
       rank === 'Centrale' ||
       rank === 'Medico' ||
       rank === 'Infermiere' ||
-      rank === 'Triage') &&
+      rank === 'Triage' ||
+      rank === 'Soccorritore') &&
     Boolean(pmaSeg)
-  const showImpEvento = rank === 'Superadmin' && Boolean(manSeg)
+  const showImpEvento = RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) && Boolean(manSeg)
 
   const operatoreInitial = (user.nome?.trim()?.charAt(0) || user.email?.trim()?.charAt(0) || '?').toUpperCase()
 
@@ -138,7 +179,7 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
     return (
       <aside className={RAIL_CLASS} aria-label="Navigazione principale">
         <div
-          className="mb-1 flex h-10 w-10 items-center justify-center rounded-full border border-[#e2e8f0] bg-white text-[10px] font-bold text-slate-600"
+          className="mb-1 flex h-10 w-10 items-center justify-center rounded-full border border-[#e2e8f0] bg-white text-xs font-bold text-slate-600"
           title={`${user.nome} · ${rank}`}
         >
           {operatoreInitial}
@@ -155,13 +196,13 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
             onNavigate={onNavigate}
           />
         ) : showDashCentrale ? (
-          <RailDisabled title="Dashboard centrale (manifestazione non disponibile)" emoji="🖥️" />
+          <RailDisabled title="Dashboard centrale (apri una manifestazione dalla Home)" emoji="🖥️" />
         ) : null}
 
         {showDashPma ? (
           <RailLink to={`/pma/${pmaSeg}`} end title="Dashboard PMA" emoji="🏥" onNavigate={onNavigate} />
-        ) : rank === 'Superadmin' || rank === 'Medico' || rank === 'Infermiere' || rank === 'Triage' ? (
-          <RailDisabled title="Dashboard PMA (PMA non disponibile)" emoji="🏥" />
+        ) : RANKS_PMA_DASH.includes(rank) ? (
+          <RailDisabled title="Dashboard PMA (nessun PMA nel contesto: profilo o URL /pma/…)" emoji="🏥" />
         ) : null}
 
         {showImpPma ? (
@@ -175,8 +216,31 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
           rank === 'Centrale' ||
           rank === 'Medico' ||
           rank === 'Infermiere' ||
+          rank === 'Soccorritore' ||
           rank === 'Triage' ? (
-          <RailDisabled title="Impostazioni PMA (PMA non disponibile)" emoji="⛺" />
+          <RailDisabled title="Impostazioni PMA (nessun PMA nel contesto)" emoji="⛺" />
+        ) : null}
+
+        {showImpEvento ? (
+          <RailLink
+            to={`/manifestazione/${manSeg}/rubrica`}
+            title="Rubrica"
+            emoji="📞"
+            onNavigate={onNavigate}
+          />
+        ) : RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) ? (
+          <RailDisabled title="Rubrica (nessuna manifestazione nel contesto)" emoji="📞" />
+        ) : null}
+
+        {showImpEvento ? (
+          <RailLink
+            to={`/manifestazione/${manSeg}/file-utili`}
+            title="File utili"
+            emoji="📎"
+            onNavigate={onNavigate}
+          />
+        ) : RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) ? (
+          <RailDisabled title="File utili (nessuna manifestazione nel contesto)" emoji="📎" />
         ) : null}
 
         {showImpEvento ? (
@@ -186,8 +250,8 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
             emoji="🏟️"
             onNavigate={onNavigate}
           />
-        ) : rank === 'Superadmin' ? (
-          <RailDisabled title="Impostazioni evento (manifestazione non disponibile)" emoji="🏟️" />
+        ) : RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) ? (
+          <RailDisabled title="Impostazioni evento (nessuna manifestazione nel contesto)" emoji="🏟️" />
         ) : null}
       </aside>
     )
@@ -196,9 +260,9 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
   return (
     <aside className="flex h-full min-h-0 w-full flex-col border-r border-[#e2e8f0] bg-white" aria-label="Navigazione">
       <div className="border-b border-[#e2e8f0] px-4 py-4">
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Operatore</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Operatore</p>
         <p className="mt-1 truncate text-sm font-semibold text-slate-900">{user.nome}</p>
-        <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Manifestazione</p>
+        <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Manifestazione</p>
         <p className="mt-1 truncate text-sm text-slate-900" title={manifestazioneNome ?? undefined}>
           {manifestazioneNome ?? '—'}
         </p>
@@ -218,7 +282,7 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
         ) : null}
         {showDashPma ? (
           <DrawerLink to={`/pma/${pmaSeg}`} end label="Dashboard PMA" emoji="🏥" onNavigate={onNavigate} />
-        ) : rank === 'Superadmin' || rank === 'Medico' || rank === 'Infermiere' || rank === 'Triage' ? (
+        ) : RANKS_PMA_DASH.includes(rank) ? (
           <DrawerDisabled label="Dashboard PMA" emoji="🏥" />
         ) : null}
         {showImpPma ? (
@@ -232,8 +296,29 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
           rank === 'Centrale' ||
           rank === 'Medico' ||
           rank === 'Infermiere' ||
+          rank === 'Soccorritore' ||
           rank === 'Triage' ? (
           <DrawerDisabled label="Impostazioni PMA" emoji="⛺" />
+        ) : null}
+        {showImpEvento ? (
+          <DrawerLink
+            to={`/manifestazione/${manSeg}/rubrica`}
+            label="Rubrica"
+            emoji="📞"
+            onNavigate={onNavigate}
+          />
+        ) : RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) ? (
+          <DrawerDisabled label="Rubrica" emoji="📞" />
+        ) : null}
+        {showImpEvento ? (
+          <DrawerLink
+            to={`/manifestazione/${manSeg}/file-utili`}
+            label="File utili"
+            emoji="📎"
+            onNavigate={onNavigate}
+          />
+        ) : RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) ? (
+          <DrawerDisabled label="File utili" emoji="📎" />
         ) : null}
         {showImpEvento ? (
           <DrawerLink
@@ -242,7 +327,7 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
             emoji="🏟️"
             onNavigate={onNavigate}
           />
-        ) : rank === 'Superadmin' ? (
+        ) : RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) ? (
           <DrawerDisabled label="Impostazioni evento" emoji="🏟️" />
         ) : null}
       </nav>

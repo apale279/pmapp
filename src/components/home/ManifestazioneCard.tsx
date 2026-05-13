@@ -27,14 +27,14 @@ export function ManifestazioneCard({ manifestazione }: { manifestazione: Manifes
   return (
     <Link
       to={to}
-      className={`group block rounded-xl border border-slate-200 border-l-4 ${theme.cardAccentLeft} bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md`}
+      className={`group block pma-card border-l-4 ${theme.cardAccentLeft} no-underline transition hover:shadow-md`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate text-lg font-semibold text-slate-900 group-hover:text-slate-950">
             {manifestazione.nome}
           </h2>
-          <p className="mt-1 text-sm text-slate-500">{formatData(manifestazione)}</p>
+          <p className="mt-1 text-sm pma-field__value--muted">{formatData(manifestazione)}</p>
         </div>
         <span
           className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${statoBadge(manifestazione.stato)}`}
@@ -42,7 +42,7 @@ export function ManifestazioneCard({ manifestazione }: { manifestazione: Manifes
           {manifestazione.stato}
         </span>
       </div>
-      <p className="mt-3 text-xs text-slate-400">Apri dashboard →</p>
+      <p className="mt-3 text-xs pma-field__value--muted">Apri dashboard →</p>
     </Link>
   )
 }

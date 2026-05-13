@@ -1,4 +1,6 @@
 import type { Paziente } from '../../types/paziente'
+import type { UserRank } from '../../types/userProfile'
+import { schedaTabCartellaAllows, schedaTabDimissioneAllows, schedaTabInvioPsAllows } from '../../lib/rankMatrix'
 
 export type SchedaPazienteTabId = 'generale' | 'anagrafica' | 'cartella' | 'dimissione' | 'invio_ps'
 
@@ -11,13 +13,24 @@ const BASE_TABS: { id: SchedaPazienteTabId; label: string }[] = [
 
 /**
  * Tab visibili sulla scheda: la sezione Invio PS compare solo con esito `invio_ps`.
+ * Esclude tab in base al rank (matrice Rank.xlsx / `rankMatrix`).
  */
-export function schedaPazienteTabsFor(p: Pick<Paziente, 'dimissione_esito'>): {
+export function schedaPazienteTabsFor(
+  p: Pick<Paziente, 'dimissione_esito'>,
+  rank: UserRank,
+): {
   id: SchedaPazienteTabId
   label: string
 }[] {
+  let tabs: { id: SchedaPazienteTabId; label: string }[] = [...BASE_TABS]
   if (p.dimissione_esito === 'invio_ps') {
-    return [...BASE_TABS, { id: 'invio_ps', label: 'Invio PS' }]
+    tabs = [...tabs, { id: 'invio_ps', label: 'Invio PS' }]
   }
-  return [...BASE_TABS]
+  tabs = tabs.filter((t) => {
+    if (t.id === 'cartella') return schedaTabCartellaAllows(rank, 'READ')
+    if (t.id === 'dimissione') return schedaTabDimissioneAllows(rank, 'READ')
+    if (t.id === 'invio_ps') return schedaTabInvioPsAllows(rank, 'READ')
+    return true
+  })
+  return tabs
 }

@@ -1,5 +1,6 @@
 import type { UserProfile } from '../../types/userProfile'
 import { UnifiedEmojiSidebar } from './UnifiedEmojiSidebar'
+import { AdminEmojiSidebar } from '../admin/AdminEmojiSidebar'
 
 export function MobileEmojiNavOverlay({
   open,
@@ -11,6 +12,7 @@ export function MobileEmojiNavOverlay({
   user: UserProfile
 }) {
   if (!open) return null
+  const Sidebar = user.rank === 'Superadmin' ? AdminEmojiSidebar : UnifiedEmojiSidebar
   return (
     <>
       <button
@@ -36,7 +38,7 @@ export function MobileEmojiNavOverlay({
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <UnifiedEmojiSidebar user={user} variant="drawer" onNavigate={onClose} />
+          <Sidebar user={user} variant="drawer" onNavigate={onClose} />
         </div>
       </div>
     </>

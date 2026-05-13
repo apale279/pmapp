@@ -51,7 +51,9 @@ export async function createPazienteWithProgressivo(
 
   const stato = statoInizialePazientePerRank(params.creatorRank)
   const now = Timestamp.now()
-  const tipo = params.bozza?.tipo_paziente ?? 'autopresentato'
+  const tipo =
+    params.bozza?.tipo_paziente ??
+    (params.creatorRank === 'Centrale' ? 'trasportato' : 'autopresentato')
   const breve = params.bozza?.breve_descrizione ?? ''
   const colore = params.bozza?.codice_colore ?? 'bianco'
 
@@ -92,7 +94,12 @@ export async function createPazienteWithProgressivo(
       apr: 'Nulla.',
       allergie: 'Nega.',
       app: '',
-      eo_quick: [],
+      EO_GENERALE: [],
+      EO_NEUROLOGICO: [],
+      EO_CUTE: [],
+      EO_TORACE: [],
+      EO_ADDOME: [],
+      EO_CAPO_COLLO: [],
       eo_note: '',
       parametri_vitali: [],
       prestazioni_sel: [],
@@ -115,6 +122,7 @@ export async function createPazienteWithProgressivo(
       firma_paziente_base64: null,
       dimissione_firma_medico_base64: null,
       dimesso_at: null,
+      ripreso_in_carico_at: null,
       infermiere_rif: '',
       medico_rif: '',
       creato_da_uid: params.creatorUid,

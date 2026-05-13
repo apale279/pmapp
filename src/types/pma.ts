@@ -8,6 +8,8 @@ export interface Pma {
   id_manifestazione: string
   impostazioni_pma: {
     posti_letto: number
+    /** Elenco farmaci usati nel PMA (aggiornato da schede paziente). */
+    elenco_farmaci_usati?: string[]
   }
   /** Campi opzionali per estensioni future */
   createdAt?: Timestamp

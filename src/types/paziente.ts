@@ -17,7 +17,7 @@ export type CodiceColorePaziente = 'bianco' | 'verde' | 'giallo' | 'rosso'
  * Sezione 1 — STATO scheda.
  * Default creazione: `in_arrivo` se creatore Centrale, `in_carico` se Medico/Infermiere/Triage/Soccorritore.
  */
-export type PazienteStato = 'in_arrivo' | 'in_attesa' | 'in_carico' | 'errore' | 'dimesso'
+export type PazienteStato = 'in_arrivo' | 'in_attesa' | 'in_carico' | 'in_sospeso' | 'dimesso'
 
 /**
  * Modello documento `pazienti/{id}` (UUID documento nascosto in UI).
@@ -68,10 +68,23 @@ export interface Paziente {
   apr: string
   allergie: string
   app: string
-  eo_quick: string[]
+  /** Esame obiettivo — opzioni rapide per area (Firestore root, `EO_*`). */
+  EO_GENERALE: string[]
+  EO_NEUROLOGICO: string[]
+  EO_CUTE: string[]
+  EO_TORACE: string[]
+  EO_ADDOME: string[]
+  EO_CAPO_COLLO: string[]
+  /**
+   * Solo lettura da vecchio campo `eo_quick` se tutti gli `EO_*` sono vuoti.
+   * La UI ripartisce con le liste manifestazione; i salvataggi avvengono sui campi `EO_*`.
+   */
+  eo_quick_legacy?: string[]
   eo_note: string
   parametri_vitali: ParametroVitaleRilevazione[]
   prestazioni_sel: string[]
+  /** Foto ECG allegata (upload Cloudinary, URL sicuro). */
+  ecg_cloudinary_url?: string | null
   farmaci: FarmacoSomministrato[]
   rivalutazioni: RivalutazioneVoce[]
   /** Lesioni (marker su omino SVG + descrizioni). Core v3. */
@@ -100,6 +113,8 @@ export interface Paziente {
   /** Copia firma medico alla dimissione: data URL/Base64 o URL legacy. */
   dimissione_firma_medico_base64: string | null
   dimesso_at: Timestamp | null
+  /** Data/ora ultimo “ripreso in carico” da dimesso (solo Medico, da elenco dimessi). */
+  ripreso_in_carico_at?: Timestamp | null
 
   /** Riferimento soft: chi ha preso per primo in carico come infermiere (solo informativo). */
   infermiere_rif: string
@@ -123,8 +138,23 @@ export const PAZIENTE_STATO_LABEL: Record<PazienteStato, string> = {
   in_arrivo: 'In arrivo',
   in_attesa: 'In attesa',
   in_carico: 'In carico',
-  errore: 'Errore',
+  in_sospeso: 'In sospeso',
   dimesso: 'Dimesso',
+}
+
+/** Valore legacy `errore` → `in_sospeso` in lettura. */
+export function parsePazienteStatoFromFirestore(v: unknown): PazienteStato {
+  if (v === 'errore') return 'in_sospeso'
+  if (
+    v === 'in_arrivo' ||
+    v === 'in_attesa' ||
+    v === 'in_carico' ||
+    v === 'in_sospeso' ||
+    v === 'dimesso'
+  ) {
+    return v
+  }
+  return 'in_carico'
 }
 
 export function isTipoPaziente(v: unknown): v is TipoPaziente {
@@ -140,7 +170,12 @@ export function isPazienteStato(v: unknown): v is PazienteStato {
     v === 'in_arrivo' ||
     v === 'in_attesa' ||
     v === 'in_carico' ||
-    v === 'errore' ||
+    v === 'in_sospeso' ||
     v === 'dimesso'
   )
+}
+
+/** Saturazione letti PMA: contano solo chi occupa un posto (esclusi dimessi e ancora in logistica “in arrivo”). */
+export function pazienteOccupaPostoLetto(stato: PazienteStato): boolean {
+  return stato !== 'dimesso' && stato !== 'in_arrivo'
 }
