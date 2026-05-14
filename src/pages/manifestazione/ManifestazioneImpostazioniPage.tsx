@@ -15,6 +15,7 @@ import {
 } from '../../lib/multilineList'
 import { sortRecordKeysAndValuesIt, sortStringsIt } from '../../lib/sortLocaleIt'
 import { manifestazioneImpostazioniAllows } from '../../lib/rankMatrix'
+import { normalizeEoQuickLabels } from '../../lib/eoQuickSelection'
 import { usePmaListForManifestazione } from '../../hooks/usePmaListForManifestazione'
 import {
   parsePresetDimissioneFromFirestore,
@@ -213,7 +214,7 @@ export function ManifestazioneImpostazioniPage() {
         )
         const nextEoDraft = emptyEoDraft()
         for (const k of EO_CLINICAL_TABS) {
-          nextEoDraft[k] = (eoObj[k] ?? []).join('\n')
+          nextEoDraft[k] = normalizeEoQuickLabels(eoObj[k] ?? []).join('\n')
         }
         setEoDraft(nextEoDraft)
 
@@ -320,7 +321,7 @@ export function ManifestazioneImpostazioniPage() {
     async (tab: EoTabKey) => {
       if (!db || !manifestazioneId) return
       const ref = doc(db, 'manifestazioni', manifestazioneId)
-      const lines = parseLinesToValues(eoDraft[tab] ?? '')
+      const lines = normalizeEoQuickLabels(parseLinesToValues(eoDraft[tab] ?? ''))
       const defaultPrim = firstEoRapidoDefaultFromDrafts(eoDraft)
       await runSectionSave(`eo_${tab}`, () =>
         updateDoc(ref, {

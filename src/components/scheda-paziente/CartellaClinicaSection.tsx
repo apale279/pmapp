@@ -679,10 +679,13 @@ export function CartellaClinicaSection({
     for (let i = 0; i < EO_CLINICAL_TABS.length; i++) {
       const tab = EO_CLINICAL_TABS[i]
       const field = EO_PAZIENTE_FIRESTORE_FIELDS[i]
-      o[tab] = [...(eoResolved[field] ?? [])]
+      const group = eoQuickGroups.find((g) => g.title === tab)
+      const allowed = new Set(group?.labels ?? [])
+      const raw = [...(eoResolved[field] ?? [])]
+      o[tab] = raw.filter((x) => allowed.has(x))
     }
     return o
-  }, [eoResolved])
+  }, [eoResolved, eoQuickGroups])
 
   const eoQuickKeySuffix = useMemo(
     () =>
@@ -690,7 +693,7 @@ export function CartellaClinicaSection({
     [eoSelectedByTab, eoQuickGroups, eoQuickDefaultLabel],
   )
 
-  /** Colonna EO vuota → salva opzione «NESSUNO» (o equivalente) dalla lista manifestazione. */
+  /** Colonna EO vuota (o solo valori non più in lista) → salva il primo valore manifestazione come default. */
   useEffect(() => {
     if (!canEdit || hideClinicalBlocks) return
     if (manifestListeLoading) return
@@ -703,6 +706,7 @@ export function CartellaClinicaSection({
       const labels = (group?.labels ?? []).map((x) => x.trim()).filter(Boolean)
       if (labels.length === 0 || col.length > 0) continue
       const defLabel = firstEoDefaultLabelFromLabels(labels)
+      if (!defLabel) continue
       patch[field] = [defLabel]
     }
     if (Object.keys(patch).length === 0) return

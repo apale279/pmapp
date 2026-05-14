@@ -5,13 +5,20 @@ export function isNessunaEoOptionLabel(label: string): boolean {
   return t.toUpperCase() === 'NESSUNA' || t.toUpperCase() === 'NESSUNO'
 }
 
-/** Garantisce «NESSUNO» come prima voce (mutuamente esclusiva gestita in `toggleEoQuickSelection`). */
-export function ensureEoNessunoFirstLabels(labels: string[]): string[] {
-  const nonNessuno = labels
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .filter((x) => !isNessunaEoOptionLabel(x))
-  return ['NESSUNO', ...nonNessuno]
+/**
+ * Liste EO da manifestazione / Firestore: trim, niente duplicati, **nessuna** voce «NESSUNO»/«NESSUNA»
+ * (non sono più chip; il default è sempre il **primo** valore reale dell’array).
+ */
+export function normalizeEoQuickLabels(labels: string[]): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const raw of labels) {
+    const x = raw.trim()
+    if (!x || isNessunaEoOptionLabel(x) || seen.has(x)) continue
+    seen.add(x)
+    out.push(x)
+  }
+  return out
 }
 
 /**
@@ -45,8 +52,8 @@ export function nessunaEoOptionDisabled(
 
 /** Primo valore della colonna = default (“normale”). Lista già ordinata dalla manifestazione. */
 export function firstEoDefaultLabelFromLabels(labels: readonly string[]): string {
-  const first = labels.map((x) => x.trim()).find(Boolean)
-  return first ?? 'NESSUNO'
+  const n = normalizeEoQuickLabels([...labels])
+  return n[0] ?? ''
 }
 
 /**

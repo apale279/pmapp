@@ -8,7 +8,7 @@ import {
 import { sortRecordKeysAndValuesIt, sortStringsIt } from '../lib/sortLocaleIt'
 import { EO_CLINICAL_TABS } from '../lib/multilineList'
 import { defaultEoQuickGroupRows, type EoQuickGroupRow } from '../lib/eoQuickDefaults'
-import { ensureEoNessunoFirstLabels } from '../lib/eoQuickSelection'
+import { isNessunaEoOptionLabel, normalizeEoQuickLabels } from '../lib/eoQuickSelection'
 import { EO_OPZIONI_RAPIDE } from '../types/cartellaClinica'
 import { parsePresetFarmaciFromFirestore, type PresetFarmaciPack } from '../types/manifestazioneImpostazioni'
 import { useSyncLive } from '../context/SyncLiveContext'
@@ -64,13 +64,13 @@ function buildEoQuickGroups(
   if (!raw || typeof raw !== 'object') {
     return EO_CLINICAL_TABS.map((title, i) => ({
       title,
-      labels: ensureEoNessunoFirstLabels(i === 0 ? fallback : []),
+      labels: normalizeEoQuickLabels(i === 0 ? fallback : []),
     }))
   }
   const o = raw as Record<string, unknown>
   return EO_CLINICAL_TABS.map((title) => {
     const arr = asStringArray(o[title])
-    return { title, labels: ensureEoNessunoFirstLabels(arr?.length ? [...arr] : []) }
+    return { title, labels: normalizeEoQuickLabels(arr?.length ? [...arr] : []) }
   })
 }
 
@@ -90,16 +90,21 @@ function flattenLabelsFromGroups(groups: EoQuickGroupRow[]): string[] {
 
 function eoQuickDefaultFromDoc(d: Record<string, unknown>, imp: Record<string, unknown>): string | null {
   const rawDef = d.dettaglio_eo_rapido_default ?? imp.dettaglio_eo_rapido_default
-  if (typeof rawDef === 'string' && rawDef.trim() !== '') return rawDef.trim()
+  if (typeof rawDef === 'string' && rawDef.trim() !== '') {
+    const dTrim = rawDef.trim()
+    if (!isNessunaEoOptionLabel(dTrim)) return dTrim
+  }
   const raw = d.dettaglio_eo_rapido ?? imp.dettaglio_eo_rapido ?? imp.eo_quick_imp ?? imp.EO_QUICK_IMP
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
   for (const key of EO_CLINICAL_TABS) {
     const arr = asStringArray(o[key])
-    if (arr?.length) return arr[0] ?? null
+    const norm = arr?.length ? normalizeEoQuickLabels([...arr]) : []
+    if (norm.length > 0) return norm[0] ?? null
   }
   const legacy = asStringArray(o.CAPO_COLLO)
-  if (legacy?.length) return legacy[0] ?? null
+  const normLegacy = legacy?.length ? normalizeEoQuickLabels([...legacy]) : []
+  if (normLegacy.length > 0) return normLegacy[0] ?? null
   return null
 }
 
