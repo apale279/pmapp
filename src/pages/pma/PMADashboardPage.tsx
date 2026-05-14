@@ -230,6 +230,7 @@ function ManagerQueueBox({
   onInCarico,
   smartphoneOpenDetail,
   onSelectPatientDetail,
+  smartphoneHeading,
 }: {
   titleLine1: string
   titleLine2: string
@@ -241,85 +242,119 @@ function ManagerQueueBox({
   /** Smartphone: tap sul paziente apre il popup dettaglio invece della navigazione diretta. */
   smartphoneOpenDetail?: boolean
   onSelectPatientDetail?: (pz: PazienteListItem) => void
+  /** Smartphone: titolo principale coda (es. IN ARRIVO) e sottotitolo stato in piccolo. */
+  smartphoneHeading?: { main: string; sub: string }
 }) {
+  const openDetail = Boolean(smartphoneOpenDetail && onSelectPatientDetail)
   const preview = lista.slice(0, 2)
+  const headingMain =
+    openDetail && smartphoneHeading
+      ? smartphoneHeading.main
+      : openDetail
+        ? titleLine2
+        : titleLine1
+  const headingSub =
+    openDetail && smartphoneHeading
+      ? smartphoneHeading.sub
+      : openDetail
+        ? titleLine1
+        : titleLine2
+  const rows = openDetail ? lista : preview
+
+  const canTakeCharge = (pz: PazienteListItem) =>
+    takeChargeFromQueues &&
+    (pz.stato === 'in_arrivo' || pz.stato === 'in_attesa' || pz.stato === 'in_sospeso')
+
   return (
-    <section className="pma-card">
+    <section className={openDetail ? 'pma-card min-w-0 max-w-full overflow-hidden' : 'pma-card'}>
       <div className="border-b border-slate-100 pb-2 text-center">
-        <div className="text-lg font-bold text-slate-900">{titleLine1}</div>
-        <div className="pma-card__hdr mb-0 mt-1 text-center">{titleLine2}</div>
+        <div className="text-lg font-bold leading-tight text-slate-900">{headingMain}</div>
+        <div className="pma-card__hdr mb-0 mt-1 text-center">{headingSub}</div>
       </div>
-      {preview.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="mt-2 text-center text-sm text-slate-400">—</p>
+      ) : openDetail ? (
+        <ul className="mt-1 divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white">
+          {rows.map((pz) => {
+            const nome = [pz.cognome, pz.nome].filter(Boolean).join(' ') || 'Senza nome'
+            const take = canTakeCharge(pz)
+            return (
+              <li key={pz.id}>
+                <div className="flex w-full min-w-0 max-w-full items-center gap-2 px-2 py-2.5 transition-colors hover:bg-slate-50 active:bg-slate-100">
+                  <span
+                    className="flex shrink-0 flex-col items-center gap-0.5"
+                    title={CODICE_COLORE_LABEL[pz.codice_colore]}
+                  >
+                    <span className={`h-3 w-3 shrink-0 rounded-full ${DOT_BG[pz.codice_colore]}`} aria-hidden />
+                    <span className="max-w-[2.5rem] truncate text-[9px] font-bold uppercase leading-none text-slate-600">
+                      {CODICE_COLORE_LABEL[pz.codice_colore].slice(0, 3)}
+                    </span>
+                  </span>
+                  <div className="flex min-w-0 flex-1 overflow-hidden rounded-md border border-slate-200 bg-slate-50/90">
+                    {take ? (
+                      <button
+                        type="button"
+                        title="Prendi in carico"
+                        aria-label={`Prendi in carico ${nome}`}
+                        onClick={() => onInCarico(pz.id)}
+                        className="flex w-10 shrink-0 items-center justify-center border-r border-slate-200 bg-white text-lg font-semibold leading-none text-slate-800 hover:bg-slate-100 active:bg-slate-200"
+                      >
+                        ←
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 px-2 py-1.5 text-left transition-colors hover:bg-white/70 active:bg-white"
+                      aria-label={`Dettagli ${nome}`}
+                      onClick={() => onSelectPatientDetail?.(pz)}
+                    >
+                      <div className="truncate text-sm font-semibold leading-tight text-slate-900">{nome}</div>
+                      <div className="truncate font-mono text-xs text-slate-600">{pz.id_paziente_visibile}</div>
+                    </button>
+                  </div>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
       ) : (
         <ul className="mt-2 space-y-2">
           {preview.map((pz) => {
             const nome = [pz.cognome, pz.nome].filter(Boolean).join(' ') || '—'
             const schedaTo = `/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`
-            const openDetail = Boolean(smartphoneOpenDetail && onSelectPatientDetail)
             return (
               <li key={pz.id} className="rounded-md border border-slate-100 bg-slate-50/40">
-                {openDetail ? (
-                  <div className="flex min-w-0 items-start justify-between gap-1.5 p-2">
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 rounded-md py-0.5 text-left hover:bg-white/80"
-                      aria-label={`Dettagli ${nome}`}
-                      onClick={() => onSelectPatientDetail?.(pz)}
-                    >
-                      <div className="min-w-0 break-words text-sm font-medium leading-snug text-slate-900">
-                        {nome}
+                <div className="relative rounded-md">
+                  <Link
+                    to={schedaTo}
+                    className="absolute inset-0 z-0 rounded-md"
+                    aria-label={`Apri scheda ${nome}`}
+                  />
+                  <div className="pointer-events-none relative z-[1] p-2">
+                    <div className="flex min-w-0 items-start justify-between gap-1.5">
+                      <div className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-900">
+                        <span className="line-clamp-2">{nome}</span>
                       </div>
-                      <div className="mt-0.5 break-all font-mono text-xs font-medium text-slate-600">
-                        {pz.id_paziente_visibile}
-                      </div>
-                    </button>
-                    {takeChargeFromQueues &&
-                    (pz.stato === 'in_arrivo' || pz.stato === 'in_attesa' || pz.stato === 'in_sospeso') ? (
-                      <button
-                        type="button"
-                        title="Prendi in carico"
-                        onClick={() => onInCarico(pz.id)}
-                        className="shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-bold uppercase leading-none text-slate-800 hover:bg-slate-50"
-                      >
-                        Prendi
-                      </button>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="relative rounded-md">
-                    <Link
-                      to={schedaTo}
-                      className="absolute inset-0 z-0 rounded-md"
-                      aria-label={`Apri scheda ${nome}`}
-                    />
-                    <div className="pointer-events-none relative z-[1] p-2">
-                      <div className="flex min-w-0 items-start justify-between gap-1.5">
-                        <div className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-900">
-                          <span className="line-clamp-2">{nome}</span>
-                        </div>
-                        {takeChargeFromQueues &&
-                        (pz.stato === 'in_arrivo' || pz.stato === 'in_attesa' || pz.stato === 'in_sospeso') ? (
-                          <button
-                            type="button"
-                            title="Prendi in carico"
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              onInCarico(pz.id)
-                            }}
-                            className="pointer-events-auto relative z-[2] shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-bold uppercase leading-none text-slate-800 hover:bg-slate-50"
-                          >
-                            Prendi
-                          </button>
-                        ) : null}
-                      </div>
-                      <div className="mt-0.5 font-mono text-xs font-medium text-slate-600">
-                        {pz.id_paziente_visibile}
-                      </div>
+                      {canTakeCharge(pz) ? (
+                        <button
+                          type="button"
+                          title="Prendi in carico"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            onInCarico(pz.id)
+                          }}
+                          className="pointer-events-auto relative z-[2] shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-bold uppercase leading-none text-slate-800 hover:bg-slate-50"
+                        >
+                          Prendi
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="mt-0.5 font-mono text-xs font-medium text-slate-600">
+                      {pz.id_paziente_visibile}
                     </div>
                   </div>
-                )}
+                </div>
               </li>
             )
           })}
@@ -1214,7 +1249,7 @@ export function PMADashboardPage() {
             <div
               className={
                 smartphone
-                  ? 'grid w-full min-w-0 max-w-full shrink-0 grid-cols-2 gap-2'
+                  ? 'flex w-full min-w-0 max-w-full shrink-0 flex-col gap-2'
                   : 'w-full shrink-0 space-y-4 lg:min-w-[16rem] lg:max-w-[28%] lg:flex-1'
               }
             >
@@ -1227,6 +1262,11 @@ export function PMADashboardPage() {
                 onInCarico={handleInCarico}
                 smartphoneOpenDetail={smartphone}
                 onSelectPatientDetail={smartphone ? (pz) => setMobilePatientSnap(pz) : undefined}
+                smartphoneHeading={
+                  smartphone
+                    ? { main: 'IN ARRIVO', sub: PAZIENTE_STATO_LABEL.in_arrivo }
+                    : undefined
+                }
               />
               <ManagerQueueBox
                 titleLine1="Pazienti"
@@ -1237,6 +1277,14 @@ export function PMADashboardPage() {
                 onInCarico={handleInCarico}
                 smartphoneOpenDetail={smartphone}
                 onSelectPatientDetail={smartphone ? (pz) => setMobilePatientSnap(pz) : undefined}
+                smartphoneHeading={
+                  smartphone
+                    ? {
+                        main: 'IN ATTESA',
+                        sub: `${PAZIENTE_STATO_LABEL.in_attesa} · ${PAZIENTE_STATO_LABEL.in_sospeso}`,
+                      }
+                    : undefined
+                }
               />
             </div>
           </div>
