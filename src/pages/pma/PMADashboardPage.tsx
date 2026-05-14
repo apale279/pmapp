@@ -805,43 +805,12 @@ export function PMADashboardPage() {
     }
   }
 
-  const myPmaId = user?.id_pma?.trim() ?? ''
-  const onMyPmaDashboard = Boolean(myPmaId && pmaId.trim() === myPmaId)
-
   const topToolbarEl = (
       <div
         className={`flex min-w-0 items-center gap-2 ${
           infermiereSm ? 'flex-nowrap overflow-x-auto [-webkit-overflow-scrolling:touch] pb-0.5' : 'flex-wrap'
         }`}
       >
-        {smartphone && myPmaId ? (
-          <button
-            type="button"
-            disabled={onMyPmaDashboard}
-            title={onMyPmaDashboard ? 'Sei già nella dashboard del tuo PMA' : 'Dashboard del mio PMA'}
-            aria-label="Vai alla dashboard del mio PMA"
-            onClick={() => void navigate(`/pma/${encodeURIComponent(myPmaId)}`)}
-            className={opToolbarBtnSm}
-          >
-            <span className="sr-only">Vai alla dashboard del mio PMA</span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="shrink-0"
-              aria-hidden
-            >
-              <path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />
-              <path d="M9 21V12h6v9" />
-            </svg>
-          </button>
-        ) : null}
         <button
           type="button"
           disabled={!canCreatePaziente || !manifestazioneForCreate || creating || !pmaId.trim()}
