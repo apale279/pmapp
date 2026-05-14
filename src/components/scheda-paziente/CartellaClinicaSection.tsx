@@ -1033,13 +1033,13 @@ export function CartellaClinicaSection({
           Valutazione e anamnesi
         </div>
         <div className="space-y-0">
-            <div className="pma-field mx-2 my-2 rounded-lg border-2 border-red-600 bg-red-50/40 p-3 shadow-sm sm:mx-3 sm:p-4">
+            <div className="mx-3 my-4 box-border rounded-xl border-2 border-red-500 bg-red-50 px-5 py-5 shadow-sm sm:mx-4 sm:px-6 sm:py-6">
               <span className="pma-field__label">DOMANDA ALLERGIE</span>
-              <p className="mt-1 text-sm leading-snug text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
                 Prima di procedere: il paziente ha allergie farmacologiche o di altro tipo da segnalare?
               </p>
               {canEdit ? (
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap gap-2 pb-0.5">
                   {(['si', 'no', 'non_noto'] as const satisfies readonly AllergieVerificaStato[]).map((k) => {
                     const selected = p.allergie_verifica === k
                     return (
@@ -1055,7 +1055,7 @@ export function CartellaClinicaSection({
                   })}
                 </div>
               ) : (
-                <div className="mt-2 text-sm font-semibold tabular-nums text-slate-900">
+                <div className="mt-4 pb-0.5 text-sm font-semibold tabular-nums text-slate-900">
                   {allergieVerificaDisplay(p.allergie_verifica)}
                 </div>
               )}
