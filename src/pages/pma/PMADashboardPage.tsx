@@ -19,6 +19,7 @@ import { CodiciMinoriModal } from '../../components/pma/CodiciMinoriModal'
 import { PmaManagerShell } from '../../components/pma/PmaManagerShell'
 import { opToolbarBtnSm } from '../../components/layout/operativeTokens'
 import { useInfermiereSmartphone } from '../../hooks/useInfermiereSmartphone'
+import { useIsSmartphone } from '../../hooks/useIsSmartphone'
 import type { CodiceColorePaziente } from '../../types/paziente'
 import { CODICE_COLORE_LABEL, PAZIENTE_STATO_LABEL } from '../../types/paziente'
 import type { PazienteListItem } from '../../hooks/usePazientiForPma'
@@ -448,6 +449,7 @@ export function PMADashboardPage() {
   const { user, logout } = useAuth()
   const theme = useRankTheme()
   const infermiereSm = useInfermiereSmartphone(user)
+  const smartphone = useIsSmartphone()
   const pmaSnap = usePmaDocSnapshot(pmaId || undefined)
   const { data: manZipMeta } = useManifestazioneDoc(pmaSnap.idManifestazione || undefined)
   const manListeCliniche = useManifestazioneListeCliniche(pmaSnap.idManifestazione || undefined)
@@ -819,12 +821,29 @@ export function PMADashboardPage() {
                 ? 'Permessi insufficienti per creare una nuova scheda.'
                 : !manifestazioneForCreate
                   ? 'Manifestazione non disponibile.'
-                  : undefined
+                  : smartphone
+                    ? 'Nuovo paziente'
+                    : undefined
           }
           onClick={() => void handleNuovoPazienteImmediato()}
           className={opToolbarBtnSm}
         >
-          {creating ? '…' : 'NUOVO PAZIENTE'}
+          {smartphone ? (
+            creating ? (
+              <span aria-live="polite">…</span>
+            ) : (
+              <>
+                <span className="sr-only">Nuovo paziente</span>
+                <span className="text-[1.35rem] font-semibold leading-none" aria-hidden>
+                  +
+                </span>
+              </>
+            )
+          ) : creating ? (
+            '…'
+          ) : (
+            'NUOVO PAZIENTE'
+          )}
         </button>
         <button
           type="button"
@@ -834,12 +853,36 @@ export function PMADashboardPage() {
               ? 'Manifestazione non disponibile per i codici minori.'
               : !canOpenCodiciMinori
                 ? 'Permessi insufficienti.'
-                : undefined
+                : smartphone
+                  ? 'Codici minori'
+                  : undefined
           }
           onClick={() => setCodiciMinoriOpen(true)}
           className={opToolbarBtnSm}
         >
-          CODICI MINORI
+          {smartphone ? (
+            <>
+              <span className="sr-only">Codici minori</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0"
+                aria-hidden
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 9h18M9 21V9" />
+              </svg>
+            </>
+          ) : (
+            'CODICI MINORI'
+          )}
         </button>
         {user?.rank !== 'Centrale' && typeof Notification !== 'undefined' && Notification.permission === 'default' ? (
           <button
