@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { deleteField, serverTimestamp } from 'firebase/firestore'
-import { saveAs } from 'file-saver'
 import type { Paziente } from '../../types/paziente'
 import type { UserProfile } from '../../types/userProfile'
 import {
@@ -9,11 +8,7 @@ import {
   type DimissioneEsito,
 } from '../../types/dimissione'
 import { SignatureCanvas } from './SignatureCanvas'
-import {
-  buildMailtoReportPaziente,
-  buildPazientePdfBlob,
-  defaultPdfFilename,
-} from '../../lib/pdf/pazientePdfReport'
+import { buildMailtoReportPaziente, defaultPdfFilename } from '../../lib/pdf/pazientePdfHelpers'
 import type { PresetDimissioneVoce } from '../../types/manifestazioneImpostazioni'
 
 type Props = {
@@ -94,7 +89,7 @@ export function DimissioneSection({
   }
 
   async function handleDimettiConfirm() {
-    if (!canChiudiDimetti || !user) return
+    if (!canChiudiDimetti || !user || user.rank !== 'Medico') return
     setDimettiBusy(true)
     try {
       const snap =
@@ -118,6 +113,10 @@ export function DimissioneSection({
     setPdfErr(null)
     setPdfBusy(true)
     try {
+      const [{ buildPazientePdfBlob }, { saveAs }] = await Promise.all([
+        import('../../lib/pdf/pazientePdfReport'),
+        import('file-saver'),
+      ])
       const blob = await buildPazientePdfBlob(p, {
         manifestazioneNome: reportManifestazioneNome,
         pmaNome: reportPmaNome,
@@ -146,6 +145,10 @@ export function DimissioneSection({
     setPdfErr(null)
     setPdfBusy(true)
     try {
+      const [{ buildPazientePdfBlob }, { saveAs }] = await Promise.all([
+        import('../../lib/pdf/pazientePdfReport'),
+        import('file-saver'),
+      ])
       const blob = await buildPazientePdfBlob(p, {
         manifestazioneNome: reportManifestazioneNome,
         pmaNome: reportPmaNome,
@@ -185,12 +188,7 @@ export function DimissioneSection({
 
   return (
     <section className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <div className="pma-section-hdr">Sezione 4 — Dimissione</div>
-      <div className="flex flex-col gap-2 border-b border-slate-100 px-3 py-2 sm:flex-row sm:items-start sm:justify-between">
-        <p className="text-sm text-slate-600">
-          Modificabile da <strong>Superadmin, Centrale o Medico</strong> con scheda aperta. Dopo la dimissione
-          definitiva la scheda è chiusa per tutti i ruoli.
-        </p>
+      <div className="flex flex-col gap-2 border-b border-slate-100 px-3 py-2 sm:flex-row sm:items-start sm:justify-end">
         {p.dimesso_at ? (
           <p className="shrink-0 text-xs text-slate-500">
             Chiusura:{' '}
@@ -201,13 +199,6 @@ export function DimissioneSection({
         ) : null}
       </div>
 
-      {!dimissioneEdit ? (
-        <p className="mx-3 mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          {canEditDimissioneTab && !p.aperto
-            ? 'Scheda chiusa dopo dimissione: dimissione e firme in sola lettura.'
-            : 'Sola lettura: la dimissione su scheda aperta è riservata a Superadmin, Centrale o Medico.'}
-        </p>
-      ) : null}
 
       <div className="space-y-0">
         <div className="pma-row">
@@ -275,49 +266,41 @@ export function DimissioneSection({
         ) : null}
 
         <div className="pma-field max-w-3xl">
-          <div className="mb-1 flex min-w-0 flex-wrap items-center justify-between gap-2">
-            <label htmlFor={`dimissione-note-${p.id}`} className="pma-field__label m-0">
-              Note di dimissione
-            </label>
-            {showPresetMenuMedico ? (
-              <details className="relative shrink-0 [&_summary::-webkit-details-marker]:hidden">
-                <summary className="cursor-pointer list-none rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-800 shadow-sm hover:bg-slate-50">
-                  Preset <span className="text-slate-400" aria-hidden>▾</span>
-                </summary>
-                <div
-                  className="absolute right-0 z-20 mt-1 max-h-60 min-w-[14rem] max-w-[min(100vw-2rem,20rem)] overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
-                  role="menu"
-                  aria-label="Preset note dimissione"
-                >
-                  {presetDimissione.map((preset, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
-                      onClick={() => {
-                        appendPresetTesto(preset.testo)
-                      }}
-                    >
-                      <span className="font-semibold text-slate-900">
-                        {preset.titolo.trim() || `Preset ${idx + 1}`}
-                      </span>
-                      {preset.testo.trim() ? (
-                        <span className="mt-0.5 line-clamp-2 block text-xs font-normal text-slate-500">
-                          {preset.testo.trim()}
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
-              </details>
-            ) : null}
-          </div>
+          <label htmlFor={`dimissione-note-${p.id}`} className="pma-field__label">
+            Note di dimissione
+          </label>
           {showPresetMenuMedico ? (
-            <p className="mb-2 text-xs text-slate-500">
-              Come <strong className="font-semibold text-slate-700">Medico</strong>, apri il menu &quot;Preset&quot;
-              e scegli una voce: puoi ripetere l&apos;operazione per aggiungere più blocchi di testo alle note.
-            </p>
+            <label className="mt-1 mb-2 block w-full max-w-3xl" htmlFor={`dim-preset-sel-${p.id}`}>
+              <span className="sr-only">Preset dimissioni</span>
+              <select
+                id={`dim-preset-sel-${p.id}`}
+                className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                defaultValue=""
+                onChange={(e) => {
+                  const raw = e.target.value
+                  e.target.value = ''
+                  if (raw === '') return
+                  const idx = Number(raw)
+                  const preset = presetDimissione[idx]
+                  if (preset) appendPresetTesto(preset.testo)
+                }}
+              >
+                <option value="">Preset dimissioni…</option>
+                {presetDimissione.map((preset, idx) => {
+                  const tit = preset.titolo.trim() || `Preset ${idx + 1}`
+                  const preview = preset.testo.trim()
+                  const optLabel =
+                    preview.length > 0
+                      ? `${tit} — ${preview.length > 120 ? `${preview.slice(0, 120)}…` : preview}`
+                      : tit
+                  return (
+                    <option key={idx} value={String(idx)} title={optLabel}>
+                      {optLabel}
+                    </option>
+                  )
+                })}
+              </select>
+            </label>
           ) : null}
           <textarea
             id={`dimissione-note-${p.id}`}
@@ -356,11 +339,6 @@ export function DimissioneSection({
 
         <div>
           <div className="pma-section-hdr">Firma paziente</div>
-          <p className="px-3 py-2 text-xs text-slate-500">
-            Area ampia per tablet; la firma viene salvata come immagine (Base64) nel documento
-            paziente, senza Firebase Storage. Con scheda aperta il Medico può sempre tracciare o
-            aggiornare la firma; dopo la dimissione definitiva questa sezione è solo lettura.
-          </p>
           <div className="px-3 pb-3">
             {dimissioneEdit ? (
               <div className="space-y-3">
@@ -419,10 +397,6 @@ export function DimissioneSection({
 
         <div>
           <div className="pma-section-hdr">Firma medico</div>
-          <p className="px-3 py-2 text-xs text-slate-500">
-            Anteprima dal profilo utente (firma in Base64 o URL legacy) o copia salvata alla
-            dimissione definitiva.
-          </p>
           <div className="px-3 pb-3">
             {firmaMedicoPreview ? (
               <div className="inline-block max-w-full rounded-lg border border-slate-200 bg-white p-1.5 shadow-sm">
@@ -445,10 +419,6 @@ export function DimissioneSection({
 
         <div className="border-t border-slate-200">
           <div className="pma-section-hdr">Report PDF</div>
-          <p className="px-3 py-2 text-xs text-slate-600">
-            Esportazione A4 densa (anagrafica, cartella clinica, parametri vitali, farmaci, rivalutazioni,
-            lesioni, dimissione, firme).
-          </p>
           {pdfErr ? (
             <p className="mt-2 text-sm text-red-700" role="alert">
               {pdfErr}
@@ -486,18 +456,14 @@ export function DimissioneSection({
         </div>
 
         {canChiudiDimetti ? (
-          <div className="border-t border-slate-200 px-3 py-4">
+          <div className="flex w-full justify-center border-t border-slate-200 bg-gradient-to-b from-slate-50 to-white px-4 py-12">
             <button
               type="button"
               onClick={() => setDimettiOpen(true)}
-              className="inline-flex h-10 w-full max-w-md items-center justify-center rounded-lg bg-red-700 px-4 text-sm font-bold uppercase text-white shadow-md hover:bg-red-800"
+              className="pma-theme-skip inline-flex h-12 w-full max-w-lg min-w-[14rem] items-center justify-center rounded-xl border-2 border-red-900 bg-red-600 px-8 text-sm font-bold uppercase tracking-wide text-white shadow-lg ring-2 ring-red-500/40 hover:bg-red-700"
             >
               DIMETTI PAZIENTE
             </button>
-            <p className="mt-2 max-w-xl text-xs text-slate-500">
-              Chiude definitivamente la scheda (<code className="rounded bg-slate-100 px-1">aperto: false</code>
-              , stato <strong>Dimesso</strong>, timestamp di chiusura).
-            </p>
           </div>
         ) : null}
       </div>

@@ -7,6 +7,7 @@ import {
   type Firestore,
 } from 'firebase/firestore'
 import { statoInizialePazientePerRank } from './pazienteStatoIniziale'
+import { createPmaAlert } from './createPmaAlert'
 import type { CodiceColorePaziente, TipoPaziente } from '../types/paziente'
 import type { UserRank } from '../types/userProfile'
 
@@ -34,7 +35,7 @@ export async function createPazienteWithProgressivo(
     creatorUid: string
     bozza?: BozzaNuovaScheda
   },
-): Promise<string> {
+): Promise<{ id: string; id_paziente_visibile: string }> {
   const idPmaTrim = params.idPma.trim()
   if (!idPmaTrim) {
     throw new Error('id_pma mancante: apri la dashboard da un URL PMA valido.')
@@ -57,11 +58,13 @@ export async function createPazienteWithProgressivo(
   const breve = params.bozza?.breve_descrizione ?? ''
   const colore = params.bozza?.codice_colore ?? 'bianco'
 
+  let idPazienteVisibile = ''
   await runTransaction(db, async (tx) => {
     const cSnap = await tx.get(counterRef)
     const prev = typeof cSnap.data()?.ultimo === 'number' ? (cSnap.data()?.ultimo as number) : 0
     const next = prev + 1
     const idVis = `P_${next}`
+    idPazienteVisibile = idVis
 
     tx.set(
       counterRef,
@@ -91,6 +94,7 @@ export async function createPazienteWithProgressivo(
       email: '',
       telefono: '',
       email_tel: '',
+      codice_fiscale: '',
       apr: 'Nulla.',
       allergie: 'Nega.',
       app: '',
@@ -131,5 +135,20 @@ export async function createPazienteWithProgressivo(
     })
   })
 
-  return pazienteRef.id
+  if (params.creatorRank !== 'Centrale' && colore === 'rosso' && idPazienteVisibile) {
+    try {
+      await createPmaAlert(db, {
+        idPma: idPmaTrim,
+        idManifestazione: params.manifestazioneId,
+        pazienteId: pazienteRef.id,
+        idPazienteVisibile,
+        messaggio: `Codice ROSSO: nuova scheda ${idPazienteVisibile} — creato da ${params.creatorRank}.`,
+        creatoDaUid: params.creatorUid,
+      })
+    } catch {
+      /* allerta best-effort */
+    }
+  }
+
+  return { id: pazienteRef.id, id_paziente_visibile: idPazienteVisibile }
 }

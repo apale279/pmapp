@@ -23,6 +23,17 @@ dist-ssr
 *.sln
 *.sw?
 
+# Secrets / env (never commit real keys)
+.env
+.env.*
+!.env.example
+
+# Internal prompts & office binaries (optional local notes; keep out of git)
+Prompt/
+
 # Office / Excel lock & temp (never commit)
 ~$*
 **/~$*
+
+# Local archives (not for repo)
+public.zip

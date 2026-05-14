@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { Timestamp } from 'firebase/firestore'
-import { deleteField, serverTimestamp } from 'firebase/firestore'
+import { collection, deleteField, limit, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
 import { useSyncLive } from '../../context/SyncLiveContext'
 import { useRankTheme } from '../../hooks/useRankTheme'
@@ -20,6 +20,7 @@ import { opPrimaryBtn } from '../../components/layout/operativeTokens'
 import { manifestazioneDashboardAllows } from '../../lib/rankMatrix'
 import { db } from '../../lib/firebase'
 import { updateSchedaPazienteGranular } from '../../lib/updateSchedaPaziente'
+import { useApplyOperativeChrome } from '../../hooks/useApplyOperativeChrome'
 
 function formatDimessoBreve(ts: Timestamp | null): string {
   if (!ts || typeof ts.toDate !== 'function') return '—'
@@ -92,11 +93,77 @@ export function ManifestazioneDashboardPage() {
   const [dimessiSearch, setDimessiSearch] = useState('')
   const [riprendiBusyId, setRiprendiBusyId] = useState<string | null>(null)
   const [riprendiErr, setRiprendiErr] = useState<string | null>(null)
+  const [centraleAlertToast, setCentraleAlertToast] = useState<{ id: string; msg: string } | null>(null)
+
+  useApplyOperativeChrome(
+    Boolean(man && manExists),
+    () => ({
+      titleOverride: (
+        <h1 className="truncate text-xs font-bold uppercase tracking-wider text-[#e8e8f8] sm:text-sm">
+          {man!.nome.trim().toUpperCase()}
+        </h1>
+      ),
+      headerActions: (
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          <Link
+            to={`/manifestazione/${encodeURIComponent(manifestazioneId)}/impostazioni`}
+            className="inline-flex items-center justify-center rounded border border-white/25 bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#e8e8f8] no-underline hover:bg-white/15 sm:text-xs"
+          >
+            Impostazioni
+          </Link>
+          {rank != null && manifestazioneDashboardAllows(rank, 'CREATE') ? (
+            <button
+              type="button"
+              onClick={() => {
+                setPmaModalKey((k) => k + 1)
+                setPmaModalOpen(true)
+              }}
+              className={`${opPrimaryBtn} shrink-0 whitespace-nowrap`}
+            >
+              Crea nuovo PMA
+            </button>
+          ) : null}
+        </div>
+      ),
+    }),
+    [man?.nome, manifestazioneId, rank],
+  )
 
   const { bumpSync } = useSyncLive()
   useEffect(() => {
     if (!manLoading && manExists) bumpSync()
   }, [manLoading, manExists, bumpSync])
+
+  useEffect(() => {
+    if (!db || !manifestazioneId.trim() || rank !== 'Centrale') return
+    const q = query(
+      collection(db, 'allerte_pma'),
+      where('id_manifestazione', '==', manifestazioneId.trim()),
+      limit(40),
+    )
+    let first = true
+    const unsub = onSnapshot(q, (snap) => {
+      if (first) {
+        first = false
+        return
+      }
+      for (const ch of snap.docChanges()) {
+        if (ch.type !== 'added') continue
+        const d = ch.doc.data() as Record<string, unknown>
+        const msg = typeof d.messaggio === 'string' ? d.messaggio : 'Allerta'
+        setCentraleAlertToast({ id: ch.doc.id, msg })
+        window.setTimeout(() => setCentraleAlertToast((cur) => (cur?.id === ch.doc.id ? null : cur)), 14_000)
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          try {
+            new Notification('Allerta codice rosso', { body: msg, tag: ch.doc.id })
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    })
+    return () => unsub()
+  }, [manifestazioneId, rank])
 
   const pmaNomeById = useMemo(() => {
     const m = new Map<string, string>()
@@ -174,36 +241,25 @@ export function ManifestazioneDashboardPage() {
 
       {man && manExists ? (
         <>
-          <header className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <div className="pma-bar flex-col items-start gap-3 sm:flex-row sm:items-start">
-              <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9090b8]">
-                  Manifestazione
-                </div>
-                <div className="pma-bar__id mt-0.5 text-lg font-semibold leading-tight">{man.nome}</div>
-              </div>
-              <div className="pma-bar__right flex flex-col items-stretch gap-2 sm:items-end">
-                <Link
-                  to={`/manifestazione/${encodeURIComponent(manifestazioneId)}/impostazioni`}
-                  className="text-sm font-medium no-underline hover:opacity-90"
-                >
-                  Impostazioni manifestazione
-                </Link>
-                {rank != null && manifestazioneDashboardAllows(rank, 'CREATE') ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPmaModalKey((k) => k + 1)
-                      setPmaModalOpen(true)
-                    }}
-                    className={`${opPrimaryBtn} px-5 text-sm`}
-                  >
-                    Crea nuovo PMA
-                  </button>
-                ) : null}
-              </div>
+          {centraleAlertToast ? (
+            <div
+              className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-950 shadow-sm"
+              role="status"
+            >
+              <p className="min-w-0 flex-1">
+                <strong className="font-semibold">Allerta Centrale:</strong> {centraleAlertToast.msg}
+              </p>
+              <button
+                type="button"
+                className="shrink-0 inline-flex h-10 items-center justify-center rounded-md border border-red-400 bg-white px-4 text-sm font-bold uppercase text-red-950 hover:bg-red-100"
+                onClick={() => setCentraleAlertToast(null)}
+              >
+                Chiudi
+              </button>
             </div>
-            <div className="border-t border-slate-100 px-4 py-4 sm:px-6">
+          ) : null}
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 px-4 py-4 sm:px-6">
               <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
                 <div>
                   <dt className="text-slate-500">ID</dt>
@@ -229,7 +285,7 @@ export function ManifestazioneDashboardPage() {
                 </div>
               </dl>
             </div>
-          </header>
+          </div>
 
           {showCoordinationBoard && !pmaLoading && !pmaError && pmaList.length > 0 ? (
             <section

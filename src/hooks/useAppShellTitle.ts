@@ -3,6 +3,7 @@ import { useManifestazioneDoc } from './useManifestazioneDoc'
 import { usePmaDocSnapshot } from './usePmaDocNome'
 import { parseManifestazioneIdFromPath, parsePmaIdFromPath } from '../lib/routeScopeFromPath'
 
+/** Titolo breve per l’header globale (stampatello, senza nome app). */
 export function useAppShellTitle(): string {
   const { pathname } = useLocation()
   const manifestazioneId = parseManifestazioneIdFromPath(pathname)
@@ -11,53 +12,47 @@ export function useAppShellTitle(): string {
   const pmaSnap = usePmaDocSnapshot(pmaIdFromPath)
 
   if (pathname === '/' || pathname === '') {
-    return 'PMA Manager - Home'
+    return 'HOME'
   }
   if (pathname === '/admin' || pathname === '/admin/') {
-    return 'PMA Manager - Dashboard admin'
+    return 'DASHBOARD ADMIN'
   }
   if (pathname.startsWith('/admin/manifestazioni')) {
-    return 'PMA Manager - Manifestazioni (admin)'
+    return 'MANIFESTAZIONI (ADMIN)'
   }
   if (pathname.startsWith('/admin/pma')) {
-    return 'PMA Manager - PMA globali (admin)'
+    return 'PMA GLOBALI (ADMIN)'
   }
   if (pathname.startsWith('/admin/utenti')) {
-    return 'PMA Manager - Gestione utenti (admin)'
+    return 'GESTIONE UTENTI (ADMIN)'
   }
   if (pathname.startsWith('/admin/pazienti')) {
-    return 'PMA Manager - Pazienti globali (admin)'
+    return 'PAZIENTI GLOBALI (ADMIN)'
   }
   if (pathname.startsWith('/utenti')) {
-    return 'PMA Manager - Gestione utenti'
+    return 'GESTIONE UTENTI'
   }
   if (manifestazioneId && /^\/manifestazione\/[^/]+\/impostazioni\/?$/.test(pathname)) {
     const label = man?.nome?.trim() || manifestazioneId
-    return `PMA Manager - ${label} - Impostazioni manifestazione`
+    return `IMPOSTAZIONI · ${label.toUpperCase()}`
   }
   if (manifestazioneId && /^\/manifestazione\/[^/]+\/rubrica\/?$/.test(pathname)) {
-    const label = man?.nome?.trim() || manifestazioneId
-    return `PMA Manager - ${label} - Rubrica`
+    return 'RUBRICA'
   }
   if (manifestazioneId && /^\/manifestazione\/[^/]+\/file-utili\/?$/.test(pathname)) {
-    const label = man?.nome?.trim() || manifestazioneId
-    return `PMA Manager - ${label} - File utili`
+    return 'FILE UTILI'
   }
   if (manifestazioneId && /^\/manifestazione\/[^/]+\/?$/.test(pathname)) {
     const label = man?.nome?.trim() || manifestazioneId
-    return `PMA Manager - ${label} - Dashboard`
-  }
-  if (pmaIdFromPath && /^\/pma\/[^/]+\/impostazioni\/?$/.test(pathname)) {
-    const label = pmaSnap.nome?.trim() || pmaIdFromPath
-    return `PMA Manager - ${label} - Impostazioni PMA`
+    return `DASHBOARD · ${label.toUpperCase()}`
   }
   if (pmaIdFromPath && /^\/pma\/[^/]+\/paziente\/[^/]+\/?/.test(pathname)) {
-    return 'PMA Manager - Scheda paziente'
+    return 'SCHEDA PAZIENTE'
   }
   if (pmaIdFromPath && /^\/pma\/[^/]+\/?$/.test(pathname)) {
     const label = pmaSnap.nome?.trim() || pmaIdFromPath
-    return `PMA Manager - ${label}`
+    return label.toUpperCase()
   }
 
-  return `PMA Manager - ${pathname}`
+  return pathname.replace(/^\//, '').toUpperCase() || 'PMAPP'
 }

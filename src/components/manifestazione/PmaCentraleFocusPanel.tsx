@@ -125,14 +125,14 @@ export function PmaCentraleFocusPanel({ manifestazioneId, pmaList, theme }: Prop
     setCreateErr(null)
     setCreating(true)
     try {
-      const nuovoId = await createPazienteWithProgressivo(db, {
+      const nuovo = await createPazienteWithProgressivo(db, {
         manifestazioneId: manifestazioneId.trim(),
         idPma: focusPmaId.trim(),
         creatorRank: 'Centrale',
         creatorUid: user.uid,
       })
       navigate(
-        `/pma/${encodeURIComponent(focusPmaId)}/paziente/${encodeURIComponent(nuovoId)}?tab=generale`,
+        `/pma/${encodeURIComponent(focusPmaId)}/paziente/${encodeURIComponent(nuovo.id)}?tab=generale`,
       )
     } catch (e) {
       setCreateErr(e instanceof Error ? e.message : 'Creazione non riuscita.')

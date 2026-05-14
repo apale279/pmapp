@@ -1,34 +1,30 @@
 import { useLayoutEffect, type ReactNode } from 'react'
 import { useOperativeChrome } from '../../context/OperativeChromeContext'
+import type { UserProfile } from '../../types/userProfile'
 
 export type PmaManagerShellProps = {
-  user: unknown
+  user: UserProfile | null
   pmaId: string
   manifestazioneId: string
   pmaDisplayTitle: string
   logout: unknown
+  /** Pulsanti azione nel chrome globale (es. Nuovo paziente). */
+  headerActions?: ReactNode
   topToolbar?: ReactNode
   triageStrip?: ReactNode
   children: ReactNode
   footer?: ReactNode
 }
 
-const PMA_BADGE = (
-  <div
-    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[#e2e8f0] bg-[#f8fafc] text-xs font-bold uppercase tracking-wide text-slate-600"
-    aria-hidden
-  >
-    PMA
-  </div>
-)
-
 /**
  * Collega toolbar, strip triage e footer al chrome globale (`OperativeAppShell`).
  * Non renderizza più sidebar/header duplicati (evita “pagina nella pagina”).
  */
 export function PmaManagerShell({
+  user: _user,
   pmaDisplayTitle,
   triageStrip,
+  headerActions,
   topToolbar,
   children,
   footer,
@@ -38,11 +34,15 @@ export function PmaManagerShell({
   const hasToolbar = topToolbar != null
 
   useLayoutEffect(() => {
+    const titleUpper = pmaDisplayTitle.trim().toUpperCase()
     setSlots({
-      headerPrepend: PMA_BADGE,
+      headerPrepend: null,
       titleOverride: (
-        <h1 className="pma-bar__id truncate">PMA Manager - {pmaDisplayTitle}</h1>
+        <h1 className="truncate text-xs font-bold uppercase tracking-wider text-[#e8e8f8] sm:text-sm">
+          {titleUpper}
+        </h1>
       ),
+      headerActions: headerActions ?? null,
       headerAfterTitle: triageStrip ?? null,
       toolbar: hasToolbar ? topToolbar : null,
       footer: hasFooter ? footer : null,
@@ -53,7 +53,17 @@ export function PmaManagerShell({
     return () => {
       clearSlots()
     }
-  }, [pmaDisplayTitle, triageStrip, topToolbar, footer, hasToolbar, hasFooter, setSlots, clearSlots])
+  }, [
+    pmaDisplayTitle,
+    triageStrip,
+    headerActions,
+    topToolbar,
+    footer,
+    hasToolbar,
+    hasFooter,
+    setSlots,
+    clearSlots,
+  ])
 
   return <>{children}</>
 }

@@ -101,11 +101,6 @@ export function pmaDashboardRouteRanks(): readonly UserRank[] {
   return RANK_ORDER
 }
 
-/** Impostazioni PMA: tutti i rank (lettura per Triage; CUD in pagina). */
-export function pmaImpostazioniRouteRanks(): readonly UserRank[] {
-  return RANK_ORDER
-}
-
 /** Scheda paziente sotto PMA: tutti i rank (tab filtrate in pagina). */
 export function schedaPazienteRouteRanks(): readonly UserRank[] {
   return RANK_ORDER
@@ -114,16 +109,6 @@ export function schedaPazienteRouteRanks(): readonly UserRank[] {
 /** Dashboard PMA: tutti i rank, pieno CRUD in matrice. */
 export function pmaDashboardAllows(_rank: UserRank, _op: 'READ' | 'CREATE' | 'UPDATE' | 'DELETE'): boolean {
   return true
-}
-
-/** Impostazioni PMA: tutti READ; CUD fino a Soccorritore (no Triage su UPDATE/CREATE/DELETE). */
-export function pmaImpostazioniAllows(
-  rank: UserRank,
-  op: 'READ' | 'CREATE' | 'UPDATE' | 'DELETE',
-): boolean {
-  if (op === 'READ') return true
-  if (rank === 'Triage') return false
-  return RANK_ORDER.includes(rank)
 }
 
 /** Tab Generale / Anagrafica: tutti i rank, pieno CRUD (scheda aperta gestita altrove). */
@@ -142,10 +127,10 @@ export function schedaTabCartellaAllows(rank: UserRank, op: 'READ' | 'CREATE' | 
   return true
 }
 
-/** Dimissione: Triage NO ACCESS; CUD solo Superadmin, Centrale, Medico. */
+/** Dimissione: tab visibile solo a Medico e Centrale (READ); CUD come da matrice legacy. */
 export function schedaTabDimissioneAllows(rank: UserRank, op: 'READ' | 'CREATE' | 'UPDATE' | 'DELETE'): boolean {
   if (rank === 'Triage') return false
-  if (op === 'READ') return true
+  if (op === 'READ') return rank === 'Medico' || rank === 'Centrale'
   return rank === 'Superadmin' || rank === 'Centrale' || rank === 'Medico'
 }
 

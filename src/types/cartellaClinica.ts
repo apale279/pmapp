@@ -50,6 +50,8 @@ export interface FarmacoSomministrato {
   dose: string
   via: FarmacoVia
   registrato_at: Timestamp
+  /** Chi ha inserito la riga (UI scheda; omesso dal PDF). */
+  inserito_da_nome?: string
 }
 
 /** Nota di rivalutazione (Sez. 4.4). */

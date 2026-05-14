@@ -99,28 +99,6 @@ function IconPmaDashboard({ className }: { className?: string }) {
   )
 }
 
-/** Impostazioni PMA — chiave, distinto dalle impostazioni manifestazione. */
-function IconWrench({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M14.7 6.3a4 4 0 010 5.65l-7.07 7.07a2.5 2.5 0 01-3.54-3.54l7.07-7.07"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M16.24 8.76L19 6l2 2-2.76 2.76"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
 function IconLayout({ className }: { className?: string }) {
   return (
     <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -438,14 +416,6 @@ export function AppSidebar({ user, theme, layout = 'rail', onNavigate }: AppSide
               rank={rank}
               icon={<IconPmaDashboard />}
               label="Dashboard PMA"
-              mini={mini}
-              onNavigate={onNavigate}
-            />
-            <NavItem
-              to={`/pma/${pmaSeg}/impostazioni`}
-              rank={rank}
-              icon={<IconWrench />}
-              label="Impostazioni PMA"
               mini={mini}
               onNavigate={onNavigate}
             />

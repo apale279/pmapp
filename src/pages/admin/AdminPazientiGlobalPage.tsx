@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useLayoutEffect } from 'react'
 import { deleteDoc, doc } from 'firebase/firestore'
 import { useRankTheme } from '../../hooks/useRankTheme'
 import { useAllPazientiGlobal } from '../../hooks/useAllPazientiGlobal'
 import { db } from '../../lib/firebase'
 import { AdminTableToolbar } from '../../components/admin/AdminTableToolbar'
 import { AdminRowActions } from '../../components/admin/AdminRowActions'
+import { useOperativeChrome } from '../../context/OperativeChromeContext'
 
 export function AdminPazientiGlobalPage() {
   const theme = useRankTheme()
@@ -29,6 +30,26 @@ export function AdminPazientiGlobalPage() {
     )
   }, [items, q])
 
+  const { setSlots, clearSlots } = useOperativeChrome()
+  useLayoutEffect(() => {
+    setSlots({
+      titleOverride: (
+        <h1 className="truncate text-xs font-bold uppercase tracking-wider text-[#e8e8f8] sm:text-sm">
+          PAZIENTI GLOBALI
+        </h1>
+      ),
+      toolbar: (
+        <AdminTableToolbar
+          variant="filtersOnly"
+          searchPlaceholder="Filtra per ID, nome, stato, PMA…"
+          searchValue={q}
+          onSearchChange={setQ}
+        />
+      ),
+    })
+    return () => clearSlots()
+  }, [q, setSlots, clearSlots])
+
   async function confirmDelete() {
     if (!del || !db) return
     setDelBusy(true)
@@ -45,13 +66,10 @@ export function AdminPazientiGlobalPage() {
 
   return (
     <div className="pma-dashboard w-full max-w-[min(100%,1800px)] space-y-6">
-      <AdminTableToolbar
-        title="Pazienti — archivio globale"
-        subtitle="Elenco in tempo reale della collection `pazienti`. Modifica apre la scheda nel contesto PMA se disponibile."
-        searchPlaceholder="Filtra per ID, nome, stato, PMA…"
-        searchValue={q}
-        onSearchChange={setQ}
-      />
+      <p className="text-xs leading-snug text-slate-600">
+        Elenco in tempo reale della collection <code className="rounded bg-slate-100 px-1">pazienti</code>. Modifica apre
+        la scheda nel contesto PMA se disponibile.
+      </p>
 
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">

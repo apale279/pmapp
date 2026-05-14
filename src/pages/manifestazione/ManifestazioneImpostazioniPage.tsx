@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
 import { deleteField, doc, onSnapshot, updateDoc } from 'firebase/firestore'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useSyncLive } from '../../context/SyncLiveContext'
 import { db } from '../../lib/firebase'
 import { ChipTagField } from '../../components/manifestazione/ChipTagField'
 import { OperativePageGrid } from '../../components/layout/OperativePageGrid'
-import { opPrimaryBtn, opToolbarBtnSm } from '../../components/layout/operativeTokens'
+import { opToolbarBtnSm } from '../../components/layout/operativeTokens'
 import {
   EO_CLINICAL_TABS,
   firstEoRapidoDefaultFromDrafts,
@@ -15,10 +15,14 @@ import {
 } from '../../lib/multilineList'
 import { sortRecordKeysAndValuesIt, sortStringsIt } from '../../lib/sortLocaleIt'
 import { manifestazioneImpostazioniAllows } from '../../lib/rankMatrix'
+import { usePmaListForManifestazione } from '../../hooks/usePmaListForManifestazione'
 import {
   parsePresetDimissioneFromFirestore,
+  parsePresetFarmaciFromFirestore,
   type PresetDimissioneVoce,
+  type PresetFarmaciPack,
 } from '../../types/manifestazioneImpostazioni'
+import { FARMACO_VIA_LABEL, FARMACO_VIE, isFarmacoVia, type FarmacoVia } from '../../types/cartellaClinica'
 import { parsePartecipantiExcelFile } from '../../lib/parsePartecipantiExcel'
 
 /** Testo textarea → righe pulite, deduplicate, ordinate, rimesse su righe. */
@@ -27,9 +31,25 @@ function sortLinesText(text: string): string {
 }
 
 /** Per Firestore: trim righe, senza vuoti, senza duplicati, ordine alfabetico. */
+function packPresetFarmaciForFirestore(draft: PresetFarmaciPack[]) {
+  return draft
+    .map((pack) => ({
+      nome: pack.nome.trim(),
+      farmaci: pack.farmaci
+        .map((f) => ({
+          nome: f.nome.trim(),
+          dose: typeof f.dose === 'string' ? f.dose.trim() : '',
+          via: f.via,
+        }))
+        .filter((f) => f.nome || f.dose),
+    }))
+    .filter((p) => p.nome || p.farmaci.length > 0)
+}
+
 function listFromMultilineText(text: string): string[] {
   return sortStringsIt(parseLinesToValues(text))
 }
+
 
 function asStringArray(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null
@@ -95,6 +115,17 @@ function pickPrestazioniFarmaci(
   return sortStringsIt(top ?? [])
 }
 
+const IMP_DETAILS =
+  'group overflow-hidden rounded-lg border border-[#e2e8f0] bg-white [&_summary::-webkit-details-marker]:hidden'
+const IMP_SUMMARY =
+  'flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50 px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-slate-800 hover:bg-slate-100'
+const IMP_PANEL = 'border-t border-slate-100 px-6 py-6 sm:px-8'
+const IMP_H3 = 'text-xs font-bold uppercase tracking-[0.12em] text-slate-500'
+/** Accordion esclusivo: una sola sezione principale aperta (HTML `details name`). */
+const IMP_ACC_NAME = 'manifestazione-impostazioni-acc'
+const impSaveBtn =
+  'pma-theme-skip inline-flex min-h-[var(--pma-touch-min)] items-center justify-center rounded-full border border-transparent px-5 py-2 text-xs font-bold uppercase tracking-wide text-white shadow-md transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:pointer-events-none disabled:opacity-45'
+
 /**
  * IMP_GENERALI — Prestazioni/farmaci su textarea; tipo evento a chip; dettaglio + EO su textarea.
  * Salvataggio: liste + `tipo_evento`, `dettaglio_evento`, `dettaglio_eo_rapido`, `dettaglio_eo_rapido_default` a root.
@@ -106,6 +137,12 @@ export function ManifestazioneImpostazioniPage() {
   const { bumpSync } = useSyncLive()
   const isReadOnlyManifestazione = user ? !manifestazioneImpostazioniAllows(user.rank, 'UPDATE') : true
 
+  const {
+    items: pmaConsumatiList,
+    loading: pmaConsumatiLoading,
+    error: pmaConsumatiError,
+  } = usePmaListForManifestazione(manifestazioneId.trim() || undefined)
+
   const [prestazioniDraft, setPrestazioniDraft] = useState('')
   const [farmaciDraft, setFarmaciDraft] = useState('')
   const [tipoEvento, setTipoEvento] = useState<string[]>([])
@@ -116,13 +153,13 @@ export function ManifestazioneImpostazioniPage() {
   const [consensoPrivacyDraft, setConsensoPrivacyDraft] = useState('')
   const [rifiutoInvioPsDraft, setRifiutoInvioPsDraft] = useState('')
   const [presetDimissioneDraft, setPresetDimissioneDraft] = useState<PresetDimissioneVoce[]>([])
-  const [openAcc, setOpenAcc] = useState<Record<string, boolean>>({})
+  const [presetFarmaciDraft, setPresetFarmaciDraft] = useState<PresetFarmaciPack[]>([])
 
   const [partecipantiElencoCount, setPartecipantiElencoCount] = useState(0)
   const [partExcelBusy, setPartExcelBusy] = useState(false)
 
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [savingSection, setSavingSection] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
 
@@ -186,6 +223,7 @@ export function ManifestazioneImpostazioniPage() {
         setConsensoPrivacyDraft(typeof imp.consenso_privacy === 'string' ? imp.consenso_privacy : '')
         setRifiutoInvioPsDraft(typeof imp.rifiuto_invio_ps === 'string' ? imp.rifiuto_invio_ps : '')
         setPresetDimissioneDraft(parsePresetDimissioneFromFirestore(imp.preset_dimissione))
+        setPresetFarmaciDraft(parsePresetFarmaciFromFirestore(imp.preset_farmaci))
 
         const rawPe = imp.partecipanti_elenco
         setPartecipantiElencoCount(Array.isArray(rawPe) ? rawPe.length : 0)
@@ -214,72 +252,119 @@ export function ManifestazioneImpostazioniPage() {
     })
   }, [])
 
-  const salva = useCallback(async () => {
-    if (isReadOnlyManifestazione) return
+  const runSectionSave = useCallback(
+    async (sectionKey: string, exec: () => Promise<void>) => {
+      if (isReadOnlyManifestazione) return
+      setSavingSection(sectionKey)
+      setError(null)
+      setSaved(null)
+      try {
+        await exec()
+        setSaved('Salvataggio completato.')
+        bumpSync()
+        window.setTimeout(() => setSaved(null), 5000)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Salvataggio non riuscito.')
+      } finally {
+        setSavingSection(null)
+      }
+    },
+    [isReadOnlyManifestazione, bumpSync],
+  )
+
+  const salvaPrestazioni = useCallback(async () => {
     if (!db || !manifestazioneId) return
-    setSaving(true)
-    setError(null)
-    setSaved(null)
-    try {
-      const ref = doc(db, 'manifestazioni', manifestazioneId)
-      const detFiltered: Record<string, string[]> = {}
-      for (const t of tipoEvento) {
-        detFiltered[t] = sortStringsIt(parseLinesToValues(dettaglioDraft[t] ?? ''))
-      }
-      const eoPayload: Record<string, string[]> = {}
-      for (const k of EO_CLINICAL_TABS) {
-        eoPayload[k] = parseLinesToValues(eoDraft[k] ?? '')
-      }
-      const defaultPrim = firstEoRapidoDefaultFromDrafts(eoDraft)
-
-      const prestazioniLista = listFromMultilineText(prestazioniDraft)
-      const farmaciLista = listFromMultilineText(farmaciDraft)
-      const presetPayload = presetDimissioneDraft
-        .map((row) => ({ titolo: row.titolo.trim(), testo: row.testo }))
-        .filter((row) => row.titolo || row.testo.trim())
-
-      await updateDoc(ref, {
+    const ref = doc(db, 'manifestazioni', manifestazioneId)
+    const prestazioniLista = listFromMultilineText(prestazioniDraft)
+    await runSectionSave('prestazioni', () =>
+      updateDoc(ref, {
         prestazioni_lista: prestazioniLista,
-        farmaci_lista: farmaciLista,
-        tipo_evento: sortStringsIt(tipoEvento),
-        dettaglio_evento: sortRecordKeysAndValuesIt(detFiltered),
-        dettaglio_eo_rapido: eoPayload,
         'impostazioni.prestazioni_imp': prestazioniLista,
+      }),
+    )
+  }, [manifestazioneId, prestazioniDraft, runSectionSave])
+
+  const salvaFarmaci = useCallback(async () => {
+    if (!db || !manifestazioneId) return
+    const ref = doc(db, 'manifestazioni', manifestazioneId)
+    const farmaciLista = listFromMultilineText(farmaciDraft)
+    await runSectionSave('farmaci', () =>
+      updateDoc(ref, {
+        farmaci_lista: farmaciLista,
         'impostazioni.farmaci_imp': farmaciLista,
+      }),
+    )
+  }, [manifestazioneId, farmaciDraft, runSectionSave])
+
+  const salvaTipoEvento = useCallback(async () => {
+    if (!db || !manifestazioneId) return
+    const ref = doc(db, 'manifestazioni', manifestazioneId)
+    await runSectionSave('tipo_evento', () =>
+      updateDoc(ref, { tipo_evento: sortStringsIt(tipoEvento) }),
+    )
+  }, [manifestazioneId, tipoEvento, runSectionSave])
+
+  const salvaDettaglioTipo = useCallback(
+    async (tipo: string) => {
+      if (!db || !manifestazioneId) return
+      const ref = doc(db, 'manifestazioni', manifestazioneId)
+      const key = `dettaglio_evento.${tipo}`
+      await runSectionSave(`dettaglio_${tipo}`, () =>
+        updateDoc(ref, { [key]: listFromMultilineText(dettaglioDraft[tipo] ?? '') }),
+      )
+    },
+    [manifestazioneId, dettaglioDraft, runSectionSave],
+  )
+
+  const salvaEoTab = useCallback(
+    async (tab: EoTabKey) => {
+      if (!db || !manifestazioneId) return
+      const ref = doc(db, 'manifestazioni', manifestazioneId)
+      const lines = parseLinesToValues(eoDraft[tab] ?? '')
+      const defaultPrim = firstEoRapidoDefaultFromDrafts(eoDraft)
+      await runSectionSave(`eo_${tab}`, () =>
+        updateDoc(ref, {
+          [`dettaglio_eo_rapido.${tab}`]: lines,
+          ...(defaultPrim
+            ? { dettaglio_eo_rapido_default: defaultPrim }
+            : { dettaglio_eo_rapido_default: deleteField() }),
+        }),
+      )
+    },
+    [manifestazioneId, eoDraft, runSectionSave],
+  )
+
+  const salvaPresetDimissione = useCallback(async () => {
+    if (!db || !manifestazioneId) return
+    const ref = doc(db, 'manifestazioni', manifestazioneId)
+    const presetPayload = presetDimissioneDraft
+      .map((row) => ({ titolo: row.titolo.trim(), testo: row.testo }))
+      .filter((row) => row.titolo || row.testo.trim())
+    await runSectionSave('preset_dimissione', () =>
+      updateDoc(ref, { 'impostazioni.preset_dimissione': presetPayload }),
+    )
+  }, [manifestazioneId, presetDimissioneDraft, runSectionSave])
+
+  const salvaPresetFarmaci = useCallback(async () => {
+    if (!db || !manifestazioneId) return
+    const ref = doc(db, 'manifestazioni', manifestazioneId)
+    const payload = packPresetFarmaciForFirestore(presetFarmaciDraft)
+    await runSectionSave('preset_farmaci', () =>
+      updateDoc(ref, { 'impostazioni.preset_farmaci': payload }),
+    )
+  }, [manifestazioneId, presetFarmaciDraft, runSectionSave])
+
+  const salvaConsensi = useCallback(async () => {
+    if (!db || !manifestazioneId) return
+    const ref = doc(db, 'manifestazioni', manifestazioneId)
+    await runSectionSave('consensi', () =>
+      updateDoc(ref, {
         'impostazioni.consenso_generico_cure': consensoGenericoDraft,
         'impostazioni.consenso_privacy': consensoPrivacyDraft,
         'impostazioni.rifiuto_invio_ps': rifiutoInvioPsDraft,
-        'impostazioni.preset_dimissione': presetPayload,
-        ...(defaultPrim
-          ? { dettaglio_eo_rapido_default: defaultPrim }
-          : { dettaglio_eo_rapido_default: deleteField() }),
-      })
-      setSaved('Salvataggio completato.')
-      bumpSync()
-      window.setTimeout(() => setSaved(null), 5000)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Salvataggio non riuscito.')
-    } finally {
-      setSaving(false)
-    }
-  }, [
-    isReadOnlyManifestazione,
-    manifestazioneId,
-    prestazioniDraft,
-    farmaciDraft,
-    tipoEvento,
-    dettaglioDraft,
-    eoDraft,
-    consensoGenericoDraft,
-    consensoPrivacyDraft,
-    rifiutoInvioPsDraft,
-    presetDimissioneDraft,
-    bumpSync,
-  ])
-
-  const toggleAcc = (tipo: string) => {
-    setOpenAcc((o) => ({ ...o, [tipo]: !o[tipo] }))
-  }
+      }),
+    )
+  }, [manifestazioneId, consensoGenericoDraft, consensoPrivacyDraft, rifiutoInvioPsDraft, runSectionSave])
 
   const onPartecipantiExcel = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
@@ -325,72 +410,11 @@ export function ManifestazioneImpostazioniPage() {
     }
   }, [db, manifestazioneId, isReadOnlyManifestazione, bumpSync])
 
-  useEffect(() => {
-    setOpenAcc((prev) => {
-      const next = { ...prev }
-      const prevKeys = new Set(Object.keys(next))
-      if (tipoEvento.length && tipoEvento.every((t) => !prevKeys.has(t))) {
-        next[tipoEvento[0]] = true
-      }
-      for (const k of Object.keys(next)) {
-        if (!tipoEvento.includes(k)) delete next[k]
-      }
-      return next
-    })
-  }, [tipoEvento])
-
   return (
     <div className="pma-dashboard mx-auto w-full max-w-[1920px] pb-12">
       <OperativePageGrid
         main={
           <>
-            <header className="mb-6 overflow-hidden rounded-lg border border-[#e2e8f0] bg-white shadow-sm">
-              <div className="pma-bar flex-col items-start gap-3 sm:flex-row sm:items-center">
-                <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9090b8]">
-                    Manifestazione
-                  </div>
-                  <h1 className="pma-bar__id mt-0.5 text-lg font-semibold leading-tight">
-                    Impostazioni manifestazione
-                    {isReadOnlyManifestazione ? (
-                      <span className="ml-2 text-sm font-normal text-[#a8a8c8]">(sola lettura)</span>
-                    ) : null}
-                  </h1>
-                  <p className="mt-1 text-xs text-[#a8a8c8]">
-                    Documento: manifestazioni/{manifestazioneId || '—'}
-                  </p>
-                </div>
-                <div className="pma-bar__right flex w-full flex-col gap-2 sm:w-auto sm:items-end">
-                  <Link
-                    to={`/manifestazione/${encodeURIComponent(manifestazioneId)}`}
-                    className={`${opToolbarBtnSm} inline-flex justify-center border-slate-600 bg-slate-800 no-underline hover:bg-slate-700`}
-                  >
-                    Torna alla dashboard
-                  </Link>
-                  {!isReadOnlyManifestazione ? (
-                    <button
-                      type="button"
-                      disabled={saving || !manifestazioneId}
-                      onClick={() => void salva()}
-                      className={`${opPrimaryBtn} inline-flex items-center justify-center gap-2`}
-                    >
-                      {saving ? (
-                        <>
-                          <span
-                            className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
-                            aria-hidden
-                          />
-                          <span>Salvataggio…</span>
-                        </>
-                      ) : (
-                        'Salva impostazioni'
-                      )}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </header>
-
             {loading ? (
         <div className="flex items-center gap-2 text-sm text-slate-600">
           <span
@@ -416,110 +440,72 @@ export function ManifestazioneImpostazioniPage() {
       ) : null}
 
       {!loading ? (
-        <div className="space-y-10">
-          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
-            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Liste cliniche</h2>
-            <div className="mt-4 space-y-8">
+        <div className="space-y-4">
+          <details name={IMP_ACC_NAME} className={IMP_DETAILS}>
+            <summary className={IMP_SUMMARY}>
+              <span>Evento</span>
+              <span
+                className="shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180"
+                aria-hidden
+              >
+                ▼
+              </span>
+            </summary>
+            <div className={`${IMP_PANEL} space-y-10`}>
               <div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-slate-800">Elenco prestazioni</span>
-                  <button
-                    type="button"
-                    disabled={isReadOnlyManifestazione}
-                    onClick={() => setPrestazioniDraft((t) => sortLinesText(t))}
-                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium uppercase text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    Ordina Alfabeticamente
-                  </button>
-                </div>
-                <p className="mt-1 text-xs text-slate-500">
-                  Campi Firestore: <code className="rounded bg-slate-100 px-1">prestazioni_lista</code>,{' '}
-                  <code className="rounded bg-slate-100 px-1">impostazioni.prestazioni_imp</code>. Un valore
-                  per riga.
+                <h3 className={IMP_H3}>Tipo evento</h3>
+                <p className="mt-2 text-xs text-slate-500">
+                  Evento lesivo selezionabile in scheda (es. trauma, caduta). Campo Firestore:{' '}
+                  <code className="rounded bg-slate-100 px-1">tipo_evento</code>.
                 </p>
-                <textarea
-                  value={prestazioniDraft}
-                  onChange={(e) => setPrestazioniDraft(e.target.value)}
-                  disabled={isReadOnlyManifestazione}
-                  rows={10}
-                  spellCheck={false}
-                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
-                  aria-label="Elenco prestazioni, un valore per riga"
-                />
+                <div className="mt-3">
+                  <ChipTagField
+                    tags={tipoEvento}
+                    onChange={setTipoEventoSync}
+                    disabled={isReadOnlyManifestazione}
+                    placeholder="es. trauma, contusione… poi Invio"
+                  />
+                </div>
+                {!isReadOnlyManifestazione ? (
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      disabled={Boolean(savingSection) || !manifestazioneId}
+                      onClick={() => void salvaTipoEvento()}
+                      className={`${impSaveBtn} bg-sky-600 hover:bg-sky-500 focus-visible:ring-sky-300`}
+                    >
+                      {savingSection === 'tipo_evento' ? 'Salvataggio…' : 'Salva tipo evento'}
+                    </button>
+                  </div>
+                ) : null}
               </div>
               <div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-slate-800">Elenco farmaci</span>
-                  <button
-                    type="button"
-                    disabled={isReadOnlyManifestazione}
-                    onClick={() => setFarmaciDraft((t) => sortLinesText(t))}
-                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium uppercase text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    Ordina Alfabeticamente
-                  </button>
-                </div>
-                <p className="mt-1 text-xs text-slate-500">
-                  Campi Firestore: <code className="rounded bg-slate-100 px-1">farmaci_lista</code>,{' '}
-                  <code className="rounded bg-slate-100 px-1">impostazioni.farmaci_imp</code>. Un valore per
-                  riga.
+                <h3 className={IMP_H3}>Dettaglio evento per tipo</h3>
+                <p className="mt-2 text-xs text-slate-500">
+                  Una sezione per ogni tipo. Un valore per riga (andata a capo). Campo:{' '}
+                  <code className="rounded bg-slate-100 px-1">dettaglio_evento</code>. Al salvataggio le righe di ogni
+                  tipo sono ordinate alfabeticamente (come richiesto per questo campo).
                 </p>
-                <textarea
-                  value={farmaciDraft}
-                  onChange={(e) => setFarmaciDraft(e.target.value)}
-                  disabled={isReadOnlyManifestazione}
-                  rows={10}
-                  spellCheck={false}
-                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
-                  aria-label="Elenco farmaci, un valore per riga"
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
-            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Tipo evento</h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Evento lesivo selezionabile in scheda (es. trauma, caduta). Campo Firestore:{' '}
-              <code className="rounded bg-slate-100 px-1">tipo_evento</code>.
-            </p>
-            <div className="mt-3">
-              <ChipTagField
-                tags={tipoEvento}
-                onChange={setTipoEventoSync}
-                disabled={isReadOnlyManifestazione}
-                placeholder="es. trauma, contusione… poi Invio"
-              />
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
-            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-              Dettaglio evento per tipo
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Una sezione per ogni tipo. Un valore per riga (andata a capo). Campo:{' '}
-              <code className="rounded bg-slate-100 px-1">dettaglio_evento</code>. Al salvataggio le righe di ogni
-              tipo sono ordinate alfabeticamente (come richiesto per questo campo).
-            </p>
-            {tipoEvento.length === 0 ? (
-              <p className="mt-4 text-sm text-slate-500">Aggiungi almeno un tipo evento per configurare i dettagli.</p>
-            ) : (
-              <div className="mt-4 space-y-2">
-                {tipoEvento.map((tipo) => {
-                  const open = Boolean(openAcc[tipo])
-                  return (
-                    <div key={tipo} className="overflow-hidden rounded-lg border border-[#e2e8f0]">
-                      <button
-                        type="button"
-                        onClick={() => toggleAcc(tipo)}
-                        className="flex w-full items-center justify-between gap-2 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-900 hover:bg-slate-100"
-                        aria-expanded={open}
+                {tipoEvento.length === 0 ? (
+                  <p className="mt-4 text-sm text-slate-500">
+                    Aggiungi almeno un tipo evento per configurare i dettagli.
+                  </p>
+                ) : (
+                  <div className="mt-4 space-y-2">
+                    {tipoEvento.map((tipo) => (
+                      <details
+                        key={tipo}
+                        className="group overflow-hidden rounded-lg border border-[#e2e8f0] bg-white [&_summary::-webkit-details-marker]:hidden"
                       >
-                        <span>{tipo}</span>
-                        <span className="text-slate-500">{open ? '▼' : '▶'}</span>
-                      </button>
-                      {open ? (
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-900 hover:bg-slate-100">
+                          <span>{tipo}</span>
+                          <span
+                            className="text-slate-400 transition-transform duration-200 group-open:rotate-90"
+                            aria-hidden
+                          >
+                            ▶
+                          </span>
+                        </summary>
                         <div className="border-t border-slate-100 p-4">
                           <label className="block text-xs font-medium text-slate-600">
                             Valori (uno per riga)
@@ -534,118 +520,313 @@ export function ManifestazioneImpostazioniPage() {
                               spellCheck={false}
                             />
                           </label>
+                          {!isReadOnlyManifestazione ? (
+                            <div className="mt-3">
+                              <button
+                                type="button"
+                                disabled={Boolean(savingSection) || !manifestazioneId}
+                                onClick={() => void salvaDettaglioTipo(tipo)}
+                                className={`${impSaveBtn} bg-indigo-600 hover:bg-indigo-500 focus-visible:ring-indigo-300`}
+                              >
+                                {savingSection === `dettaglio_${tipo}`
+                                  ? 'Salvataggio…'
+                                  : `Salva dettaglio (${tipo})`}
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
-                      ) : null}
-                    </div>
-                  )
-                })}
+                      </details>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </section>
+            </div>
+          </details>
 
-          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
-            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-              Dettaglio EO rapido (tab clinici)
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Un valore per riga; l&apos;ordine delle righe è quello usato in cartella (non alfabetico). La prima
-              riga non vuota seguendo le tab da GENERALE in poi definisce il default in cartella (
-              <code className="rounded bg-slate-100 px-1">dettaglio_eo_rapido_default</code>). Campo liste:{' '}
-              <code className="rounded bg-slate-100 px-1">dettaglio_eo_rapido</code>.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-1 border-b border-slate-200 pb-2">
-              {EO_CLINICAL_TABS.map((tab) => {
-                const sel = eoActiveTab === tab
-                return (
+          <details name={IMP_ACC_NAME} className={IMP_DETAILS}>
+            <summary className={IMP_SUMMARY}>
+              <span>Cartella clinica</span>
+              <span
+                className="shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180"
+                aria-hidden
+              >
+                ▼
+              </span>
+            </summary>
+            <div className={`${IMP_PANEL} space-y-10`}>
+              <div>
+                <h3 className={IMP_H3}>Elenco prestazioni</h3>
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                   <button
-                    key={tab}
                     type="button"
-                    onClick={() => setEoActiveTab(tab)}
-                    className={
-                      sel
-                        ? 'rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold uppercase text-white'
-                        : 'rounded-md px-3 py-1.5 text-xs font-medium uppercase text-slate-600 hover:bg-slate-100'
-                    }
+                    disabled={isReadOnlyManifestazione}
+                    onClick={() => setPrestazioniDraft((t) => sortLinesText(t))}
+                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium uppercase text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
                   >
-                    {tab}
+                    Ordina Alfabeticamente
                   </button>
-                )
-              })}
-            </div>
-            <div className="mt-4">
-              <label className="block text-xs font-medium text-slate-600">
-                Valori per {eoActiveTab} (uno per riga)
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Campi Firestore: <code className="rounded bg-slate-100 px-1">prestazioni_lista</code>,{' '}
+                  <code className="rounded bg-slate-100 px-1">impostazioni.prestazioni_imp</code>. Un valore per
+                  riga.
+                </p>
                 <textarea
-                  value={eoDraft[eoActiveTab] ?? ''}
-                  onChange={(e) => setEoDraft((prev) => ({ ...prev, [eoActiveTab]: e.target.value }))}
+                  value={prestazioniDraft}
+                  onChange={(e) => setPrestazioniDraft(e.target.value)}
                   disabled={isReadOnlyManifestazione}
-                  rows={8}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm disabled:bg-slate-50"
+                  rows={10}
                   spellCheck={false}
+                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
+                  aria-label="Elenco prestazioni, un valore per riga"
                 />
-              </label>
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
-            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Preset dimissione</h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Il medico può importare uno o più testi nelle <strong className="text-slate-800">note di dimissione</strong>{' '}
-              dalla scheda. Campo Firestore:{' '}
-              <code className="rounded bg-slate-100 px-1">impostazioni.preset_dimissione</code> (array di oggetti{' '}
-              <code className="rounded bg-slate-100 px-1">titolo</code>, <code className="rounded bg-slate-100 px-1">testo</code>
-              ).
-            </p>
-            <div className="mt-4 space-y-4">
-              {presetDimissioneDraft.map((row, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-lg border border-slate-200 bg-slate-50/60 p-4 shadow-sm"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <label className="block min-w-[12rem] flex-1 text-xs font-medium text-slate-600">
-                      Titolo (pulsante in scheda)
-                      <input
-                        type="text"
-                        value={row.titolo}
-                        onChange={(e) =>
-                          setPresetDimissioneDraft((prev) =>
-                            prev.map((r, i) => (i === idx ? { ...r, titolo: e.target.value } : r)),
-                          )
-                        }
-                        disabled={isReadOnlyManifestazione}
-                        className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-50"
-                        placeholder="es. Dimissione standard"
-                      />
-                    </label>
+                {!isReadOnlyManifestazione ? (
+                  <div className="mt-3">
                     <button
                       type="button"
-                      disabled={isReadOnlyManifestazione}
-                      onClick={() =>
-                        setPresetDimissioneDraft((prev) => prev.filter((_, i) => i !== idx))
-                      }
-                      className={`${opToolbarBtnSm} text-red-800`}
+                      disabled={Boolean(savingSection) || !manifestazioneId}
+                      onClick={() => void salvaPrestazioni()}
+                      className={`${impSaveBtn} bg-emerald-600 hover:bg-emerald-500 focus-visible:ring-emerald-300`}
                     >
-                      Rimuovi
+                      {savingSection === 'prestazioni' ? 'Salvataggio…' : 'Salva prestazioni'}
                     </button>
                   </div>
-                  <label className="mt-3 block text-xs font-medium text-slate-600">
-                    Testo da appendere alle note
+                ) : null}
+              </div>
+              <div>
+                <h3 className={IMP_H3}>Elenco farmaci</h3>
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    disabled={isReadOnlyManifestazione}
+                    onClick={() => setFarmaciDraft((t) => sortLinesText(t))}
+                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium uppercase text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Ordina Alfabeticamente
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Campi Firestore: <code className="rounded bg-slate-100 px-1">farmaci_lista</code>,{' '}
+                  <code className="rounded bg-slate-100 px-1">impostazioni.farmaci_imp</code>. Un valore per riga.
+                </p>
+                <textarea
+                  value={farmaciDraft}
+                  onChange={(e) => setFarmaciDraft(e.target.value)}
+                  disabled={isReadOnlyManifestazione}
+                  rows={10}
+                  spellCheck={false}
+                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
+                  aria-label="Elenco farmaci, un valore per riga"
+                />
+                {!isReadOnlyManifestazione ? (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      disabled={Boolean(savingSection) || !manifestazioneId}
+                      onClick={() => void salvaFarmaci()}
+                      className={`${impSaveBtn} bg-teal-600 hover:bg-teal-500 focus-visible:ring-teal-300`}
+                    >
+                      {savingSection === 'farmaci' ? 'Salvataggio…' : 'Salva farmaci'}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <div>
+                <h3 className={IMP_H3}>Dettaglio EO rapido (tab clinici)</h3>
+                <p className="mt-2 text-xs text-slate-500">
+                  Un valore per riga; l&apos;ordine delle righe è quello usato in cartella (non alfabetico). La prima
+                  riga non vuota seguendo le tab da GENERALE in poi definisce il default in cartella (
+                  <code className="rounded bg-slate-100 px-1">dettaglio_eo_rapido_default</code>). Campo liste:{' '}
+                  <code className="rounded bg-slate-100 px-1">dettaglio_eo_rapido</code>.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-1 border-b border-slate-200 pb-2">
+                  {EO_CLINICAL_TABS.map((tab) => {
+                    const sel = eoActiveTab === tab
+                    return (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setEoActiveTab(tab)}
+                        className={
+                          sel
+                            ? 'rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold uppercase text-white'
+                            : 'rounded-md px-3 py-1.5 text-xs font-medium uppercase text-slate-600 hover:bg-slate-100'
+                        }
+                      >
+                        {tab}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="mt-4">
+                  <label className="block text-xs font-medium text-slate-600">
+                    Valori per {eoActiveTab} (uno per riga)
                     <textarea
-                      value={row.testo}
-                      onChange={(e) =>
-                        setPresetDimissioneDraft((prev) =>
-                          prev.map((r, i) => (i === idx ? { ...r, testo: e.target.value } : r)),
-                        )
-                      }
+                      value={eoDraft[eoActiveTab] ?? ''}
+                      onChange={(e) => setEoDraft((prev) => ({ ...prev, [eoActiveTab]: e.target.value }))}
                       disabled={isReadOnlyManifestazione}
-                      rows={5}
+                      rows={8}
+                      className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm disabled:bg-slate-50"
                       spellCheck={false}
-                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-50"
                     />
                   </label>
+                  {!isReadOnlyManifestazione ? (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        disabled={Boolean(savingSection) || !manifestazioneId}
+                        onClick={() => void salvaEoTab(eoActiveTab)}
+                        className={`${impSaveBtn} bg-violet-600 hover:bg-violet-500 focus-visible:ring-violet-300`}
+                      >
+                        {savingSection === `eo_${eoActiveTab}` ? 'Salvataggio…' : `Salva EO (${eoActiveTab})`}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
-              ))}
+              </div>
+            </div>
+          </details>
+
+          <details name={IMP_ACC_NAME} className={IMP_DETAILS}>
+            <summary className={IMP_SUMMARY}>
+              <span>Consumati</span>
+              <span
+                className="shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180"
+                aria-hidden
+              >
+                ▼
+              </span>
+            </summary>
+            <div className={IMP_PANEL}>
+              <p className="text-xs text-slate-500">
+                Per ogni PMA della manifestazione: farmaci registrati dalle schede paziente su{' '}
+                <code className="rounded bg-slate-100 px-1">pma/{'{id}'}.impostazioni_pma.elenco_farmaci_usati</code>{' '}
+                (<code className="rounded bg-slate-100 px-1">arrayUnion</code>). Se assente, si legge anche il campo
+                legacy <code className="rounded bg-slate-100 px-1">farmaci_usati</code> in radice sullo stesso
+                documento.
+              </p>
+              {manifestazioneId && pmaConsumatiError ? (
+                <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+                  {pmaConsumatiError}
+                </div>
+              ) : null}
+              {manifestazioneId && !pmaConsumatiError && pmaConsumatiLoading ? (
+                <p className="mt-4 text-sm text-slate-600">Caricamento elenco PMA…</p>
+              ) : null}
+              {manifestazioneId && !pmaConsumatiError && !pmaConsumatiLoading && pmaConsumatiList.length === 0 ? (
+                <p className="mt-4 text-sm text-slate-600">Nessun PMA collegato a questa manifestazione.</p>
+              ) : null}
+              {manifestazioneId && !pmaConsumatiError && !pmaConsumatiLoading && pmaConsumatiList.length > 0 ? (
+                <div className="mt-6 space-y-8">
+                  {pmaConsumatiList.map((pma) => {
+                    const farmaciUsati = pma.impostazioni_pma.elenco_farmaci_usati ?? []
+                    return (
+                      <div key={pma.id}>
+                        <h3 className="text-sm font-semibold text-slate-900">{pma.nome}</h3>
+                        <p className="mt-0.5 font-mono text-xs text-slate-500">{pma.id}</p>
+                        {pma.luogo && pma.luogo !== '—' ? (
+                          <p className="mt-1 text-xs text-slate-500">{pma.luogo}</p>
+                        ) : null}
+                        <div className="mt-3 border-t border-slate-100 pt-3">
+                          {farmaciUsati.length === 0 ? (
+                            <p className="text-sm text-slate-600">Nessun farmaco registrato ancora.</p>
+                          ) : (
+                            <ul className="list-inside list-disc text-sm font-medium text-slate-900">
+                              {farmaciUsati.map((f) => (
+                                <li key={`${pma.id}:${f}`}>{f}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
+          </details>
+
+          <details name={IMP_ACC_NAME} className={IMP_DETAILS}>
+            <summary className={IMP_SUMMARY}>
+              <span>Preset</span>
+              <span
+                className="shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180"
+                aria-hidden
+              >
+                ▼
+              </span>
+            </summary>
+            <div className={`${IMP_PANEL} space-y-10`}>
+              <div>
+                <h3 className={IMP_H3}>Preset dimissioni</h3>
+                <p className="mt-2 text-xs text-slate-500">
+                  Il medico può importare uno o più testi nelle{' '}
+                  <strong className="text-slate-800">note di dimissione</strong> dalla scheda. Campo Firestore:{' '}
+                  <code className="rounded bg-slate-100 px-1">impostazioni.preset_dimissione</code> (array di oggetti{' '}
+                  <code className="rounded bg-slate-100 px-1">titolo</code>,{' '}
+                  <code className="rounded bg-slate-100 px-1">testo</code>).
+                </p>
+                <div className="mt-4 space-y-4">
+                  {presetDimissioneDraft.map((row, idx) => (
+                    <details
+                      key={idx}
+                      className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50/60 shadow-sm [&_summary::-webkit-details-marker]:hidden"
+                    >
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-2.5 text-left text-sm font-semibold text-slate-900 hover:bg-slate-100/80">
+                        <span className="truncate">{row.titolo.trim() || `Preset ${idx + 1}`}</span>
+                        <span
+                          className="shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180"
+                          aria-hidden
+                        >
+                          ▼
+                        </span>
+                      </summary>
+                      <div className="border-t border-slate-200 bg-white p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label className="block min-w-[12rem] flex-1 text-xs font-medium text-slate-600">
+                            Titolo (pulsante in scheda)
+                            <input
+                              type="text"
+                              value={row.titolo}
+                              onChange={(e) =>
+                                setPresetDimissioneDraft((prev) =>
+                                  prev.map((r, i) => (i === idx ? { ...r, titolo: e.target.value } : r)),
+                                )
+                              }
+                              disabled={isReadOnlyManifestazione}
+                              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-50"
+                              placeholder="es. Dimissione standard"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            disabled={isReadOnlyManifestazione}
+                            onClick={() =>
+                              setPresetDimissioneDraft((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                            className={`${opToolbarBtnSm} text-red-800`}
+                          >
+                            Rimuovi
+                          </button>
+                        </div>
+                        <label className="mt-3 block text-xs font-medium text-slate-600">
+                          Testo da appendere alle note
+                          <textarea
+                            value={row.testo}
+                            onChange={(e) =>
+                              setPresetDimissioneDraft((prev) =>
+                                prev.map((r, i) => (i === idx ? { ...r, testo: e.target.value } : r)),
+                              )
+                            }
+                            disabled={isReadOnlyManifestazione}
+                            rows={5}
+                            spellCheck={false}
+                            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-50"
+                          />
+                        </label>
+                      </div>
+                    </details>
+                  ))}
               <button
                 type="button"
                 disabled={isReadOnlyManifestazione}
@@ -656,111 +837,347 @@ export function ManifestazioneImpostazioniPage() {
               >
                 Aggiungi preset
               </button>
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
-            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-              Elenco partecipanti (Excel)
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Primo foglio, colonne <strong className="text-slate-800">A–E</strong>: A = pettorale, B = nome, C =
-              cognome, D = data di nascita, E = telefono. Formati data: <code className="rounded bg-slate-100 px-1">gg/mm/aaaa</code>,{' '}
-              <code className="rounded bg-slate-100 px-1">aaaa-mm-gg</code> o cella data Excel. L&apos;elenco viene
-              salvato in{' '}
-              <code className="rounded bg-slate-100 px-1">impostazioni.partecipanti_elenco</code> e usato in scheda
-              paziente (ricerca accanto al pettorale).
-            </p>
-            <p className="mt-2 text-sm font-medium text-slate-800">
-              Righe caricate: <span className="tabular-nums">{partecipantiElencoCount}</span>
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <label
-                className={`inline-flex items-center gap-2 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-100 ${
-                  isReadOnlyManifestazione || partExcelBusy || !manifestazioneId
-                    ? 'cursor-not-allowed opacity-50'
-                    : 'cursor-pointer'
-                }`}
-              >
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                  className="sr-only"
-                  disabled={isReadOnlyManifestazione || partExcelBusy || !manifestazioneId}
-                  onChange={(ev) => void onPartecipantiExcel(ev)}
-                />
-                {partExcelBusy ? 'Lettura…' : 'Carica Excel'}
-              </label>
-              {!isReadOnlyManifestazione && partecipantiElencoCount > 0 ? (
-                <button
-                  type="button"
-                  disabled={partExcelBusy}
-                  onClick={() => void rimuoviElencoPartecipanti()}
-                  className={`${opToolbarBtnSm} border-red-200 text-red-800 hover:bg-red-50`}
+              {!isReadOnlyManifestazione ? (
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    disabled={Boolean(savingSection) || !manifestazioneId}
+                    onClick={() => void salvaPresetDimissione()}
+                    className={`${impSaveBtn} bg-amber-600 hover:bg-amber-500 focus-visible:ring-amber-300`}
+                  >
+                    {savingSection === 'preset_dimissione' ? 'Salvataggio…' : 'Salva preset dimissione'}
+                  </button>
+                </div>
+              ) : null}
+                </div>
+              </div>
+              <div>
+                <h3 className={IMP_H3}>Preset farmaci</h3>
+                <p className="mt-2 text-xs text-slate-500">
+                  In cartella clinica (farmaci) si possono importare uno o più preset: ogni preset ha un nome (es.{' '}
+                  <strong className="text-slate-800">NAUSEA</strong>) e un elenco di farmaci con nome, dose e via come
+                  in scheda. Campo Firestore:{' '}
+                  <code className="rounded bg-slate-100 px-1">impostazioni.preset_farmaci</code>.
+                </p>
+            <div className="mt-4 space-y-4">
+              {presetFarmaciDraft.map((pack, pIdx) => (
+                <details
+                  key={pIdx}
+                  className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50/60 shadow-sm [&_summary::-webkit-details-marker]:hidden"
                 >
-                  Rimuovi elenco
-                </button>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-2.5 text-left text-sm font-semibold text-slate-900 hover:bg-slate-100/80">
+                    <span className="truncate">{pack.nome.trim() || `Preset farmaci ${pIdx + 1}`}</span>
+                    <span
+                      className="shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180"
+                      aria-hidden
+                    >
+                      ▼
+                    </span>
+                  </summary>
+                  <div className="border-t border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="block min-w-[12rem] flex-1 text-xs font-medium text-slate-600">
+                      Nome preset
+                      <input
+                        type="text"
+                        value={pack.nome}
+                        onChange={(e) =>
+                          setPresetFarmaciDraft((prev) =>
+                            prev.map((pk, i) => (i === pIdx ? { ...pk, nome: e.target.value } : pk)),
+                          )
+                        }
+                        disabled={isReadOnlyManifestazione}
+                        className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-50"
+                        placeholder="es. NAUSEA"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={isReadOnlyManifestazione}
+                      onClick={() => setPresetFarmaciDraft((prev) => prev.filter((_, i) => i !== pIdx))}
+                      className={`${opToolbarBtnSm} text-red-800`}
+                    >
+                      Rimuovi preset
+                    </button>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {pack.farmaci.map((f, fi) => (
+                      <div
+                        key={fi}
+                        className="flex flex-wrap items-end gap-2 rounded-md border border-slate-200 bg-white p-2"
+                      >
+                        <label className="min-w-[8rem] flex-1 text-xs font-medium text-slate-600">
+                          Nome farmaco
+                          <input
+                            type="text"
+                            value={f.nome}
+                            onChange={(e) =>
+                              setPresetFarmaciDraft((prev) =>
+                                prev.map((pk, i) =>
+                                  i !== pIdx
+                                    ? pk
+                                    : {
+                                        ...pk,
+                                        farmaci: pk.farmaci.map((row, j) =>
+                                          j === fi ? { ...row, nome: e.target.value } : row,
+                                        ),
+                                      },
+                                ),
+                              )
+                            }
+                            disabled={isReadOnlyManifestazione}
+                            className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm disabled:bg-slate-50"
+                          />
+                        </label>
+                        <label className="min-w-[5rem] text-xs font-medium text-slate-600">
+                          Dose
+                          <input
+                            type="text"
+                            value={f.dose}
+                            onChange={(e) =>
+                              setPresetFarmaciDraft((prev) =>
+                                prev.map((pk, i) =>
+                                  i !== pIdx
+                                    ? pk
+                                    : {
+                                        ...pk,
+                                        farmaci: pk.farmaci.map((row, j) =>
+                                          j === fi ? { ...row, dose: e.target.value } : row,
+                                        ),
+                                      },
+                                ),
+                              )
+                            }
+                            disabled={isReadOnlyManifestazione}
+                            className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm disabled:bg-slate-50"
+                          />
+                        </label>
+                        <label className="min-w-[4rem] text-xs font-medium text-slate-600">
+                          Via
+                          <select
+                            value={f.via}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              if (!isFarmacoVia(v)) return
+                              setPresetFarmaciDraft((prev) =>
+                                prev.map((pk, i) =>
+                                  i !== pIdx
+                                    ? pk
+                                    : {
+                                        ...pk,
+                                        farmaci: pk.farmaci.map((row, j) =>
+                                          j === fi ? { ...row, via: v } : row,
+                                        ),
+                                      },
+                                ),
+                              )
+                            }}
+                            disabled={isReadOnlyManifestazione}
+                            className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm disabled:bg-slate-50"
+                          >
+                            {FARMACO_VIE.map((via) => (
+                              <option key={via} value={via}>
+                                {FARMACO_VIA_LABEL[via]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          disabled={isReadOnlyManifestazione}
+                          onClick={() =>
+                            setPresetFarmaciDraft((prev) =>
+                              prev.map((pk, i) =>
+                                i !== pIdx
+                                  ? pk
+                                  : { ...pk, farmaci: pk.farmaci.filter((_, j) => j !== fi) },
+                              ),
+                            )
+                          }
+                          className={`${opToolbarBtnSm} text-red-800`}
+                        >
+                          Rimuovi
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={isReadOnlyManifestazione}
+                      onClick={() =>
+                        setPresetFarmaciDraft((prev) =>
+                          prev.map((pk, i) =>
+                            i !== pIdx
+                              ? pk
+                              : {
+                                  ...pk,
+                                  farmaci: [...pk.farmaci, { nome: '', dose: '', via: 'EV' as FarmacoVia }],
+                                },
+                          ),
+                        )
+                      }
+                      className={opToolbarBtnSm}
+                    >
+                      Aggiungi farmaco al preset
+                    </button>
+                  </div>
+                  </div>
+                </details>
+              ))}
+              <button
+                type="button"
+                disabled={isReadOnlyManifestazione}
+                onClick={() =>
+                  setPresetFarmaciDraft((prev) => [
+                    ...prev,
+                    { nome: '', farmaci: [{ nome: '', dose: '', via: 'EV' }] },
+                  ])
+                }
+                className={opToolbarBtnSm}
+              >
+                Aggiungi preset farmaci
+              </button>
+              {!isReadOnlyManifestazione ? (
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    disabled={Boolean(savingSection) || !manifestazioneId}
+                    onClick={() => void salvaPresetFarmaci()}
+                    className={`${impSaveBtn} bg-orange-600 hover:bg-orange-500 focus-visible:ring-orange-300`}
+                  >
+                    {savingSection === 'preset_farmaci' ? 'Salvataggio…' : 'Salva preset farmaci'}
+                  </button>
+                </div>
               ) : null}
             </div>
-          </section>
-
-          <section className="rounded-lg border border-[#e2e8f0] bg-white px-6 py-6 sm:px-8">
-            <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-              Testi legali dimissione (in fondo alle impostazioni)
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Consensi sempre mostrati in scheda dopo le note (se compilati). Il testo &quot;Rifiuto invio in PS&quot; è
-              visibile solo se l&apos;esito dimissione è <strong className="text-slate-800">Rifiuta invio in PS</strong>.
-              Campi:{' '}
-              <code className="rounded bg-slate-100 px-1">impostazioni.consenso_generico_cure</code>,{' '}
-              <code className="rounded bg-slate-100 px-1">impostazioni.consenso_privacy</code>,{' '}
-              <code className="rounded bg-slate-100 px-1">impostazioni.rifiuto_invio_ps</code>.
-            </p>
-            <div className="mt-4 space-y-4">
-              <label className="block text-sm">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Consenso generico alle cure
-                </span>
-                <textarea
-                  value={consensoGenericoDraft}
-                  onChange={(e) => setConsensoGenericoDraft(e.target.value)}
-                  disabled={isReadOnlyManifestazione}
-                  rows={6}
-                  spellCheck={false}
-                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
-                  aria-label="Testo consenso generico alle cure"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Consenso privacy
-                </span>
-                <textarea
-                  value={consensoPrivacyDraft}
-                  onChange={(e) => setConsensoPrivacyDraft(e.target.value)}
-                  disabled={isReadOnlyManifestazione}
-                  rows={6}
-                  spellCheck={false}
-                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
-                  aria-label="Testo consenso privacy"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Rifiuto invio in PS
-                </span>
-                <textarea
-                  value={rifiutoInvioPsDraft}
-                  onChange={(e) => setRifiutoInvioPsDraft(e.target.value)}
-                  disabled={isReadOnlyManifestazione}
-                  rows={6}
-                  spellCheck={false}
-                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
-                  aria-label="Testo rifiuto invio in PS"
-                />
-              </label>
+              </div>
             </div>
-          </section>
+          </details>
+
+          <details name={IMP_ACC_NAME} className={IMP_DETAILS}>
+            <summary className={IMP_SUMMARY}>
+              <span>Testi</span>
+              <span
+                className="shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180"
+                aria-hidden
+              >
+                ▼
+              </span>
+            </summary>
+            <div className={IMP_PANEL}>
+              <p className="text-xs text-slate-500">
+                In scheda paziente, dopo le note, se compilati. Il testo &quot;Rifiuto 112&quot; (invio in PS) compare
+                solo con esito dimissione <strong className="text-slate-800">Rifiuta invio in PS</strong>. Campi:{' '}
+                <code className="rounded bg-slate-100 px-1">impostazioni.consenso_generico_cure</code>,{' '}
+                <code className="rounded bg-slate-100 px-1">impostazioni.consenso_privacy</code>,{' '}
+                <code className="rounded bg-slate-100 px-1">impostazioni.rifiuto_invio_ps</code>.
+              </p>
+              <div className="mt-4 space-y-4">
+                <label className="block text-sm">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Consenso</span>
+                  <textarea
+                    value={consensoGenericoDraft}
+                    onChange={(e) => setConsensoGenericoDraft(e.target.value)}
+                    disabled={isReadOnlyManifestazione}
+                    rows={6}
+                    spellCheck={false}
+                    className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
+                    aria-label="Consenso (testo generico alle cure)"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Privacy</span>
+                  <textarea
+                    value={consensoPrivacyDraft}
+                    onChange={(e) => setConsensoPrivacyDraft(e.target.value)}
+                    disabled={isReadOnlyManifestazione}
+                    rows={6}
+                    spellCheck={false}
+                    className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
+                    aria-label="Privacy"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Rifiuto 112</span>
+                  <textarea
+                    value={rifiutoInvioPsDraft}
+                    onChange={(e) => setRifiutoInvioPsDraft(e.target.value)}
+                    disabled={isReadOnlyManifestazione}
+                    rows={6}
+                    spellCheck={false}
+                    className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm leading-relaxed text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-50"
+                    aria-label="Rifiuto 112 (rifiuto invio in pronto soccorso)"
+                  />
+                </label>
+                {!isReadOnlyManifestazione ? (
+                  <div className="mt-2 border-t border-slate-100 pt-4">
+                    <button
+                      type="button"
+                      disabled={Boolean(savingSection) || !manifestazioneId}
+                      onClick={() => void salvaConsensi()}
+                      className={`${impSaveBtn} bg-rose-600 hover:bg-rose-500 focus-visible:ring-rose-300`}
+                    >
+                      {savingSection === 'consensi' ? 'Salvataggio…' : 'Salva testi'}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </details>
+
+          <details name={IMP_ACC_NAME} className={IMP_DETAILS}>
+            <summary className={IMP_SUMMARY}>
+              <span>Altro</span>
+              <span
+                className="shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180"
+                aria-hidden
+              >
+                ▼
+              </span>
+            </summary>
+            <div className={IMP_PANEL}>
+              <h3 className={IMP_H3}>Elenco partecipanti (Excel)</h3>
+              <p className="mt-2 text-xs text-slate-500">
+                Primo foglio, colonne <strong className="text-slate-800">A–E</strong>: A = pettorale, B = nome, C =
+                cognome, D = data di nascita, E = telefono. Formati data:{' '}
+                <code className="rounded bg-slate-100 px-1">gg/mm/aaaa</code>,{' '}
+                <code className="rounded bg-slate-100 px-1">aaaa-mm-gg</code> o cella data Excel. L&apos;elenco viene
+                salvato in{' '}
+                <code className="rounded bg-slate-100 px-1">impostazioni.partecipanti_elenco</code> e usato in scheda
+                paziente (ricerca accanto al pettorale).
+              </p>
+              <p className="mt-2 text-sm font-medium text-slate-800">
+                Righe caricate: <span className="tabular-nums">{partecipantiElencoCount}</span>
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <label
+                  className={`inline-flex items-center gap-2 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-100 ${
+                    isReadOnlyManifestazione || partExcelBusy || !manifestazioneId
+                      ? 'cursor-not-allowed opacity-50'
+                      : 'cursor-pointer'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                    className="sr-only"
+                    disabled={isReadOnlyManifestazione || partExcelBusy || !manifestazioneId}
+                    onChange={(ev) => void onPartecipantiExcel(ev)}
+                  />
+                  {partExcelBusy ? 'Lettura…' : 'Carica Excel'}
+                </label>
+                {!isReadOnlyManifestazione && partecipantiElencoCount > 0 ? (
+                  <button
+                    type="button"
+                    disabled={partExcelBusy}
+                    onClick={() => void rimuoviElencoPartecipanti()}
+                    className={`${opToolbarBtnSm} border-red-200 text-red-800 hover:bg-red-50`}
+                  >
+                    Rimuovi elenco
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </details>
 
         </div>
       ) : null}
@@ -771,22 +1188,17 @@ export function ManifestazioneImpostazioniPage() {
             <section className="rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-sm">
               <h2 className="text-lg font-bold text-slate-900">Guida rapida</h2>
               <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                Prestazioni e farmaci: una riga per voce; usa &quot;Ordina Alfabeticamente&quot; per pulire e
-                ordinare. Tipo evento = evento lesivo (es. trauma).{' '}
-                <strong className="text-slate-900">Dettaglio evento per tipo</strong>: al salvataggio righe
-                pulite, chiavi e valori ordinati alfabeticamente.{' '}
-                <strong className="text-slate-900">Dettaglio EO rapido</strong>: l&apos;ordine delle righe è
-                clinico — non viene mai riordinato alfabeticamente. Il primo valore EO non vuoto seguendo le tab
-                (GENERALE, poi le altre) definisce{' '}
-                <code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1 font-mono text-xs">
-                  dettaglio_eo_rapido_default
-                </code>
-                .{' '}
-                <code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1 font-mono text-xs">
-                  updateDoc
-                </code>{' '}
-                aggiorna solo i campi indicati. L&apos;Excel partecipanti si carica dalla sezione dedicata e non
-                richiede &quot;Salva impostazioni&quot;: viene scritto subito su Firestore.
+                Le sezioni <strong className="text-slate-900">Evento</strong> e{' '}
+                <strong className="text-slate-900">Cartella clinica</strong> sono aperte di default;{' '}
+                <strong className="text-slate-900">Consumati</strong>, <strong className="text-slate-900">Preset</strong>,{' '}
+                <strong className="text-slate-900">Testi</strong> e <strong className="text-slate-900">Altro</strong> sono
+                richiudibili (Consumati è solo lettura: farmaci usati per PMA). Ogni area configurabile ha
+                il proprio pulsante <strong className="text-slate-900">Salva</strong>: un solo{' '}
+                <code className="rounded border border-[#e2e8f0] bg-[#f8fafc] px-1 font-mono text-xs">updateDoc</code>{' '}
+                con i campi di quella sezione. Prestazioni e farmaci: una riga per voce; tipo evento e dettagli per tipo
+                separati; EO per tab clinico; preset dimissione e preset farmaci nello stesso blocco; testi legali in un
+                salvataggio. L&apos;Excel partecipanti è in <strong className="text-slate-900">Altro</strong> e viene
+                scritto su Firestore al caricamento.
               </p>
             </section>
             {isReadOnlyManifestazione ? (

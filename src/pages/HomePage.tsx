@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSyncLive } from '../context/SyncLiveContext'
@@ -7,7 +7,6 @@ import { useRankTheme } from '../hooks/useRankTheme'
 import { useManifestazioneDoc } from '../hooks/useManifestazioneDoc'
 import { usePmaDocNome, usePmaDocSnapshot } from '../hooks/usePmaDocNome'
 import { ManifestazioneCard } from '../components/home/ManifestazioneCard'
-import { NewManifestazioneModal } from '../components/home/NewManifestazioneModal'
 import { useManifestazioni } from '../hooks/useManifestazioni'
 import { opPrimaryBtn } from '../components/layout/operativeTokens'
 import { defaultRouteAfterLogin } from '../lib/postLoginRedirect'
@@ -16,8 +15,6 @@ export function HomePage() {
   const { user } = useAuth()
   const theme = useRankTheme()
   const { aperte, chiuse, loading, error } = useManifestazioni()
-  const [modalOpen, setModalOpen] = useState(false)
-  const [modalKey, setModalKey] = useState(0)
 
   const isSuperadmin = user?.rank === 'Superadmin'
   const isCentrale = user?.rank === 'Centrale'
@@ -53,26 +50,9 @@ export function HomePage() {
     <OperativePageGrid
       main={
     <div className="pma-dashboard space-y-8">
-      <div className="pma-bar flex-col items-start gap-2 sm:flex-row sm:items-center">
-        <div className="min-w-0 flex-1">
-          <div className="pma-bar__id text-base">Homepage</div>
-          <p className="mt-0.5 text-xs text-[#a8a8c8]">
-            Centro PMApp: manifestazioni e accesso rapido in base al tuo ruolo.
-          </p>
-        </div>
-        {isSuperadmin ? (
-          <button
-            type="button"
-            onClick={() => {
-              setModalKey((k) => k + 1)
-              setModalOpen(true)
-            }}
-            className={`${opPrimaryBtn} shrink-0 px-5`}
-          >
-            NUOVA MANIFESTAZIONE
-          </button>
-        ) : null}
-      </div>
+      <p className="max-w-2xl text-xs leading-snug text-slate-600">
+        Centro PMApp: manifestazioni e accesso rapido in base al tuo ruolo.
+      </p>
 
       {user && !isSuperadmin && isCentrale ? (
         <section
@@ -136,14 +116,10 @@ export function HomePage() {
         </section>
       ) : null}
 
-      <div className="pma-bar flex-col items-start gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="pma-bar__id text-base">Manifestazioni</div>
-          <p className="mt-0.5 text-xs text-[#a8a8c8]">
-            Eventi PMApp: stato in tempo reale. Le manifestazioni chiuse sono visibili solo al Superadmin.
-          </p>
-        </div>
-      </div>
+      <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Manifestazioni</h2>
+      <p className="mt-1 max-w-2xl text-xs text-slate-600">
+        Eventi PMApp: stato in tempo reale. Le manifestazioni chiuse sono visibili solo al Superadmin.
+      </p>
 
       {loading ? (
         <div className="flex flex-col items-center justify-center gap-3 py-20 text-slate-600">
@@ -206,12 +182,6 @@ export function HomePage() {
           ) : null}
         </>
       ) : null}
-
-      <NewManifestazioneModal
-        key={modalKey}
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-      />
     </div>
       }
       aside={

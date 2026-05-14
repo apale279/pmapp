@@ -3,14 +3,9 @@ export const FONT_UI =
   'font-[Inter,ui-sans-serif,system-ui,sans-serif] text-sm leading-normal antialiased'
 
 /**
- * Esclude il pulsante dallo stile chip globale (`pma-theme.css`):
- * menu app, overlay, pulsanti solo simbolo / icona.
+ * Escludi il pulsante dallo stile chip globale (`index.css`): usa la classe `pma-theme-skip`
+ * (menu, overlay, controlli che devono rispettare classi Tailwind proprie).
  */
-export const opNavBtn =
-  'pma-theme-skip flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-[#374151] transition-colors hover:bg-white hover:text-[#2563eb] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'
-
-export const opNavBtnActive =
-  'pma-theme-skip relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white text-[#2563eb] shadow-[inset_3px_0_0_0_#2563eb] hover:text-[#2563eb]'
 
 /** Stessa scala di `.pma-pill` (variabili tema); il CSS globale in index.css completa il look. */
 const opChipCore =

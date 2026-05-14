@@ -14,6 +14,7 @@ import { isDimissioneEsito } from '../types/dimissione'
 import type { Paziente } from '../types/paziente'
 import { readEoColumnArraysFromDoc, totalEoColumnSelections } from '../lib/eoPazienteFields'
 import {
+  isAllergieVerificaStato,
   isCodiceColorePaziente,
   isTipoPaziente,
   parsePazienteStatoFromFirestore,
@@ -147,9 +148,15 @@ function parsePaziente(id: string, d: Record<string, unknown>): Paziente {
       const email_tel = legacy.trim() !== '' ? legacy.trim() : `${email}${glue}${telefono}`.trim()
       return { email, telefono, email_tel }
     })(),
+    codice_fiscale: strOrEmpty(d.codice_fiscale)
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 16),
 
     apr: aprRaw === '' ? 'Nulla.' : aprRaw,
     allergie: allergieRaw === '' ? 'Nega.' : allergieRaw,
+    allergie_verifica: isAllergieVerificaStato(d.allergie_verifica) ? d.allergie_verifica : undefined,
     app: strOrEmpty(d.app),
     EO_GENERALE: eoCols.EO_GENERALE,
     EO_NEUROLOGICO: eoCols.EO_NEUROLOGICO,

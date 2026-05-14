@@ -7,6 +7,25 @@ import type {
   RivalutazioneVoce,
 } from './cartellaClinica'
 
+/** Verifica obbligatoria prima di modificare la cartella (Firestore `allergie_verifica`). */
+export type AllergieVerificaStato = 'si' | 'no' | 'non_noto'
+
+export function isAllergieVerificaStato(v: unknown): v is AllergieVerificaStato {
+  return v === 'si' || v === 'no' || v === 'non_noto'
+}
+
+export const ALLERGIE_VERIFICA_LABEL: Record<AllergieVerificaStato, string> = {
+  si: 'SI',
+  no: 'NO',
+  non_noto: 'NON NOTO',
+}
+
+/** Testo per UI e PDF (manca valore → trattino). */
+export function allergieVerificaDisplay(v: AllergieVerificaStato | null | undefined): string {
+  if (!v || !isAllergieVerificaStato(v)) return '—'
+  return ALLERGIE_VERIFICA_LABEL[v]
+}
+
 /** Sezione 1 — Tipo paziente (scelta rapida). */
 export type TipoPaziente = 'trasportato' | 'autopresentato'
 
@@ -63,10 +82,14 @@ export interface Paziente {
   telefono: string
   /** Legacy: combinato email/telefono (lettura migrazione). */
   email_tel: string
+  /** Codice fiscale (16 caratteri), es. da barcode tessera sanitaria. */
+  codice_fiscale: string
 
   /** Sezione 3 — Cartella clinica (valori sempre normalizzati dal parser). */
   apr: string
   allergie: string
+  /** Conferma operatore: il paziente ha allergie note? Obbligatorio prima di modificare la cartella. */
+  allergie_verifica?: AllergieVerificaStato | null
   app: string
   /** Esame obiettivo — opzioni rapide per area (Firestore root, `EO_*`). */
   EO_GENERALE: string[]

@@ -1,22 +1,31 @@
 import { Link } from 'react-router-dom'
+import { useLayoutEffect } from 'react'
 import { useRankTheme } from '../../hooks/useRankTheme'
 import { useSuperadminStats } from '../../hooks/useSuperadminStats'
+import { useOperativeChrome } from '../../context/OperativeChromeContext'
 
 export function AdminDashboardPage() {
   const theme = useRankTheme()
   const { totaleUtenti, eventiAttivi, loading, error } = useSuperadminStats()
+  const { setSlots, clearSlots } = useOperativeChrome()
+
+  useLayoutEffect(() => {
+    setSlots({
+      titleOverride: (
+        <h1 className="truncate text-xs font-bold uppercase tracking-wider text-[#e8e8f8] sm:text-sm">
+          DASHBOARD ADMIN
+        </h1>
+      ),
+    })
+    return () => clearSlots()
+  }, [setSlots, clearSlots])
 
   return (
     <div className="pma-dashboard mx-auto w-full max-w-[min(100%,1800px)] space-y-8 pb-10">
-      <header className="pma-bar flex-col items-start gap-1 sm:flex-row sm:items-center">
-        <div className="min-w-0">
-          <div className="pma-bar__id">Dashboard admin</div>
-          <p className="mt-1 max-w-3xl text-xs leading-snug text-[#a8a8c8]">
-            Panoramica globale in tempo reale (snapshot Firestore). Le viste operative PMA / manifestazione si aprono
-            solo da debug o da link dedicati nelle tabelle.
-          </p>
-        </div>
-      </header>
+      <p className="max-w-3xl text-xs leading-snug text-slate-600">
+        Panoramica globale in tempo reale (snapshot Firestore). Le viste operative PMA / manifestazione si aprono solo da
+        debug o da link dedicati nelle tabelle.
+      </p>
 
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">

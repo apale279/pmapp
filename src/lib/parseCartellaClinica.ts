@@ -74,6 +74,9 @@ export function parseFarmaci(raw: unknown): FarmacoSomministrato[] {
       dose: str(o.dose),
       via,
       registrato_at,
+      ...(typeof o.inserito_da_nome === 'string' && o.inserito_da_nome.trim()
+        ? { inserito_da_nome: o.inserito_da_nome.trim() }
+        : {}),
     })
   }
   return out

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, useLayoutEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   addDoc,
@@ -15,6 +15,7 @@ import { opPrimaryBtn, opToolbarBtnSm } from '../../components/layout/operativeT
 import { OperativePageGrid } from '../../components/layout/OperativePageGrid'
 import { RUBRICA_CONTATTI_COLLECTION, useManifestazioneRubrica } from '../../hooks/useManifestazioneRubrica'
 import type { RubricaContattoDoc } from '../../types/manifestazioneShared'
+import { useOperativeChrome } from '../../context/OperativeChromeContext'
 
 function telHref(numero: string): string {
   const compact = numero.replace(/[^\d+]/g, '')
@@ -54,6 +55,16 @@ export function ManifestazioneRubricaPage() {
   const [copyMsg, setCopyMsg] = useState<string | null>(null)
 
   const canUse = Boolean(db && tenantId.trim())
+
+  const { setSlots, clearSlots } = useOperativeChrome()
+  useLayoutEffect(() => {
+    setSlots({
+      titleOverride: (
+        <h1 className="truncate text-xs font-bold uppercase tracking-wider text-[#e8e8f8] sm:text-sm">RUBRICA</h1>
+      ),
+    })
+    return () => clearSlots()
+  }, [setSlots, clearSlots])
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault()
@@ -140,12 +151,7 @@ export function ManifestazioneRubricaPage() {
 
   const main = (
     <div className="pma-dashboard space-y-6">
-      <div className="pma-bar flex-col items-start gap-2 sm:flex-row sm:items-center">
-        <div className="min-w-0 flex-1">
-          <div className="pma-bar__id text-base">Rubrica</div>
-          <p className="mt-0.5 text-xs text-[#a8a8c8]">Contatti condivisi per manifestazione</p>
-        </div>
-      </div>
+      <p className="text-xs text-slate-600">Contatti condivisi per manifestazione.</p>
 
       {!canUse ? (
         <p className="text-sm text-amber-800">Manifestazione non disponibile per il profilo corrente.</p>
@@ -285,14 +291,22 @@ export function ManifestazioneRubricaPage() {
                         <td className="max-w-xs px-3 py-2.5 text-slate-700">{row.descrizione || '—'}</td>
                         <td className="px-3 py-2.5 text-right">
                           <div className="inline-flex flex-wrap items-center justify-end gap-2">
-                            <a
-                              href={telHref(row.numero)}
-                              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+                            <button
+                              type="button"
                               title="Chiama"
                               aria-label={`Chiama ${row.nome}`}
+                              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+                              onClick={() => {
+                                const href = telHref(row.numero)
+                                if (href === '#') return
+                                const ok = window.confirm(
+                                  `Avviare la chiamata verso ${row.numero.trim()} (${row.nome})?`,
+                                )
+                                if (ok) window.location.assign(href)
+                              }}
                             >
                               <IconPhone />
-                            </a>
+                            </button>
                             <button
                               type="button"
                               onClick={() => void copyNumero(row.numero)}

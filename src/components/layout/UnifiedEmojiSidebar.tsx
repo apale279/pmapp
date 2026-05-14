@@ -167,14 +167,6 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
   const showDashCentrale = rank === 'Centrale'
   const showElencoUtentiCentrale = rank === 'Centrale'
   const showDashPma = RANKS_PMA_DASH.includes(rank) && Boolean(pmaSeg)
-  const showImpPma =
-    (rank === 'Superadmin' ||
-      rank === 'Centrale' ||
-      rank === 'Medico' ||
-      rank === 'Infermiere' ||
-      rank === 'Triage' ||
-      rank === 'Soccorritore') &&
-    Boolean(pmaSeg)
   const showImpEvento = RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) && Boolean(manSeg)
 
   const showHomeNav = !RANKS_HIDE_HOME_IN_NAV.includes(rank)
@@ -213,22 +205,6 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
           <RailLink to={`/pma/${pmaSeg}`} end title="Dashboard PMA" emoji="🏥" onNavigate={onNavigate} />
         ) : RANKS_PMA_DASH.includes(rank) ? (
           <RailDisabled title="Dashboard PMA (nessun PMA nel contesto: profilo o URL /pma/…)" emoji="🏥" />
-        ) : null}
-
-        {showImpPma ? (
-          <RailLink
-            to={`/pma/${pmaSeg}/impostazioni`}
-            title="Impostazioni PMA"
-            emoji="⛺"
-            onNavigate={onNavigate}
-          />
-        ) : rank === 'Superadmin' ||
-          rank === 'Centrale' ||
-          rank === 'Medico' ||
-          rank === 'Infermiere' ||
-          rank === 'Soccorritore' ||
-          rank === 'Triage' ? (
-          <RailDisabled title="Impostazioni PMA (nessun PMA nel contesto)" emoji="⛺" />
         ) : null}
 
         {showImpEvento ? (
@@ -297,21 +273,6 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
           <DrawerLink to={`/pma/${pmaSeg}`} end label="Dashboard PMA" emoji="🏥" onNavigate={onNavigate} />
         ) : RANKS_PMA_DASH.includes(rank) ? (
           <DrawerDisabled label="Dashboard PMA" emoji="🏥" />
-        ) : null}
-        {showImpPma ? (
-          <DrawerLink
-            to={`/pma/${pmaSeg}/impostazioni`}
-            label="Impostazioni PMA"
-            emoji="⛺"
-            onNavigate={onNavigate}
-          />
-        ) : rank === 'Superadmin' ||
-          rank === 'Centrale' ||
-          rank === 'Medico' ||
-          rank === 'Infermiere' ||
-          rank === 'Soccorritore' ||
-          rank === 'Triage' ? (
-          <DrawerDisabled label="Impostazioni PMA" emoji="⛺" />
         ) : null}
         {showImpEvento ? (
           <DrawerLink

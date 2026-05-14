@@ -10,19 +10,29 @@ import { db } from '../lib/firebase'
 import { useSyncLive } from '../context/SyncLiveContext'
 import type { Pma } from '../types/pma'
 
+function asNonEmptyStrings(v: unknown): string[] {
+  if (!Array.isArray(v)) return []
+  return v.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((s) => s.trim())
+}
+
+/** Merge di `impostazioni_pma.elenco_farmaci_usati` e legacy `farmaci_usati` (radice), ordinato IT. */
+function mergeFarmaciUsatiFromPmaDoc(d: Record<string, unknown>): string[] {
+  const imp = d.impostazioni_pma
+  let fromNested: string[] = []
+  if (imp && typeof imp === 'object' && imp !== null && 'elenco_farmaci_usati' in imp) {
+    fromNested = asNonEmptyStrings((imp as { elenco_farmaci_usati?: unknown }).elenco_farmaci_usati)
+  }
+  const fromLegacy = asNonEmptyStrings(d.farmaci_usati)
+  return [...new Set([...fromNested, ...fromLegacy])].sort((a, b) => a.localeCompare(b, 'it'))
+}
+
 function parsePma(docId: string, d: Record<string, unknown>): Pma {
   const imp = d.impostazioni_pma
   let posti = 0
-  let elencoFarmaci: string[] = []
   if (imp && typeof imp === 'object' && imp !== null) {
-    const o = imp as { posti_letto?: unknown; elenco_farmaci_usati?: unknown }
+    const o = imp as { posti_letto?: unknown }
     const n = Number(o.posti_letto)
     if (Number.isFinite(n)) posti = n
-    if (Array.isArray(o.elenco_farmaci_usati)) {
-      elencoFarmaci = o.elenco_farmaci_usati.filter(
-        (x): x is string => typeof x === 'string' && x.trim() !== '',
-      )
-    }
   }
 
   return {
@@ -31,7 +41,7 @@ function parsePma(docId: string, d: Record<string, unknown>): Pma {
     luogo: typeof d.luogo === 'string' ? d.luogo : '—',
     id_manifestazione:
       typeof d.id_manifestazione === 'string' ? d.id_manifestazione : '',
-    impostazioni_pma: { posti_letto: posti, elenco_farmaci_usati: elencoFarmaci },
+    impostazioni_pma: { posti_letto: posti, elenco_farmaci_usati: mergeFarmaciUsatiFromPmaDoc(d) },
     ...(d.createdAt &&
     typeof (d.createdAt as Timestamp).toMillis === 'function'
       ? { createdAt: d.createdAt as Timestamp }

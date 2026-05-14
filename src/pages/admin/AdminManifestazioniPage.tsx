@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useLayoutEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useRankTheme } from '../../hooks/useRankTheme'
 import { useManifestazioniAdminList } from '../../hooks/useManifestazioniAdminList'
@@ -9,6 +9,7 @@ import { AdminTableToolbar } from '../../components/admin/AdminTableToolbar'
 import { AdminRowActions } from '../../components/admin/AdminRowActions'
 import { opPrimaryBtn } from '../../components/layout/operativeTokens'
 import type { Manifestazione } from '../../types/manifestazione'
+import { useOperativeChrome } from '../../context/OperativeChromeContext'
 
 function formatData(m: Manifestazione): string {
   try {
@@ -40,6 +41,38 @@ export function AdminManifestazioniPage() {
     return items.filter((m) => m.nome.toLowerCase().includes(s))
   }, [items, q])
 
+  const { setSlots, clearSlots } = useOperativeChrome()
+  useLayoutEffect(() => {
+    setSlots({
+      titleOverride: (
+        <h1 className="truncate text-xs font-bold uppercase tracking-wider text-[#e8e8f8] sm:text-sm">
+          MANIFESTAZIONI
+        </h1>
+      ),
+      headerActions: (
+        <button
+          type="button"
+          onClick={() => {
+            setModalKey((k) => k + 1)
+            setModalOpen(true)
+          }}
+          className={`${opPrimaryBtn} shrink-0 whitespace-nowrap`}
+        >
+          Nuova manifestazione
+        </button>
+      ),
+      toolbar: (
+        <AdminTableToolbar
+          variant="filtersOnly"
+          searchPlaceholder="Filtra per nome manifestazione…"
+          searchValue={q}
+          onSearchChange={setQ}
+        />
+      ),
+    })
+    return () => clearSlots()
+  }, [q, setSlots, clearSlots])
+
   async function confirmDelete() {
     if (!deleteTarget || !db) return
     setDeleteBusy(true)
@@ -56,25 +89,10 @@ export function AdminManifestazioniPage() {
 
   return (
     <div className="pma-dashboard w-full max-w-[min(100%,1800px)] space-y-6">
-      <AdminTableToolbar
-        title="Manifestazioni"
-        subtitle="Elenco globale con snapshot Firestore. Eliminando una manifestazione vengono rimossi anche tutti i PMA collegati, i pazienti associati e i contatori."
-        searchPlaceholder="Filtra per nome manifestazione…"
-        searchValue={q}
-        onSearchChange={setQ}
-        actions={
-          <button
-            type="button"
-            onClick={() => {
-              setModalKey((k) => k + 1)
-              setModalOpen(true)
-            }}
-            className={`${opPrimaryBtn} px-5 text-sm`}
-          >
-            Nuova manifestazione
-          </button>
-        }
-      />
+      <p className="text-xs leading-snug text-slate-600">
+        Elenco globale con snapshot Firestore. Eliminando una manifestazione vengono rimossi anche tutti i PMA collegati,
+        i pazienti associati e i contatori.
+      </p>
 
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">

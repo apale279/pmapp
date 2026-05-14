@@ -8,7 +8,9 @@ import {
 import { sortRecordKeysAndValuesIt, sortStringsIt } from '../lib/sortLocaleIt'
 import { EO_CLINICAL_TABS } from '../lib/multilineList'
 import { defaultEoQuickGroupRows, type EoQuickGroupRow } from '../lib/eoQuickDefaults'
+import { ensureEoNessunoFirstLabels } from '../lib/eoQuickSelection'
 import { EO_OPZIONI_RAPIDE } from '../types/cartellaClinica'
+import { parsePresetFarmaciFromFirestore, type PresetFarmaciPack } from '../types/manifestazioneImpostazioni'
 import { useSyncLive } from '../context/SyncLiveContext'
 
 function asStringArray(v: unknown): string[] | null {
@@ -60,14 +62,15 @@ function buildEoQuickGroups(
   /** Ordine clinico da default: stesso ordine del codice, mai alfabetico. */
   const fallback = [...EO_OPZIONI_RAPIDE]
   if (!raw || typeof raw !== 'object') {
-    return EO_CLINICAL_TABS.map((title, i) =>
-      i === 0 ? { title, labels: fallback } : { title, labels: [] as string[] },
-    )
+    return EO_CLINICAL_TABS.map((title, i) => ({
+      title,
+      labels: ensureEoNessunoFirstLabels(i === 0 ? fallback : []),
+    }))
   }
   const o = raw as Record<string, unknown>
   return EO_CLINICAL_TABS.map((title) => {
     const arr = asStringArray(o[title])
-    return { title, labels: arr ? [...arr] : [] }
+    return { title, labels: ensureEoNessunoFirstLabels(arr?.length ? [...arr] : []) }
   })
 }
 
@@ -122,6 +125,8 @@ export type ManifestazioneCoreListe = {
   /** Valore pre-selezionato in cartella (EO rapido) se la colonna GENERALE è vuota. */
   eoQuickDefaultLabel: string | null
   loading: boolean
+  /** Preset farmaci configurabili in impostazioni manifestazione. */
+  presetFarmaci: PresetFarmaciPack[]
 }
 
 /**
@@ -140,6 +145,7 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
   const [eoQuickLabels, setEoQuickLabels] = useState<string[]>(() => flattenLabelsFromGroups(defaultEoQuickGroupRows()))
   const [eoQuickGroups, setEoQuickGroups] = useState<EoQuickGroupRow[]>(() => defaultEoQuickGroupRows())
   const [eoQuickDefaultLabel, setEoQuickDefaultLabel] = useState<string | null>(null)
+  const [presetFarmaci, setPresetFarmaci] = useState<PresetFarmaciPack[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -153,6 +159,7 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
         setEoQuickGroups(defG)
         setEoQuickLabels(flattenLabelsFromGroups(defG))
         setEoQuickDefaultLabel(null)
+        setPresetFarmaci([])
         setLoading(false)
       })
       return
@@ -173,6 +180,7 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
           setEoQuickGroups(defG2)
           setEoQuickLabels(flattenLabelsFromGroups(defG2))
           setEoQuickDefaultLabel(null)
+          setPresetFarmaci([])
           setLoading(false)
           bumpSync()
           return
@@ -214,8 +222,8 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
         setEoQuickGroups(eoGroups)
         setEoQuickLabels(eoFlat)
         setEoQuickDefaultLabel(eoDef)
+        setPresetFarmaci(parsePresetFarmaciFromFirestore(imp.preset_farmaci))
         setLoading(false)
-        bumpSync()
       },
       () => {
         setPrestazioni(sortStringsIt([...PRESTAZIONI_LISTA_DEFAULT]))
@@ -226,6 +234,7 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
         setEoQuickGroups(defG3)
         setEoQuickLabels(flattenLabelsFromGroups(defG3))
         setEoQuickDefaultLabel(null)
+        setPresetFarmaci([])
         setLoading(false)
         bumpSync()
       },
@@ -244,6 +253,7 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
       eoQuickGroups,
       eoQuickDefaultLabel,
       loading,
+      presetFarmaci,
     }),
     [
       prestazioni,
@@ -254,6 +264,7 @@ export function useManifestazioneListeCliniche(manifestazioneId: string | undefi
       eoQuickGroups,
       eoQuickDefaultLabel,
       loading,
+      presetFarmaci,
     ],
   )
 }

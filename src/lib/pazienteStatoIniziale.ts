@@ -3,12 +3,11 @@ import type { UserRank } from '../types/userProfile'
 
 /**
  * Stato iniziale alla creazione scheda (Sezione 1 — STATO).
- * - Centrale → In arrivo
- * - Medico, Infermiere, Triage, Soccorritore → In carico
- * - Altri (es. Superadmin) → In carico
+ * - Centrale, Superadmin → In arrivo (logistica)
+ * - Medico, Infermiere, Triage, Soccorritore → In carico (presa operativa sul PMA)
  */
 export function statoInizialePazientePerRank(creatorRank: UserRank): PazienteStato {
-  if (creatorRank === 'Centrale') return 'in_arrivo'
+  if (creatorRank === 'Centrale' || creatorRank === 'Superadmin') return 'in_arrivo'
   if (
     creatorRank === 'Medico' ||
     creatorRank === 'Infermiere' ||
@@ -17,5 +16,5 @@ export function statoInizialePazientePerRank(creatorRank: UserRank): PazienteSta
   ) {
     return 'in_carico'
   }
-  return 'in_carico'
+  return 'in_attesa'
 }

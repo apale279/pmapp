@@ -65,7 +65,6 @@ export function DettaglioPaziente({ p, tabs, activeTab, onTabChange, saveError, 
       </nav>
 
       <div className="mx-auto w-full max-w-5xl flex-1 pt-3">
-        <div className="pma-section-hdr mb-3">Scheda paziente</div>
         {saveError}
         {tabs.map((tab) => {
           const visible = activeTab === tab.id

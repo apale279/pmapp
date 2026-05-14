@@ -12,6 +12,7 @@ import {
 } from '../../lib/schedaDatetimeLocal'
 import { updateSchedaPazienteGranular } from '../../lib/updateSchedaPaziente'
 import { staffSoftRefFromUser } from '../../lib/staffSoftRef'
+import { statiSelezionabiliPerRank } from '../../lib/pazienteStatoUi'
 import {
   canWriteInvioPsFields,
   schedaStatoInArrivoAllows,
@@ -38,6 +39,7 @@ import { usePmaListForManifestazione } from '../../hooks/usePmaListForManifestaz
 import { createPmaAlert } from '../../lib/createPmaAlert'
 import { SchedaPazienteShell } from '../pma/SchedaPazienteShell'
 import { findPartecipanteByPettorale } from '../../types/manifestazionePartecipanti'
+import { TesseraSanitariaCfScanner } from './TesseraSanitariaCfScanner'
 
 type Props = {
   pazienteId: string
@@ -46,8 +48,6 @@ type Props = {
 /** Ordine UI v4: Bianco → Verde → Giallo → Rosso */
 const CODICI_UI: CodiceColorePaziente[] = ['bianco', 'verde', 'giallo', 'rosso']
 const TIPI: TipoPaziente[] = ['trasportato', 'autopresentato']
-
-const STATI_UI: PazienteStato[] = ['in_arrivo', 'in_attesa', 'in_carico', 'in_sospeso']
 
 function pillCodiceColore(c: CodiceColorePaziente, on: boolean): string {
   if (c === 'bianco') return `pma-pill ${on ? 'pma-pill--bianco-on' : 'pma-pill--bianco-off'}`
@@ -67,11 +67,6 @@ function emailTelLegacy(email: string, telefono: string): string {
   return e || t
 }
 
-function statiSelezionabili(canSelectInArrivo: boolean, statoCorrente: PazienteStato): PazienteStato[] {
-  const mid: PazienteStato[] = ['in_attesa', 'in_carico', 'in_sospeso']
-  return canSelectInArrivo || statoCorrente === 'in_arrivo' ? ['in_arrivo', ...mid] : [...mid]
-}
-
 export function SchedaPaziente({ pazienteId }: Props) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -86,25 +81,53 @@ export function SchedaPaziente({ pazienteId }: Props) {
   const [allertaBusy, setAllertaBusy] = useState(false)
   const [allertaErr, setAllertaErr] = useState<string | null>(null)
   const [partLookupMsg, setPartLookupMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
+  const [cfScannerOpen, setCfScannerOpen] = useState(false)
   const pettoraleInputRef = useRef<HTMLInputElement>(null)
 
   const isCentrale = user?.rank === 'Centrale'
   const isMedico = user?.rank === 'Medico'
   const canEdit = Boolean(p?.aperto && user)
+  /** Centrale con paziente in carico: scheda in sola lettura salvo tab Invio PS. */
+  const schedaEditBlockedCentraleInCarico = Boolean(isCentrale && p?.stato === 'in_carico')
+  const canEditBody = Boolean(canEdit && !schedaEditBlockedCentraleInCarico)
   const showCentraleFields = isCentrale
   const showEtaPma = isCentrale && p?.tipo_paziente === 'trasportato'
 
   const write = useCallback(
     async (patch: Record<string, unknown>) => {
       if (!db || !p?.aperto) return
+      if (isCentrale && p?.stato === 'in_carico') return
+      const prevColore = p.codice_colore
       setSaveError(null)
       try {
         await updateSchedaPazienteGranular(db, pazienteId, patch)
+        if (
+          user &&
+          user.rank !== 'Centrale' &&
+          patch.codice_colore === 'rosso' &&
+          prevColore !== 'rosso'
+        ) {
+          const idPma = (p.id_pma ?? '').trim()
+          const idMan = (p.id_manifestazione ?? '').trim()
+          if (idPma && idMan) {
+            const nomeLine = [p.cognome, p.nome].filter(Boolean).join(' ').trim()
+            void createPmaAlert(db, {
+              idPma,
+              idManifestazione: idMan,
+              pazienteId: p.id,
+              idPazienteVisibile: p.id_paziente_visibile,
+              messaggio: `Codice ROSSO: ${p.id_paziente_visibile}${nomeLine ? ` (${nomeLine})` : ''} — triage da ${user.rank}.`,
+              creatoDaUid: user.uid,
+            }).catch(() => {
+              /* best-effort */
+            })
+          }
+        }
       } catch (e) {
         setSaveError(e instanceof Error ? e.message : 'Salvataggio non riuscito.')
       }
     },
-    [pazienteId, p?.aperto],
+    [pazienteId, p, isCentrale, user],
   )
 
   const etaCalcolata = useMemo(() => calculateEtaAnni(p?.data_nascita ?? undefined), [p?.data_nascita])
@@ -120,8 +143,13 @@ export function SchedaPaziente({ pazienteId }: Props) {
       setPartLookupMsg({ tone: 'err', text: 'Database non disponibile.' })
       return
     }
-    if (!p?.aperto) {
-      setPartLookupMsg({ tone: 'err', text: 'La scheda non è modificabile (chiusa o senza accesso).' })
+    if (!p?.aperto || schedaEditBlockedCentraleInCarico) {
+      setPartLookupMsg({
+        tone: 'err',
+        text: schedaEditBlockedCentraleInCarico
+          ? 'Con paziente in carico la scheda è in sola lettura (solo tab Invio PS modificabile).'
+          : 'La scheda non è modificabile (chiusa o senza accesso).',
+      })
       return
     }
     const raw = pettoraleInputRef.current?.value?.trim() ?? ''
@@ -174,10 +202,11 @@ export function SchedaPaziente({ pazienteId }: Props) {
       .catch(() => {
         setPartLookupMsg({ tone: 'err', text: 'Salvataggio non riuscito.' })
       })
-  }, [db, p, contact.email, partecipantiElenco.rows, write])
+  }, [db, p, contact.email, partecipantiElenco.rows, write, schedaEditBlockedCentraleInCarico])
 
   const inviaAllertaPma = useCallback(async () => {
     if (!db || !user || user.rank !== 'Centrale' || !p) return
+    if (schedaEditBlockedCentraleInCarico) return
     const idPma = (p.id_pma ?? '').trim()
     if (!idPma) {
       setAllertaErr('Seleziona il PMA destinazione.')
@@ -200,11 +229,11 @@ export function SchedaPaziente({ pazienteId }: Props) {
     } finally {
       setAllertaBusy(false)
     }
-  }, [user, p])
+  }, [user, p, schedaEditBlockedCentraleInCarico])
 
   /** Allinea ai primi valori delle liste manifestazione (stesso ordine salvato in IMP). */
   useEffect(() => {
-    if (!db || !p?.aperto || !canEdit) return
+    if (!db || !p?.aperto || !canEditBody) return
     if (manifestCore.loading) return
     const tipi = manifestCore.tipoEventoList
     if (tipi.length === 0) return
@@ -238,7 +267,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
     p?.id,
     p?.tipo_evento,
     p?.dettaglio_evento,
-    canEdit,
+    canEditBody,
     manifestCore.loading,
     manifestCore.tipoEventoList,
     manifestCore.dettaglioEventoPerTipo,
@@ -246,11 +275,11 @@ export function SchedaPaziente({ pazienteId }: Props) {
   ])
 
   useEffect(() => {
-    if (!db || !p?.aperto || !canEdit || !isCentrale || pmaDestLoading) return
+    if (!db || !p?.aperto || !canEditBody || !isCentrale || pmaDestLoading) return
     if (pmaDestList.length !== 1) return
     if ((p.id_pma ?? '').trim() !== '') return
     void write({ id_pma: pmaDestList[0].id })
-  }, [db, p?.aperto, p?.id, p?.id_pma, canEdit, isCentrale, pmaDestLoading, pmaDestList, write])
+  }, [db, p?.aperto, p?.id, p?.id_pma, canEditBody, isCentrale, pmaDestLoading, pmaDestList, write])
 
   const manReport = useManifestazioneDoc(p?.id_manifestazione || undefined)
   const pmaIdForReport =
@@ -480,8 +509,6 @@ export function SchedaPaziente({ pazienteId }: Props) {
               ) : null}
 
               <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                <div className="pma-section-hdr">Sezione 1 — Dati generali</div>
-
                 <div className="pma-row pma-row--2 border-b border-slate-200">
                   <div className="pma-field pma-field--br">
                     <span className="pma-field__label">Infermiere di riferimento</span>
@@ -519,7 +546,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                     <span className="pma-field__label">Apertura scheda</span>
                     <input
                       type="datetime-local"
-                      disabled={!canEdit}
+                      disabled={!canEditBody}
                       value={toDatetimeLocal(p.apertura_scheda)}
                       onChange={(e) => {
                         const ts = datetimeLocalToTimestamp(e.target.value)
@@ -532,7 +559,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                   <label className="pma-field">
                     <span className="pma-field__label">Tipo paziente</span>
                     <select
-                      disabled={!canEdit}
+                      disabled={!canEditBody}
                       value={p.tipo_paziente}
                       onChange={(e) => void onTipoChange(e.target.value as TipoPaziente)}
                     >
@@ -555,10 +582,10 @@ export function SchedaPaziente({ pazienteId }: Props) {
                           <button
                             key={c}
                             type="button"
-                            disabled={!canEdit}
+                            disabled={!canEditBody}
                             aria-pressed={selected}
                             onClick={() => void write({ codice_colore: c })}
-                            className={`${pillCodiceColore(c, selected)} ${!canEdit ? 'opacity-40' : ''}`}
+                            className={`${pillCodiceColore(c, selected)} ${!canEditBody ? 'opacity-40' : ''}`}
                           >
                             {CODICE_COLORE_LABEL[c]}
                           </button>
@@ -573,7 +600,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                       <label className="pma-field pma-field--br">
                         <span className="pma-field__label">Tipo evento</span>
                         <select
-                          disabled={!canEdit}
+                          disabled={!canEditBody}
                           value={p.tipo_evento}
                           onChange={(e) => {
                             const v = e.target.value
@@ -592,7 +619,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                       <label className="pma-field">
                         <span className="pma-field__label">Dettaglio evento</span>
                         <select
-                          disabled={!canEdit}
+                          disabled={!canEditBody}
                           value={p.dettaglio_evento}
                           onChange={(e) => void write({ dettaglio_evento: e.target.value })}
                         >
@@ -612,7 +639,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                         <input
                           key={`te-${p.id}-${p.tipo_evento}`}
                           type="text"
-                          disabled={!canEdit}
+                          disabled={!canEditBody}
                           defaultValue={p.tipo_evento}
                           onBlur={(e) => void write({ tipo_evento: e.target.value })}
                         />
@@ -622,7 +649,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                         <input
                           key={`de-${p.id}-${p.dettaglio_evento}`}
                           type="text"
-                          disabled={!canEdit}
+                          disabled={!canEditBody}
                           defaultValue={p.dettaglio_evento}
                           onBlur={(e) => void write({ dettaglio_evento: e.target.value })}
                         />
@@ -635,7 +662,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                       <span className="pma-field__label">Breve descrizione</span>
                       <textarea
                         key={`breve-${p.id}-${p.breve_descrizione}`}
-                        disabled={!canEdit}
+                        disabled={!canEditBody}
                         rows={4}
                         defaultValue={p.breve_descrizione}
                         onBlur={(e) => void write({ breve_descrizione: e.target.value })}
@@ -651,7 +678,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                           <input
                             key={`tda-${p.id}-${p.trasportato_da ?? ''}`}
                             type="text"
-                            disabled={!canEdit}
+                            disabled={!canEditBody}
                             defaultValue={p.trasportato_da ?? ''}
                             onBlur={(e) =>
                               void write({
@@ -668,7 +695,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                           <input
                             key={`nc-${p.id}-${p.note_centrale ?? ''}`}
                             type="text"
-                            disabled={!canEdit}
+                            disabled={!canEditBody}
                             defaultValue={p.note_centrale ?? ''}
                             onBlur={(e) =>
                               void write({
@@ -683,7 +710,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                         <label className="pma-field">
                           <span className="pma-field__label">PMA destinazione</span>
                           <select
-                            disabled={!canEdit || pmaDestLoading || pmaDestList.length === 0}
+                            disabled={!canEditBody || pmaDestLoading || pmaDestList.length === 0}
                             value={(p.id_pma ?? '').trim()}
                             onChange={(e) => {
                               const v = e.target.value.trim()
@@ -712,10 +739,6 @@ export function SchedaPaziente({ pazienteId }: Props) {
                             ))
                           )}
                         </select>
-                        <p className="mt-1 text-xs pma-field__value--muted">
-                          Il paziente risulta in questo PMA. Con un solo PMA sulla manifestazione viene impostato
-                          automaticamente se mancante.
-                        </p>
                         </label>
                       </div>
                     </>
@@ -730,7 +753,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                           type="number"
                           min={0}
                           step={1}
-                          disabled={!canEdit}
+                          disabled={!canEditBody}
                           defaultValue={p.eta_pma_minuti ?? ''}
                           onBlur={(e) => {
                             const raw = e.target.value.trim()
@@ -744,10 +767,6 @@ export function SchedaPaziente({ pazienteId }: Props) {
                             void write({ eta_pma_minuti: Math.floor(n), eta_pma_deadline: deadline })
                           }}
                         />
-                        <p className="mt-2 text-xs pma-field__value--muted">
-                          Conferma i minuti uscendo dal campo: viene salvata la scadenza rispetto all&apos;ora
-                          corrente.
-                        </p>
                         <EtaPmaCountdown deadline={p.eta_pma_deadline} />
                       </label>
                     </div>
@@ -761,23 +780,14 @@ export function SchedaPaziente({ pazienteId }: Props) {
                         <span className="pma-pill pma-pill--stato-off pointer-events-none text-sm font-bold uppercase tracking-wide">
                           {PAZIENTE_STATO_LABEL.dimesso}
                         </span>
-                        <p className="mt-2 text-xs pma-field__value--muted">
-                          Impostato solo tramite &quot;Dimetti paziente&quot; nella tab Dimissioni (Medico).
-                        </p>
                       </div>
                     ) : (
                       <>
-                        {!canSetStatoInArrivo && p.stato !== 'in_arrivo' ? (
-                          <p className="mt-2 text-xs pma-field__value--muted">
-                            Solo Centrale può impostare lo stato &quot;In arrivo&quot; dalla scheda.
-                          </p>
-                        ) : null}
                         <div className="pma-pills mt-3" role="group" aria-label="Stato paziente">
-                          {STATI_UI.map((s) => {
-                            const allowed = statiSelezionabili(canSetStatoInArrivo, p.stato)
-                            const canPick = allowed.includes(s)
+                          {statiSelezionabiliPerRank(user?.rank ?? 'Soccorritore', canSetStatoInArrivo, p.stato).map(
+                            (s) => {
                             const selected = p.stato === s
-                            const disabled = !canEdit || (!canPick && !selected)
+                            const disabled = !canEditBody
                             return (
                               <button
                                 key={s}
@@ -785,18 +795,19 @@ export function SchedaPaziente({ pazienteId }: Props) {
                                 disabled={disabled}
                                 aria-pressed={selected}
                                 onClick={() => void onStatoChange(s)}
-                                className={`${pillStato(selected)} ${!canEdit || disabled ? 'opacity-40' : ''}`}
+                                className={`${pillStato(selected)} ${!canEditBody || disabled ? 'opacity-40' : ''}`}
                               >
                                 {PAZIENTE_STATO_LABEL[s]}
                               </button>
                             )
-                          })}
+                          },
+                          )}
                         </div>
                         {isCentrale && p.aperto ? (
                           <div className="mt-4 border-t border-slate-100 pt-4">
                             <button
                               type="button"
-                              disabled={!db || allertaBusy || !(p.id_pma ?? '').trim()}
+                              disabled={!db || allertaBusy || !(p.id_pma ?? '').trim() || schedaEditBlockedCentraleInCarico}
                               onClick={() => void inviaAllertaPma()}
                               className="inline-flex h-10 w-full max-w-md items-center justify-center rounded-lg border border-amber-400 bg-amber-100 px-4 text-sm font-bold uppercase text-amber-950 shadow-sm hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
                             >
@@ -806,13 +817,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                               <p className="mt-2 text-xs text-red-600" role="alert">
                                 {allertaErr}
                               </p>
-                            ) : (
-                              <p className="mt-2 max-w-xl text-xs pma-field__value--muted">
-                                Segnale in tempo reale verso il PMA destinazione (Firestore). Sul PMA compare un
-                                avviso; se abiliti le notifiche del browser nella dashboard PMA, ricevi anche un
-                                pop-up.
-                              </p>
-                            )}
+                            ) : null}
                           </div>
                         ) : null}
                       </>
@@ -823,8 +828,8 @@ export function SchedaPaziente({ pazienteId }: Props) {
             </div>
           ),
           anagrafica: (
+            <>
             <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-              <div className="pma-section-hdr">Sezione 2 — Dati anagrafici</div>
               <div className="pma-row pma-row--2">
                 <label className="pma-field pma-field--br">
                   <span className="pma-field__label">Pettorale</span>
@@ -835,7 +840,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                       className="min-w-0 flex-1"
                       type="number"
                       min={0}
-                      disabled={!canEdit}
+                      disabled={!canEditBody}
                       defaultValue={p.pettorale ?? ''}
                       onBlur={(e) => {
                         const v = e.target.value.trim()
@@ -852,7 +857,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                       title="Compila anagrafica dall’elenco partecipanti (Excel manifestazione)"
                       aria-label="Cerca pettorale nell’elenco manifestazione e compila anagrafica"
                       disabled={
-                        !canEdit ||
+                        !canEditBody ||
                         partecipantiElenco.loading ||
                         partecipantiElenco.rows.length === 0
                       }
@@ -877,11 +882,6 @@ export function SchedaPaziente({ pazienteId }: Props) {
                     >
                       {partLookupMsg.text}
                     </p>
-                  ) : partecipantiElenco.rows.length === 0 && !partecipantiElenco.loading ? (
-                    <p className="mt-1.5 text-xs text-slate-500">
-                      Elenco partecipanti non caricato: in Impostazioni manifestazione carica l’Excel (colonne
-                      A–E).
-                    </p>
                   ) : null}
                 </label>
                 <div className="pma-field">
@@ -899,14 +899,13 @@ export function SchedaPaziente({ pazienteId }: Props) {
                         ? `${p.eta} anni`
                         : '—'}
                   </span>
-                  <p className="mt-2 text-xs text-slate-600">Calcolata dalla data di nascita.</p>
                 </div>
                 <label className="pma-field pma-field--br">
                   <span className="pma-field__label">Nome</span>
                   <input
                     key={`nome-${p.id}-${p.nome}`}
                     type="text"
-                    disabled={!canEdit}
+                    disabled={!canEditBody}
                     defaultValue={p.nome}
                     onBlur={(e) => void write({ nome: e.target.value })}
                   />
@@ -916,7 +915,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                   <input
                     key={`cog-${p.id}-${p.cognome}`}
                     type="text"
-                    disabled={!canEdit}
+                    disabled={!canEditBody}
                     defaultValue={p.cognome}
                     onBlur={(e) => void write({ cognome: e.target.value })}
                   />
@@ -927,7 +926,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                   <span className="pma-field__label">Data di nascita</span>
                   <input
                     type="date"
-                    disabled={!canEdit}
+                    disabled={!canEditBody}
                     value={dataNascitaDraft}
                     onChange={(e) => setDataNascitaDraft(e.target.value)}
                     onBlur={() => {
@@ -948,10 +947,57 @@ export function SchedaPaziente({ pazienteId }: Props) {
               </div>
               <div className="pma-row">
                 <label className="pma-field">
+                  <span className="pma-field__label flex flex-wrap items-center gap-2">
+                    <span>CF (codice fiscale)</span>
+                    <button
+                      type="button"
+                      disabled={!canEditBody}
+                      title="Scansiona il codice a barre CODE 128 sulla tessera sanitaria (16 caratteri CF)"
+                      aria-label="Scansiona codice a barre tessera sanitaria"
+                      onClick={() => setCfScannerOpen(true)}
+                      className="pma-theme-skip inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <svg
+                        width="18"
+                        height="14"
+                        viewBox="0 0 20 14"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden
+                        className="text-slate-800"
+                      >
+                        <path fill="currentColor" d="M0 1h1.2v12H0V1zm2.5 0h.8v12h-.8V1zm2 0h1.5v12H4.5V1zm2.2 0h.7v12h-.7V1zm1.8 0h1.2v12H8.5V1zm2 0h.8v12h-.8V1zm2.2 0h1.4v12h-1.4V1zm2.3 0h.7v12h-.7V1zm1.8 0h1.2v12h-1.2V1zm2.1 0h.9v12h-.9V1z" />
+                      </svg>
+                    </button>
+                  </span>
+                  <input
+                    key={`cf-${p.id}-${p.codice_fiscale}`}
+                    type="text"
+                    inputMode="text"
+                    autoCapitalize="characters"
+                    maxLength={16}
+                    disabled={!canEditBody}
+                    defaultValue={p.codice_fiscale}
+                    onBlur={(e) =>
+                      void write({
+                        codice_fiscale: e.target.value
+                          .trim()
+                          .toUpperCase()
+                          .replace(/[^A-Z0-9]/g, '')
+                          .slice(0, 16),
+                      })
+                    }
+                    className="font-mono uppercase tracking-wide"
+                    spellCheck={false}
+                  />
+                </label>
+              </div>
+              <div className="pma-row">
+                <label className="pma-field">
                   <span className="pma-field__label">Email</span>
                   <input
                     type="email"
-                    disabled={!canEdit}
+                    disabled={!canEditBody}
                     value={contact.email}
                     onChange={(e) => setContact((c) => ({ ...c, email: e.target.value }))}
                     onBlur={() =>
@@ -970,7 +1016,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
                   <span className="pma-field__label">Telefono</span>
                   <input
                     type="tel"
-                    disabled={!canEdit}
+                    disabled={!canEditBody}
                     value={contact.telefono}
                     onChange={(e) => setContact((c) => ({ ...c, telefono: e.target.value }))}
                     onBlur={() =>
@@ -986,13 +1032,21 @@ export function SchedaPaziente({ pazienteId }: Props) {
                 </label>
               </div>
             </section>
+            {cfScannerOpen ? (
+              <TesseraSanitariaCfScanner
+                open={cfScannerOpen}
+                onClose={() => setCfScannerOpen(false)}
+                onCapture={(cf) => void write({ codice_fiscale: cf })}
+              />
+            ) : null}
+          </>
           ),
           cartella: (
             <CartellaClinicaSection
               embedded
               pazienteId={pazienteId}
               p={p}
-              canEdit={Boolean(canEdit)}
+              canEdit={Boolean(canEditBody)}
               write={write}
               user={user}
             />
@@ -1003,7 +1057,7 @@ export function SchedaPaziente({ pazienteId }: Props) {
               user={user}
               isMedico={isMedico}
               canEditDimissioneTab={canEditDimissioneTab}
-              canEditScheda={Boolean(canEdit)}
+              canEditScheda={Boolean(canEditBody)}
               write={write}
               reportManifestazioneNome={manReport.data?.nome ?? ''}
               reportPmaNome={pmaReport.nome ?? ''}

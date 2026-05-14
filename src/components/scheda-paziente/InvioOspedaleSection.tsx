@@ -19,19 +19,6 @@ type Props = {
 export function InvioOspedaleSection({ p, readOnly = false, writeInvio }: Props) {
   return (
     <section className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <div className="pma-section-hdr">Sezione 5 — Dati invio ospedale</div>
-      <p className="border-b border-slate-100 px-3 py-2 text-sm text-slate-600">
-        Compilabile anche con scheda chiusa, per completare i dati AREU / trasporto dopo la dimissione con
-        esito <strong>Invio in PS</strong>.
-      </p>
-
-      {readOnly ? (
-        <p className="mx-3 mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          Sola lettura: modifica riservata a Superadmin, Centrale o Medico (con regole aggiuntive su scheda
-          chiusa).
-        </p>
-      ) : null}
-
       <div className="max-w-3xl">
         <div className="pma-row pma-row--2">
           <label className="pma-field pma-field--br">

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useLayoutEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useRankTheme } from '../../hooks/useRankTheme'
 import { useAllPmaGlobal } from '../../hooks/useAllPmaGlobal'
@@ -8,6 +8,7 @@ import { db } from '../../lib/firebase'
 import { AdminTableToolbar } from '../../components/admin/AdminTableToolbar'
 import { AdminRowActions } from '../../components/admin/AdminRowActions'
 import { opPrimaryBtn } from '../../components/layout/operativeTokens'
+import { useOperativeChrome } from '../../context/OperativeChromeContext'
 
 export function AdminPmaGlobalPage() {
   const navigate = useNavigate()
@@ -38,6 +39,26 @@ export function AdminPmaGlobalPage() {
     )
   }, [items, q])
 
+  const { setSlots, clearSlots } = useOperativeChrome()
+  useLayoutEffect(() => {
+    setSlots({
+      titleOverride: (
+        <h1 className="truncate text-xs font-bold uppercase tracking-wider text-[#e8e8f8] sm:text-sm">
+          PMA GLOBALI
+        </h1>
+      ),
+      toolbar: (
+        <AdminTableToolbar
+          variant="filtersOnly"
+          searchPlaceholder="Filtra per ID, nome o manifestazione…"
+          searchValue={q}
+          onSearchChange={setQ}
+        />
+      ),
+    })
+    return () => clearSlots()
+  }, [q, setSlots, clearSlots])
+
   async function confirmDelete() {
     if (!del || !db) return
     setDelBusy(true)
@@ -54,13 +75,10 @@ export function AdminPmaGlobalPage() {
 
   return (
     <div className="pma-dashboard w-full max-w-[min(100%,1800px)] space-y-6">
-      <AdminTableToolbar
-        title="Gestione PMA globale"
-        subtitle="Tutti i posti medici avanzati (snapshot `pma`). Usa “Apri vista operativa” per debug sul PMA; elimina rimuove anche le schede paziente collegate a quel PMA."
-        searchPlaceholder="Filtra per ID, nome o manifestazione…"
-        searchValue={q}
-        onSearchChange={setQ}
-      />
+      <p className="text-xs leading-snug text-slate-600">
+        Tutti i posti medici avanzati (snapshot <code className="rounded bg-slate-100 px-1">pma</code>). Usa «Apri vista
+        operativa» per debug sul PMA; elimina rimuove anche le schede paziente collegate a quel PMA.
+      </p>
 
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
@@ -116,7 +134,12 @@ export function AdminPmaGlobalPage() {
                           </Link>
                           <AdminRowActions
                             onEdit={() => {
-                              void navigate(`/pma/${encodeURIComponent(r.id)}/impostazioni`)
+                              const man = r.idManifestazione?.trim()
+                              if (man) {
+                                void navigate(`/manifestazione/${encodeURIComponent(man)}/impostazioni`)
+                              } else {
+                                void navigate(`/pma/${encodeURIComponent(r.id)}`)
+                              }
                             }}
                             onDelete={() => {
                               setDelErr(null)

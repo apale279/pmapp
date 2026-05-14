@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { useAuth } from '../context/AuthContext'
@@ -18,12 +18,7 @@ export function Login() {
   const [pending, setPending] = useState(false)
   const [bootstrapMessage, setBootstrapMessage] = useState<string | null>(null)
   const [bootstrapBusy, setBootstrapBusy] = useState(false)
-  const [securityNotice, setSecurityNotice] = useState<string | null>(null)
-
-  useEffect(() => {
-    const msg = consumeLoginFlashMessage()
-    if (msg) setSecurityNotice(msg)
-  }, [])
+  const [securityNotice] = useState<string | null>(() => consumeLoginFlashMessage())
 
   if (firebaseDisabled || status === 'firebase_disabled') {
     return (

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, useLayoutEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { addDoc, collection, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
@@ -11,6 +11,7 @@ import {
   FILE_UTILI_MANIFESTAZIONE_COLLECTION,
   useManifestazioneFileUtili,
 } from '../../hooks/useManifestazioneFileUtili'
+import { useOperativeChrome } from '../../context/OperativeChromeContext'
 
 function formatCaricato(ts: { toDate?: () => Date } | null): string {
   if (!ts?.toDate) return '—'
@@ -43,6 +44,16 @@ export function ManifestazioneFileUtiliPage() {
   const [rowBusy, setRowBusy] = useState<string | null>(null)
 
   const canUse = Boolean(db && tenantId.trim())
+
+  const { setSlots, clearSlots } = useOperativeChrome()
+  useLayoutEffect(() => {
+    setSlots({
+      titleOverride: (
+        <h1 className="truncate text-xs font-bold uppercase tracking-wider text-[#e8e8f8] sm:text-sm">FILE UTILI</h1>
+      ),
+    })
+    return () => clearSlots()
+  }, [setSlots, clearSlots])
 
   function onPickFile(next: File | null) {
     setFile(next)
@@ -93,12 +104,7 @@ export function ManifestazioneFileUtiliPage() {
 
   const main = (
     <div className="pma-dashboard space-y-6">
-      <div className="pma-bar flex-col items-start gap-2 sm:flex-row sm:items-center">
-        <div className="min-w-0 flex-1">
-          <div className="pma-bar__id text-base">File utili</div>
-          <p className="mt-0.5 text-xs text-[#a8a8c8]">Allegati condivisi per manifestazione</p>
-        </div>
-      </div>
+      <p className="text-xs text-slate-600">Allegati condivisi per manifestazione.</p>
 
       {!canUse ? (
         <p className="text-sm text-amber-800">Manifestazione non disponibile per il profilo corrente.</p>

@@ -6,6 +6,8 @@ import { AdminEmojiSidebar } from '../admin/AdminEmojiSidebar'
 import { MobileEmojiNavOverlay, MobileNavHamburgerButton } from './MobileEmojiNav'
 import type { UserProfile } from '../../types/userProfile'
 import { useAppShellTitle } from '../../hooks/useAppShellTitle'
+import { useInfermiereSmartphone } from '../../hooks/useInfermiereSmartphone'
+import { useIsSmartphone } from '../../hooks/useIsSmartphone'
 import { OperativeChromeProvider } from '../../context/OperativeChromeContext'
 import type { OperativeChromeSlots } from '../../context/OperativeChromeTypes'
 
@@ -29,7 +31,9 @@ export function OperativeAppShell({ user, logout, children }: OperativeAppShellP
   const defaultTitle = useAppShellTitle()
   const titleNode =
     slots.titleOverride ?? (
-      <h1 className="pma-bar__id truncate">{defaultTitle}</h1>
+      <h1 className="truncate text-xs font-bold uppercase tracking-wider text-[#e8e8f8] sm:text-sm">
+        {defaultTitle}
+      </h1>
     )
 
   const defaultMainClass = 'min-h-0 flex-1 overflow-auto px-4 py-6 sm:px-8 sm:py-8'
@@ -38,6 +42,8 @@ export function OperativeAppShell({ user, logout, children }: OperativeAppShellP
 
   const isSuperadmin = user.rank === 'Superadmin'
   const Sidebar = isSuperadmin ? AdminEmojiSidebar : UnifiedEmojiSidebar
+  const infermiereSmartphoneNav = useInfermiereSmartphone(user)
+  const chromeCompact = useIsSmartphone()
 
   return (
     <OperativeChromeProvider value={chromeApi}>
@@ -52,8 +58,10 @@ export function OperativeAppShell({ user, logout, children }: OperativeAppShellP
             logout={logout}
             prepend={slots.headerPrepend ?? undefined}
             title={titleNode}
+            headerActions={slots.headerActions ?? undefined}
             afterTitle={slots.headerAfterTitle ?? undefined}
             hamburger={<MobileNavHamburgerButton onOpen={() => setMobileNavOpen(true)} />}
+            chromeCompact={chromeCompact}
           />
 
           {slots.toolbar ? (
@@ -77,6 +85,7 @@ export function OperativeAppShell({ user, logout, children }: OperativeAppShellP
           open={mobileNavOpen}
           onClose={() => setMobileNavOpen(false)}
           user={user}
+          narrowDrawer={infermiereSmartphoneNav}
         />
       </div>
     </OperativeChromeProvider>

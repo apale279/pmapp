@@ -37,6 +37,7 @@
 /**
  * Chip neutro globale — stessa scala tipografica e geometrica di `.pma-pill` (codice colore).
  * Colori allineati alla pill “Bianco” off. Esclusi: .pma-pill, .pma-theme-skip.
+ * Per stili Tailwind propri sul bottone, aggiungere sempre `pma-theme-skip` (le regole sotto usano !important).
  */
 button[type='button']:not(.pma-pill):not(.pma-theme-skip),
 button[type='submit']:not(.pma-pill):not(.pma-theme-skip),
@@ -87,6 +88,17 @@ button:not([type]):not(.pma-pill):not(.pma-theme-skip):disabled {
   opacity: 0.45 !important;
 }
 
+button[type='button']:not(.pma-pill):not(.pma-theme-skip):focus-visible,
+button[type='submit']:not(.pma-pill):not(.pma-theme-skip):focus-visible,
+button[type='reset']:not(.pma-pill):not(.pma-theme-skip):focus-visible,
+button:not([type]):not(.pma-pill):not(.pma-theme-skip):focus-visible {
+  outline: 2px solid #2563eb !important;
+  outline-offset: 2px !important;
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.28),
+    0 1px 0 rgba(15, 23, 42, 0.04) !important;
+}
+
 a.pma-action-chip {
   box-sizing: border-box !important;
   border-radius: 30px !important;
@@ -118,4 +130,10 @@ a.pma-action-chip:hover {
   background: #ffffff !important;
   color: var(--pma-bianco-text) !important;
   border-color: #64748b !important;
+}
+
+a.pma-action-chip:focus-visible {
+  outline: 2px solid #2563eb !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.28) !important;
 }

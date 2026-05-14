@@ -6,10 +6,13 @@ export function MobileEmojiNavOverlay({
   open,
   onClose,
   user,
+  narrowDrawer = false,
 }: {
   open: boolean
   onClose: () => void
   user: UserProfile
+  /** Infermiere su smartphone: drawer più stretto. */
+  narrowDrawer?: boolean
 }) {
   if (!open) return null
   const Sidebar = user.rank === 'Superadmin' ? AdminEmojiSidebar : UnifiedEmojiSidebar
@@ -23,7 +26,9 @@ export function MobileEmojiNavOverlay({
       />
       <div
         id="emoji-mobile-nav"
-        className="fixed inset-y-0 left-0 z-50 flex w-[min(20rem,90vw)] flex-col bg-white shadow-xl md:hidden"
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-white shadow-xl md:hidden ${
+          narrowDrawer ? 'w-[min(13rem,82vw)]' : 'w-[min(20rem,90vw)]'
+        }`}
         role="dialog"
         aria-modal="true"
         aria-label="Navigazione"

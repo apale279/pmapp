@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable'
 import type { Timestamp } from 'firebase/firestore'
 import type { Paziente } from '../../types/paziente'
 import {
+  allergieVerificaDisplay,
   CODICE_COLORE_LABEL,
   PAZIENTE_STATO_LABEL,
   TIPO_PAZIENTE_LABEL,
@@ -30,11 +31,6 @@ export type PazientePdfContext = {
   consensoPrivacy?: string | null
   /** Incluso se esito dimissione = rifiuta invio in PS e il testo è valorizzato. */
   rifiutoInvioPsText?: string | null
-}
-
-export function sanitizeFilePart(s: string): string {
-  const t = s.trim().replace(/[^a-zA-Z0-9._\s-]+/g, '_').replace(/\s+/g, '_')
-  return t.slice(0, 72) || 'PMA'
 }
 
 function tsIt(ts: Timestamp | null | undefined): string {
@@ -211,49 +207,109 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
   const bodyLineH = 3.6
   const paragraphTitleGap = 4
 
+  type ParagraphOpts = { compact?: boolean }
+
   /**
    * Titolo + testo: se l’intero blocco entra in una pagina, non viene spezzato (salto pagina prima se serve).
    * Se il testo è più alto di un foglio, il titolo resta con le prime righe possibili e il resto continua.
+   * `compact`: ~50% della scala standard (consensi in PDF, risparmio spazio; stampa B/N).
    */
-  const writeParagraph = (title: string, body: string) => {
+  const writeParagraph = (title: string, body: string, opts?: ParagraphOpts) => {
+    const compact = opts?.compact ?? false
+    const titleSz = compact ? 4.5 : 9
+    const bodySz = compact ? 4.5 : 9
+    const lineH = compact ? 2.05 : bodyLineH
+    const titleGap = compact ? 2.8 : paragraphTitleGap
     const bodyText = (body || '').trim() || '—'
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
+    doc.setFontSize(bodySz)
     const lines = doc.splitTextToSize(bodyText, textW)
-    const titleH = paragraphTitleGap
-    const bodyH = lines.length * bodyLineH
+    const titleH = titleGap
+    const bodyH = lines.length * lineH
     const tail = 1.5
     const total = titleH + bodyH + tail
 
     if (total <= pageInnerH) {
       if (y + total > H - M) newPage()
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
+      doc.setFontSize(titleSz)
+      doc.setTextColor(0, 0, 0)
       doc.text(title, M, y)
       y += titleH
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(9)
+      doc.setFontSize(bodySz)
       for (const line of lines) {
         doc.text(line, M, y)
-        y += bodyLineH
+        y += lineH
       }
       y += tail
       return
     }
 
-    if (y + titleH + bodyLineH > H - M) newPage()
+    if (y + titleH + lineH > H - M) newPage()
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
+    doc.setFontSize(titleSz)
+    doc.setTextColor(0, 0, 0)
     doc.text(title, M, y)
     y += titleH
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
+    doc.setFontSize(bodySz)
     for (const line of lines) {
-      if (y + bodyLineH > H - M) newPage()
+      if (y + lineH > H - M) newPage()
       doc.text(line, M, y)
-      y += bodyLineH
+      y += lineH
     }
     y += tail
+  }
+
+  /** Rifiuto invio PS: evidenza con bordo marcato (leggibile in stampa bianco e nero). */
+  const writeRifiutoInvioPsBox = (title: string, body: string) => {
+    const bodyText = (body || '').trim() || '—'
+    const pad = 2.8
+    const innerW = textW - pad * 2
+    const titleSz = 8
+    const bodySz = 8
+    const lhTitle = 3.1
+    const lhBody = 3.35
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(titleSz)
+    const titleLines = doc.splitTextToSize(title, innerW)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(bodySz)
+    const bodyLines = doc.splitTextToSize(bodyText, innerW)
+    const innerH =
+      titleLines.length * lhTitle + (titleLines.length ? 1.2 : 0) + bodyLines.length * lhBody
+    const boxH = pad * 2 + innerH
+
+    if (boxH > pageInnerH - 6) {
+      writeParagraph(title, bodyText, { compact: true })
+      return
+    }
+    if (y + boxH > H - M) newPage()
+
+    const y0 = y
+    doc.setDrawColor(0, 0, 0)
+    doc.setLineWidth(1.15)
+    doc.setFillColor(255, 255, 255)
+    doc.rect(M, y0, textW, boxH, 'FD')
+    doc.setLineWidth(0.25)
+    doc.setTextColor(0, 0, 0)
+
+    let yt = y0 + pad + titleSz * 0.35
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(titleSz)
+    for (const line of titleLines) {
+      doc.text(line, M + pad, yt)
+      yt += lhTitle
+    }
+    yt += 0.8
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(bodySz)
+    for (const line of bodyLines) {
+      doc.text(line, M + pad, yt)
+      yt += lhBody
+    }
+    y = y0 + boxH + 2.5
   }
 
   // Intestazione
@@ -283,6 +339,7 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
   const leftCol = [
     `Nome: ${p.nome || '—'}`,
     `Cognome: ${p.cognome || '—'}`,
+    `CF: ${p.codice_fiscale?.trim() || '—'}`,
     `Età (campo): ${p.eta != null ? `${p.eta} anni` : '—'}`,
     `Data nascita: ${tsItDate(p.data_nascita)}`,
   ]
@@ -309,13 +366,16 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
   }
   y = ya + 2
 
-  writeParagraph('Breve descrizione (Sez. 1)', p.breve_descrizione)
+  if ((p.breve_descrizione ?? '').trim()) {
+    writeParagraph('Breve descrizione (Sez. 1)', p.breve_descrizione)
+  }
   if (p.tipo_evento || p.dettaglio_evento) {
     writeParagraph('Tipo / dettaglio evento', `${p.tipo_evento || '—'} — ${p.dettaglio_evento || '—'}`)
   }
 
   // Cartella
   writeTitle('Cartella clinica', 10)
+  writeParagraph('DOMANDA ALLERGIE', allergieVerificaDisplay(p.allergie_verifica))
   writeParagraph('APR', p.apr)
   writeParagraph('Allergie', p.allergie)
   writeParagraph('APP', p.app)
@@ -552,12 +612,12 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
   y += 4
   writeParagraph('Note dimissione', p.dimissione_note)
   const cgPdf = ctx.consensoGenericoCure?.trim()
-  if (cgPdf) writeParagraph('Consenso generico alle cure', cgPdf)
+  if (cgPdf) writeParagraph('Consenso generico alle cure', cgPdf, { compact: true })
   const cpPdf = ctx.consensoPrivacy?.trim()
-  if (cpPdf) writeParagraph('Consenso privacy', cpPdf)
+  if (cpPdf) writeParagraph('Consenso privacy', cpPdf, { compact: true })
   if (p.dimissione_esito === 'rifiuta_invio_ps') {
     const rifPdf = ctx.rifiutoInvioPsText?.trim()
-    if (rifPdf) writeParagraph('Rifiuto invio in PS', rifPdf)
+    if (rifPdf) writeRifiutoInvioPsBox('Rifiuto invio in PS', rifPdf)
   }
   if (p.dimissione_esito === 'riaffidato') {
     writeParagraph(
@@ -652,8 +712,8 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
   doc.setFont('helvetica', 'normal')
 
   const yImg = y
-  let hLeft = 0
-  let hRight = 0
+  let hLeft: number
+  let hRight: number
 
   if (firmaPazSrc) {
     try {
@@ -699,30 +759,4 @@ export async function buildPazientePdfBlob(p: Paziente, ctx: PazientePdfContext)
   doc.text(`Documento generato il ${new Date().toLocaleString('it-IT')} — ID interno: ${p.id}`, M, H - 8)
 
   return doc.output('blob')
-}
-
-export function defaultPdfFilename(p: Paziente): string {
-  const id = sanitizeFilePart(p.id_paziente_visibile || p.id)
-  return `Scheda_${id}.pdf`
-}
-
-export function buildMailtoReportPaziente(params: {
-  toEmail: string
-  pazienteIdVisibile: string
-  pdfFilename: string
-}): string {
-  const subject = `Scheda visita PMA — ${params.pazienteIdVisibile}`
-  const body = `Gentile Collega,
-
-di seguito le istruzioni per l'invio della scheda visita PMA.
-
-1) Il report PDF è stato scaricato automaticamente sul dispositivo con nome:
-   ${params.pdfFilename}
-
-2) Poiché il programma di posta non consente allegati automatici da questa applicazione, allega manualmente il file PDF al presente messaggio prima dell'invio.
-
-3) Verifica che l'indirizzo del destinatario sia corretto.
-
-Cordiali saluti`
-  return `mailto:${encodeURIComponent(params.toEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { deleteDoc, doc } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
 import { useRankTheme } from '../../hooks/useRankTheme'
+import { useApplyOperativeChrome } from '../../hooks/useApplyOperativeChrome'
 import { db } from '../../lib/firebase'
 import {
   IdentityToolkitDeleteUserError,
@@ -104,6 +105,36 @@ export function GestioneUtentiPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [q, setQ] = useState('')
 
+  useApplyOperativeChrome(
+    true,
+    () => ({
+      titleOverride: (
+        <h1 className="truncate text-xs font-bold uppercase tracking-wider text-[#e8e8f8] sm:text-sm">UTENTI</h1>
+      ),
+      headerActions: (
+        <button
+          type="button"
+          onClick={() => {
+            setNuovoKey((k) => k + 1)
+            setNuovoOpen(true)
+          }}
+          className={`${opPrimaryBtn} shrink-0 whitespace-nowrap`}
+        >
+          Nuovo operatore
+        </button>
+      ),
+      toolbar: (
+        <AdminTableToolbar
+          variant="filtersOnly"
+          searchPlaceholder="Filtra per nome, email, rank, manifestazione, PMA…"
+          searchValue={q}
+          onSearchChange={setQ}
+        />
+      ),
+    }),
+    [q],
+  )
+
   const filteredVisibili = useMemo(() => {
     const s = q.trim().toLowerCase()
     if (!s) return visibili
@@ -160,29 +191,11 @@ export function GestioneUtentiPage() {
   return (
     <>
       <div className="pma-dashboard w-full max-w-[min(100%,1800px)] space-y-6">
-        <AdminTableToolbar
-          title="Utenti"
-          subtitle={
-            centraleMid
-              ? 'Elenco operatori della tua manifestazione (creazione e modifica con ambito evento e PMA).'
-              : 'Elenco in tempo reale dalla collection `utenti`. Gli account Superadmin non compaiono in questa vista.'
-          }
-          searchPlaceholder="Filtra per nome, email, rank, manifestazione, PMA…"
-          searchValue={q}
-          onSearchChange={setQ}
-          actions={
-            <button
-              type="button"
-              onClick={() => {
-                setNuovoKey((k) => k + 1)
-                setNuovoOpen(true)
-              }}
-              className={`${opPrimaryBtn} shrink-0 px-5 text-sm`}
-            >
-              Nuovo operatore
-            </button>
-          }
-        />
+        <p className="text-xs leading-snug text-slate-600">
+          {centraleMid
+            ? 'Elenco operatori della tua manifestazione (creazione e modifica con ambito evento e PMA).'
+            : 'Elenco in tempo reale dalla collection `utenti`. Gli account Superadmin non compaiono in questa vista.'}
+        </p>
 
         {listError ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">

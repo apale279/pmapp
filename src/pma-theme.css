@@ -128,6 +128,21 @@
 .pma-bar__sdot--rosso  { background: #ef4444; }
 .pma-bar__sdot--bianco { background: #94a3b8; }
 
+/* CTA compatte nell’header globale (evita sovrapposizioni) */
+.pma-shell-header-actions :is(button, a) {
+  font-size: 10px;
+  line-height: 1.1;
+  min-height: 28px;
+  padding: 4px 8px;
+}
+@media (min-width: 640px) {
+  .pma-shell-header-actions :is(button, a) {
+    font-size: 11px;
+    min-height: 30px;
+    padding: 5px 10px;
+  }
+}
+
 
 /* ════════════════════════════════════════════════
    TAB NAVIGAZIONE — Generale / Anagrafica / etc.
@@ -189,8 +204,10 @@
 .pma-field--no-bb  { border-bottom: none; }
 
 .pma-field__label {
-  font-size: var(--pma-label-size);
-  color: #64748b;
+  /* Stessa scala del testo nei campi; grassetto per distinguere dal valore digitato */
+  font-size: var(--pma-value-size);
+  font-weight: 700;
+  color: #0f172a;
   margin-bottom: 3px;
   display: block;
 }
