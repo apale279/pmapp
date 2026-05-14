@@ -30,14 +30,14 @@ export function SyncLiveIndicator({
   return (
     <div
       className={`flex h-10 min-h-10 shrink-0 items-center rounded-md border font-medium ${box} ${
-        compact ? 'gap-1 px-1.5 py-0 text-[10px]' : 'gap-2 px-2 py-1 text-sm'
+        compact ? 'gap-0 px-0.5 py-0 text-[10px]' : 'gap-2 px-2 py-1 text-sm'
       }`}
     >
       <button
         type="button"
         onClick={() => toggleAudioMuted()}
         className={`pma-theme-skip flex shrink-0 items-center justify-center rounded border border-transparent leading-none ${btnHover} ${
-          compact ? 'h-8 w-8 text-sm' : 'h-8 w-8 text-lg'
+          compact ? 'h-9 w-9 text-sm' : 'h-8 w-8 text-lg'
         }`}
         title={audioMuted ? 'Audio disattivato' : 'Audio attivo'}
         aria-pressed={audioMuted}
@@ -45,14 +45,20 @@ export function SyncLiveIndicator({
       >
         <span aria-hidden>{audioMuted ? '🔇' : '🔊'}</span>
       </button>
-      <span
-        className={`min-w-0 truncate font-mono font-semibold leading-none ${timeCls} ${
-          compact ? 'max-w-[3.25rem] text-[9px]' : 'text-[11px] sm:text-xs'
-        }`}
-        title="Ultimo aggiornamento dati da Firestore"
-      >
-        {lastSyncAt != null ? formatTime(lastSyncAt) : '—'}
-      </span>
+      {compact ? (
+        <span className="sr-only">
+          {lastSyncAt != null
+            ? `Ultimo aggiornamento dati da Firestore: ${formatTime(lastSyncAt)}`
+            : 'Ultimo aggiornamento dati: non disponibile'}
+        </span>
+      ) : (
+        <span
+          className={`min-w-0 truncate font-mono font-semibold leading-none ${timeCls} text-[11px] sm:text-xs`}
+          title="Ultimo aggiornamento dati da Firestore"
+        >
+          {lastSyncAt != null ? formatTime(lastSyncAt) : '—'}
+        </span>
+      )}
     </div>
   )
 }
