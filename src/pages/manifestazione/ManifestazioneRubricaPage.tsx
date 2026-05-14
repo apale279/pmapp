@@ -53,6 +53,7 @@ export function ManifestazioneRubricaPage() {
   const [draftDesc, setDraftDesc] = useState('')
   const [rowBusy, setRowBusy] = useState<string | null>(null)
   const [copyMsg, setCopyMsg] = useState<string | null>(null)
+  const [nuovoContattoOpen, setNuovoContattoOpen] = useState(false)
 
   const canUse = Boolean(db && tenantId.trim())
 
@@ -89,6 +90,7 @@ export function ManifestazioneRubricaPage() {
       setNome('')
       setNumero('')
       setDescrizione('')
+      setNuovoContattoOpen(false)
     } catch (err) {
       setFormErr(err instanceof Error ? err.message : 'Salvataggio non riuscito.')
     } finally {
@@ -174,39 +176,51 @@ export function ManifestazioneRubricaPage() {
       ) : null}
 
       <section className="overflow-hidden pma-card p-0">
-        <div className="pma-card__hdr">Nuovo contatto</div>
-        <form onSubmit={(e) => void handleAdd(e)} className="space-y-0">
-          <div className="pma-row pma-row--2">
-            <label className="pma-field pma-field--br">
-              <span className="pma-field__label">Nome</span>
-              <input
-                value={nome}
-                onChange={(e) => setNome(e.target.value)}
-                autoComplete="name"
-              />
-            </label>
-            <label className="pma-field">
-              <span className="pma-field__label">Numero</span>
-              <input
-                value={numero}
-                onChange={(e) => setNumero(e.target.value)}
-                inputMode="tel"
-                autoComplete="tel"
-              />
-            </label>
-          </div>
-          <div className="pma-row">
-            <label className="pma-field">
-              <span className="pma-field__label">Descrizione</span>
-              <input value={descrizione} onChange={(e) => setDescrizione(e.target.value)} />
-            </label>
-          </div>
-          <div className="border-t border-slate-100 p-3">
-            <button type="submit" disabled={saving || !canUse} className={opPrimaryBtn}>
-              {saving ? 'Salvataggio…' : 'Aggiungi contatto'}
-            </button>
-          </div>
-        </form>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
+          <div className="pma-card__hdr mb-0 border-0 pb-0">Nuovo contatto</div>
+          <button
+            type="button"
+            className={opToolbarBtnSm}
+            aria-expanded={nuovoContattoOpen}
+            onClick={() => setNuovoContattoOpen((o) => !o)}
+          >
+            {nuovoContattoOpen ? 'Chiudi' : 'Nuovo contatto'}
+          </button>
+        </div>
+        {nuovoContattoOpen ? (
+          <form onSubmit={(e) => void handleAdd(e)} className="space-y-0">
+            <div className="pma-row pma-row--2">
+              <label className="pma-field pma-field--br">
+                <span className="pma-field__label">Nome</span>
+                <input
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  autoComplete="name"
+                />
+              </label>
+              <label className="pma-field">
+                <span className="pma-field__label">Numero</span>
+                <input
+                  value={numero}
+                  onChange={(e) => setNumero(e.target.value)}
+                  inputMode="tel"
+                  autoComplete="tel"
+                />
+              </label>
+            </div>
+            <div className="pma-row">
+              <label className="pma-field">
+                <span className="pma-field__label">Descrizione</span>
+                <input value={descrizione} onChange={(e) => setDescrizione(e.target.value)} />
+              </label>
+            </div>
+            <div className="border-t border-slate-100 p-3">
+              <button type="submit" disabled={saving || !canUse} className={opPrimaryBtn}>
+                {saving ? 'Salvataggio…' : 'Aggiungi contatto'}
+              </button>
+            </div>
+          </form>
+        ) : null}
       </section>
 
       <section className="overflow-hidden pma-card p-0">

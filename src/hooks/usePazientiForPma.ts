@@ -27,6 +27,8 @@ export type PazienteListItem = {
   eta: number | null
   /** Motivo / sintesi accesso (breve descrizione). */
   breve_descrizione: string
+  /** Dettaglio evento (più corto in elenco colonna Motivo). */
+  dettaglio_evento: string
 }
 
 function parseListItem(id: string, d: Record<string, unknown>): PazienteListItem {
@@ -47,6 +49,8 @@ function parseListItem(id: string, d: Record<string, unknown>): PazienteListItem
       : null
   const breve =
     typeof d.breve_descrizione === 'string' ? d.breve_descrizione.trim().slice(0, 500) : ''
+  const dettaglioEv =
+    typeof d.dettaglio_evento === 'string' ? d.dettaglio_evento.trim().slice(0, 500) : ''
 
   return {
     id,
@@ -65,6 +69,7 @@ function parseListItem(id: string, d: Record<string, unknown>): PazienteListItem
     medico_rif: typeof d.medico_rif === 'string' ? d.medico_rif : '',
     eta,
     breve_descrizione: breve,
+    dettaglio_evento: dettaglioEv,
   }
 }
 

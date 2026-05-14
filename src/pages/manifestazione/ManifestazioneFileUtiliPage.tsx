@@ -42,6 +42,7 @@ export function ManifestazioneFileUtiliPage() {
   const [uploadBusy, setUploadBusy] = useState(false)
   const [formErr, setFormErr] = useState<string | null>(null)
   const [rowBusy, setRowBusy] = useState<string | null>(null)
+  const [caricaFormOpen, setCaricaFormOpen] = useState(false)
 
   const canUse = Boolean(db && tenantId.trim())
 
@@ -85,6 +86,7 @@ export function ManifestazioneFileUtiliPage() {
       setFile(null)
       const input = document.getElementById('file-utili-input') as HTMLInputElement | null
       if (input) input.value = ''
+      setCaricaFormOpen(false)
     } catch (err) {
       setFormErr(err instanceof Error ? err.message : 'Caricamento non riuscito.')
     } finally {
@@ -122,35 +124,47 @@ export function ManifestazioneFileUtiliPage() {
       ) : null}
 
       <section className="overflow-hidden pma-card p-0">
-        <div className="pma-card__hdr">Carica file</div>
-        <form onSubmit={(e) => void handleUpload(e)} className="space-y-0">
-          <label className="pma-field">
-            <span className="pma-field__label">File</span>
-            <input
-              id="file-utili-input"
-              type="file"
-              className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-800 hover:file:bg-slate-200"
-              onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
-            />
-          </label>
-          <label className="pma-field">
-            <span className="pma-field__label">Nome</span>
-            <input
-              value={nomeFile}
-              onChange={(e) => setNomeFile(e.target.value)}
-              placeholder="Nome visualizzato"
-            />
-          </label>
-          <label className="pma-field">
-            <span className="pma-field__label">Descrizione</span>
-            <input value={descrizione} onChange={(e) => setDescrizione(e.target.value)} />
-          </label>
-          <div className="border-t border-slate-100 p-3">
-            <button type="submit" disabled={uploadBusy || !canUse || !file} className={opPrimaryBtn}>
-              {uploadBusy ? 'Caricamento…' : 'Carica e salva'}
-            </button>
-          </div>
-        </form>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
+          <div className="pma-card__hdr mb-0 border-0 pb-0">Carica file</div>
+          <button
+            type="button"
+            className={opToolbarBtnSm}
+            aria-expanded={caricaFormOpen}
+            onClick={() => setCaricaFormOpen((o) => !o)}
+          >
+            {caricaFormOpen ? 'Chiudi' : 'Nuovo file'}
+          </button>
+        </div>
+        {caricaFormOpen ? (
+          <form onSubmit={(e) => void handleUpload(e)} className="space-y-0">
+            <label className="pma-field">
+              <span className="pma-field__label">File</span>
+              <input
+                id="file-utili-input"
+                type="file"
+                className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-800 hover:file:bg-slate-200"
+                onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            <label className="pma-field">
+              <span className="pma-field__label">Nome</span>
+              <input
+                value={nomeFile}
+                onChange={(e) => setNomeFile(e.target.value)}
+                placeholder="Nome visualizzato"
+              />
+            </label>
+            <label className="pma-field">
+              <span className="pma-field__label">Descrizione</span>
+              <input value={descrizione} onChange={(e) => setDescrizione(e.target.value)} />
+            </label>
+            <div className="border-t border-slate-100 p-3">
+              <button type="submit" disabled={uploadBusy || !canUse || !file} className={opPrimaryBtn}>
+                {uploadBusy ? 'Caricamento…' : 'Carica e salva'}
+              </button>
+            </div>
+          </form>
+        ) : null}
       </section>
 
       <section className="overflow-hidden pma-card p-0">

@@ -65,10 +65,9 @@ function PazienteSnapDetailSheet({
   const nome = [pz.cognome, pz.nome].filter(Boolean).join(' ') || 'Senza nome'
   const schedaTo = `/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`
   const etaDisp = pz.eta !== null && pz.eta !== undefined ? `${pz.eta} anni` : '—'
-  const motivo = pz.breve_descrizione?.trim() || '—'
+  const motivoElenco = pz.dettaglio_evento?.trim() || pz.breve_descrizione?.trim() || '—'
   const refI = pz.infermiere_rif.trim()
   const refM = pz.medico_rif.trim()
-  const refLines = [refI ? `Infermiere: ${refI}` : null, refM ? `Medico: ${refM}` : null].filter(Boolean) as string[]
 
   return (
     <div
@@ -121,15 +120,26 @@ function PazienteSnapDetailSheet({
             </div>
             <div className="min-w-0">
               <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Motivo / accesso</dt>
-              <dd className="mt-1 whitespace-pre-wrap break-words">{motivo}</dd>
+              <dd className="mt-1 whitespace-pre-wrap break-words">{motivoElenco}</dd>
             </div>
-            {refLines.length > 0 ? (
+            {refI || refM ? (
               <div className="min-w-0">
                 <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Riferimenti</dt>
-                <dd className="mt-1 space-y-1 break-words">
-                  {refLines.map((line) => (
-                    <div key={line}>{line}</div>
-                  ))}
+                <dd className="mt-1">
+                  <div className="space-y-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm">
+                    {refI ? (
+                      <div className="break-words">
+                        <span className="font-semibold text-slate-600">Infermiere: </span>
+                        {refI}
+                      </div>
+                    ) : null}
+                    {refM ? (
+                      <div className="break-words">
+                        <span className="font-semibold text-slate-600">Medico: </span>
+                        {refM}
+                      </div>
+                    ) : null}
+                  </div>
                 </dd>
               </div>
             ) : null}
@@ -507,17 +517,17 @@ function ListaPazientiInCarico({
             const inSosp = pz.stato === 'in_sospeso'
             const inEvidenza = !manager && (evidenzaIds?.has(pz.id) ?? false)
             const etaDisp = pz.eta !== null && pz.eta !== undefined ? `${pz.eta}a` : '—'
-            const rawMotivo = pz.breve_descrizione?.trim() ?? ''
+            const rawMotivo = (pz.dettaglio_evento?.trim() || pz.breve_descrizione?.trim() || '') ?? ''
             const motivo =
               rawMotivo === ''
                 ? '—'
                 : rawMotivo.length > (manager ? 80 : 56)
                   ? `${rawMotivo.slice(0, manager ? 80 : 56)}…`
                   : rawMotivo
-            const refParts: string[] = []
-            if (pz.infermiere_rif.trim()) refParts.push(`I:${pz.infermiere_rif.trim()}`)
-            if (pz.medico_rif.trim()) refParts.push(`M:${pz.medico_rif.trim()}`)
-            const ref = refParts.join(' · ') || '—'
+            const refTitle = [pz.infermiere_rif.trim() ? `Infermiere: ${pz.infermiere_rif.trim()}` : '', pz.medico_rif.trim() ? `Medico: ${pz.medico_rif.trim()}` : '']
+              .filter(Boolean)
+              .join(' · ')
+            const refHas = Boolean(pz.infermiere_rif.trim() || pz.medico_rif.trim())
             const schedaTo = `/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`
             const sep =
               inCaricoMineCount > 0 && idx === inCaricoMineCount ? (
@@ -573,10 +583,25 @@ function ListaPazientiInCarico({
                   {motivo}
                 </td>
                 <td
-                  className={`max-w-[8rem] truncate px-2 py-2.5 font-mono text-sm font-medium text-slate-600 ${manager ? 'table-cell' : 'hidden md:table-cell'}`}
-                  title={ref}
+                  className={`max-w-[8rem] px-2 py-2.5 ${manager ? 'table-cell' : 'hidden md:table-cell'}`}
+                  title={refTitle || undefined}
                 >
-                  {ref}
+                  {refHas ? (
+                    <div className="flex max-w-[8rem] flex-col gap-0.5 rounded border border-slate-200 bg-slate-50 px-1.5 py-1">
+                      {pz.infermiere_rif.trim() ? (
+                        <span className="truncate font-mono text-[11px] font-medium leading-tight text-slate-600">
+                          I:{pz.infermiere_rif.trim()}
+                        </span>
+                      ) : null}
+                      {pz.medico_rif.trim() ? (
+                        <span className="truncate font-mono text-[11px] font-medium leading-tight text-slate-600">
+                          M:{pz.medico_rif.trim()}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <span className="font-mono text-sm font-medium text-slate-400">—</span>
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-2 py-2.5 tabular-nums text-slate-700">
                   {formatPermanenza(pz.apertura_scheda, nowMs)}
@@ -748,6 +773,7 @@ export function PMADashboardPage() {
             medico_rif: '',
             eta: null,
             breve_descrizione: '',
+            dettaglio_evento: '',
           }),
         )
     }
