@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
 import type { UserProfile } from '../../types/userProfile'
-import { rankOperativeHeaderClass } from '../../lib/rankOperativeHeaderClass'
+import { operativeRankDataValue, operativeRankHeaderStripClass } from '../../lib/rankOperativeHeaderClass'
 import { OperativeUserTray } from './OperativeUserTray'
 import { SyncLiveIndicator } from './SyncLiveIndicator'
 
@@ -28,11 +28,13 @@ export function OperativeShellHeader({
   hamburger,
   chromeCompact = false,
 }: OperativeShellHeaderProps) {
-  const rankBar = rankOperativeHeaderClass(user.rank)
+  const rankStrip = operativeRankHeaderStripClass
+  const rankData = operativeRankDataValue(user.rank)
   return (
     <>
       <header
-        className={`pma-bar sticky top-0 z-10 flex shrink-0 items-center px-2 py-1.5 sm:px-3 ${rankBar} ${
+        data-operative-rank={rankData}
+        className={`pma-bar ${rankStrip} sticky top-0 z-10 flex shrink-0 items-center px-2 py-1.5 sm:px-3 ${
           chromeCompact
             ? 'min-h-12 flex-nowrap gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]'
             : 'min-h-14 flex-wrap gap-x-2 gap-y-1.5'
@@ -78,7 +80,8 @@ export function OperativeShellHeader({
       </header>
       {afterTitle ? (
         <div
-          className={`border-b border-black/20 px-3 py-1.5 text-[#e8e8f8] lg:hidden ${rankBar}`}
+          data-operative-rank={rankData}
+          className={`${rankStrip} border-b border-black/20 px-3 py-1.5 text-[#e8e8f8] lg:hidden`}
         >
           {afterTitle}
         </div>

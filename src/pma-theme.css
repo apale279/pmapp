@@ -85,6 +85,45 @@
   padding: 6px 14px;
   font-size: 12px;
 }
+
+/*
+ * Header operativo (striscia in alto): un colore scuro per RANK.
+ * No rosso / verde / giallo (codici triage). Testo chiaro → sfondi molto scuri.
+ */
+.pma-operative-rank-bg[data-operative-rank="Superadmin"] {
+  background: #0b0b0f !important;
+  color: #f1f5f9;
+}
+/* Blu comando (distinto dal “blu scheda” generico) */
+.pma-operative-rank-bg[data-operative-rank="Centrale"] {
+  background: #15396e !important;
+  color: #e8e8f8;
+}
+/* Ardesia blu — clinico */
+.pma-operative-rank-bg[data-operative-rank="Medico"] {
+  background: #243548 !important;
+  color: #e8e8f8;
+}
+/* Indaco profondo */
+.pma-operative-rank-bg[data-operative-rank="Infermiere"] {
+  background: #2d2659 !important;
+  color: #e8e8f8;
+}
+/* Terra / bronzo scuro (no giallo) */
+.pma-operative-rank-bg[data-operative-rank="Soccorritore"] {
+  background: #3d3428 !important;
+  color: #e8e8f8;
+}
+/* Prugna scuro (no rosso triage) */
+.pma-operative-rank-bg[data-operative-rank="Triage"] {
+  background: #4a2848 !important;
+  color: #e8e8f8;
+}
+.pma-operative-rank-bg[data-operative-rank="—"],
+.pma-operative-rank-bg:not([data-operative-rank]) {
+  background: #1a1a2e !important;
+  color: #e8e8f8;
+}
 .pma-bar__title {
   font-weight: 500;
   font-size: 13px;

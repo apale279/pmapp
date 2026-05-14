@@ -1,24 +1,14 @@
 import type { UserRank } from '../types/userProfile'
 
 /**
- * Sfondo barra chrome operativa per RANK (testi chiari in header).
- * Evitati rosso / verde / giallo / amber (triage codice colore).
+ * Fascia header operativo (scheda, dashboard PMA, …): colore per `data-operative-rank`.
+ * I valori esadecimali stanno in `pma-theme.css` (vincono su `.pma-bar { background }`).
+ * Palette solo **scura** per testi chiari; **mai** rosso/verde/giallo (pallini triage).
  */
-export function rankOperativeHeaderClass(rank: UserRank | undefined): string {
-  switch (rank) {
-    case 'Superadmin':
-      return '!bg-neutral-950'
-    case 'Centrale':
-      return '!bg-[#172554]'
-    case 'Medico':
-      return '!bg-slate-900'
-    case 'Infermiere':
-      return '!bg-[#1e1b4b]'
-    case 'Triage':
-      return '!bg-[#3b0764]'
-    case 'Soccorritore':
-      return '!bg-[#292524]'
-    default:
-      return '!bg-[#1a1a2e]'
-  }
+export const operativeRankHeaderStripClass = 'pma-operative-rank-bg'
+
+/** Valore sicuro per l’attributo `data-operative-rank`. */
+export function operativeRankDataValue(rank: UserRank | undefined): string {
+  if (!rank) return '—'
+  return rank
 }
