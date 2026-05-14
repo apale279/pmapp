@@ -267,9 +267,25 @@ function ManagerQueueBox({
 
   return (
     <section className={openDetail ? 'pma-card min-w-0 max-w-full overflow-hidden' : 'pma-card'}>
-      <div className="border-b border-slate-100 pb-2 text-center">
-        <div className="text-lg font-bold leading-tight text-slate-900">{headingMain}</div>
-        <div className="pma-card__hdr mb-0 mt-1 text-center">{headingSub}</div>
+      <div
+        className={`border-b border-slate-100 text-center ${
+          openDetail ? 'px-2 pb-3.5 pt-1.5' : 'pb-2'
+        }`}
+      >
+        <div
+          className={`font-bold text-slate-900 ${
+            openDetail ? 'text-base leading-snug tracking-tight sm:text-lg' : 'text-lg leading-tight'
+          }`}
+        >
+          {headingMain}
+        </div>
+        <div
+          className={`pma-card__hdr text-center text-slate-500 ${
+            openDetail ? 'mx-auto mt-2.5 max-w-[22rem] text-[11px] leading-snug' : 'mb-0 mt-1'
+          }`}
+        >
+          {headingSub}
+        </div>
       </div>
       {rows.length === 0 ? (
         <p className="mt-2 text-center text-sm text-slate-400">—</p>
@@ -282,44 +298,36 @@ function ManagerQueueBox({
               <li key={pz.id}>
                 <div className="flex w-full min-w-0 max-w-full items-center gap-2 px-2 py-2.5 transition-colors hover:bg-slate-50 active:bg-slate-100">
                   <span
-                    className="flex shrink-0 items-center pt-0.5"
+                    className="flex shrink-0 items-center self-center"
                     title={CODICE_COLORE_LABEL[pz.codice_colore]}
                   >
                     <span className={`h-3 w-3 shrink-0 rounded-full ${DOT_BG[pz.codice_colore]}`} aria-hidden />
                     <span className="sr-only">{CODICE_COLORE_LABEL[pz.codice_colore]}</span>
                   </span>
-                  <div className="flex min-w-0 flex-1 overflow-hidden rounded-md border border-slate-200 bg-slate-50/90">
-                    <div className="flex min-w-0 flex-1 flex-col px-2 py-1.5">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 truncate text-left text-sm font-semibold leading-tight text-slate-900 transition-colors hover:text-slate-950"
-                          aria-label={`Dettagli ${nome}`}
-                          onClick={() => onSelectPatientDetail?.(pz)}
-                        >
-                          {nome}
-                        </button>
-                        {take ? (
-                          <button
-                            type="button"
-                            title="Prendi in carico"
-                            aria-label={`Prendi in carico ${nome}`}
-                            onClick={() => onInCarico(pz.id)}
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-300/80 bg-white text-base font-semibold leading-none text-slate-800 hover:bg-slate-100 active:bg-slate-200"
-                          >
-                            ←
-                          </button>
-                        ) : null}
-                      </div>
+                  <div className="flex min-h-[2.75rem] min-w-0 flex-1 items-stretch overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center px-3 py-2 text-left transition-colors hover:bg-slate-50/80 active:bg-slate-100"
+                      aria-label={`Dettagli ${nome}, ${pz.id_paziente_visibile}`}
+                      onClick={() => onSelectPatientDetail?.(pz)}
+                    >
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className="font-semibold text-slate-900">{nome}</span>
+                        <span className="text-slate-400"> · </span>
+                        <span className="font-mono text-xs font-medium text-slate-600">{pz.id_paziente_visibile}</span>
+                      </span>
+                    </button>
+                    {take ? (
                       <button
                         type="button"
-                        className="mt-0.5 w-full truncate text-left font-mono text-xs text-slate-600 transition-colors hover:text-slate-800"
-                        aria-label={`Dettagli ${nome}, ID ${pz.id_paziente_visibile}`}
-                        onClick={() => onSelectPatientDetail?.(pz)}
+                        title="Prendi in carico"
+                        aria-label={`Prendi in carico ${nome}`}
+                        onClick={() => onInCarico(pz.id)}
+                        className="flex w-11 shrink-0 items-center justify-center border-l border-slate-200 bg-slate-50 text-lg font-semibold leading-none text-slate-800 transition-colors hover:bg-slate-100 active:bg-slate-200"
                       >
-                        {pz.id_paziente_visibile}
+                        ←
                       </button>
-                    </div>
+                    ) : null}
                   </div>
                 </div>
               </li>
@@ -428,7 +436,7 @@ function ListaPazientiInCarico({
             <li key={pz.id}>
               <div className="flex w-full min-w-0 max-w-full items-center gap-2 px-2 py-2.5 transition-colors hover:bg-slate-50 active:bg-slate-100">
                 <span
-                  className="flex shrink-0 items-center pt-0.5"
+                  className="flex shrink-0 items-center self-center"
                   title={CODICE_COLORE_LABEL[pz.codice_colore]}
                 >
                   <span className={`h-3 w-3 shrink-0 rounded-full ${DOT_BG[pz.codice_colore]}`} aria-hidden />
@@ -436,14 +444,17 @@ function ListaPazientiInCarico({
                 </span>
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 overflow-hidden rounded-md border border-slate-200 bg-slate-50/90 px-2 py-1.5 text-left transition hover:bg-slate-100/90 active:bg-slate-100"
+                  className="flex min-h-[2.75rem] min-w-0 flex-1 items-center overflow-hidden rounded-full border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition hover:bg-slate-50/90 active:bg-slate-100"
                   onClick={() => {
                     if (onSelectPatientDetail) onSelectPatientDetail(pz)
                     else void navigate(schedaTo)
                   }}
                 >
-                  <div className="truncate text-sm font-semibold leading-tight text-slate-900">{nome}</div>
-                  <div className="truncate font-mono text-xs text-slate-600">{pz.id_paziente_visibile}</div>
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="font-semibold text-slate-900">{nome}</span>
+                    <span className="text-slate-400"> · </span>
+                    <span className="font-mono text-xs font-medium text-slate-600">{pz.id_paziente_visibile}</span>
+                  </span>
                 </button>
               </div>
             </li>
@@ -807,6 +818,7 @@ export function PMADashboardPage() {
     )
 
   const showPrendiInCarico =
+    user?.rank === 'Superadmin' ||
     user?.rank === 'Medico' ||
     user?.rank === 'Infermiere' ||
     user?.rank === 'Soccorritore' ||

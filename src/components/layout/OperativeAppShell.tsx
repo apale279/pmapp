@@ -62,6 +62,7 @@ export function OperativeAppShell({ user, logout, children }: OperativeAppShellP
             afterTitle={slots.headerAfterTitle ?? undefined}
             hamburger={<MobileNavHamburgerButton onOpen={() => setMobileNavOpen(true)} />}
             chromeCompact={chromeCompact}
+            compactOmitTitle={slots.headerCompactOmitTitle === true}
           />
 
           {slots.toolbar ? (

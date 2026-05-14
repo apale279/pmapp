@@ -1,5 +1,6 @@
 import { useLayoutEffect, type ReactNode } from 'react'
 import { useOperativeChrome } from '../../context/OperativeChromeContext'
+import { useIsSmartphone } from '../../hooks/useIsSmartphone'
 import type { UserProfile } from '../../types/userProfile'
 
 export type PmaManagerShellProps = {
@@ -30,6 +31,7 @@ export function PmaManagerShell({
   footer,
 }: PmaManagerShellProps) {
   const { setSlots, clearSlots } = useOperativeChrome()
+  const smartphone = useIsSmartphone()
   const hasFooter = footer != null
   const hasToolbar = topToolbar != null
 
@@ -37,11 +39,14 @@ export function PmaManagerShell({
     const titleUpper = pmaDisplayTitle.trim().toUpperCase()
     setSlots({
       headerPrepend: null,
-      titleOverride: (
+      titleOverride: smartphone ? (
+        <h1 className="sr-only">{titleUpper}</h1>
+      ) : (
         <h1 className="truncate text-xs font-bold uppercase tracking-wider text-[#e8e8f8] sm:text-sm">
           {titleUpper}
         </h1>
       ),
+      headerCompactOmitTitle: smartphone,
       headerActions: headerActions ?? null,
       headerAfterTitle: triageStrip ?? null,
       toolbar: hasToolbar ? topToolbar : null,
@@ -55,6 +60,7 @@ export function PmaManagerShell({
     }
   }, [
     pmaDisplayTitle,
+    smartphone,
     triageStrip,
     headerActions,
     topToolbar,

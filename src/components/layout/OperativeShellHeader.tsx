@@ -63,6 +63,8 @@ export type OperativeShellHeaderProps = {
   hamburger?: ReactNode
   /** Smartphone: una sola riga principale, logout compatto, scroll orizzontale se serve. */
   chromeCompact?: boolean
+  /** Smartphone: non mostrare la colonna titolo visibile (titolo già sr-only dal chiamante). */
+  compactOmitTitle?: boolean
 }
 
 export function OperativeShellHeader({
@@ -75,6 +77,7 @@ export function OperativeShellHeader({
   mobileBelow,
   hamburger,
   chromeCompact = false,
+  compactOmitTitle = false,
 }: OperativeShellHeaderProps) {
   const rankStrip = operativeRankHeaderStripClass
   const rankData = operativeRankDataValue(user.rank)
@@ -84,26 +87,37 @@ export function OperativeShellHeader({
         data-operative-rank={rankData}
         className={`pma-bar ${rankStrip} sticky top-0 z-10 flex shrink-0 items-center px-2 py-1.5 sm:px-3 ${
           chromeCompact
-            ? 'min-h-12 flex-nowrap gap-1 overflow-hidden'
+            ? `relative min-h-12 flex-nowrap gap-2 overflow-hidden ${compactOmitTitle ? 'items-stretch' : 'items-center'}`
             : 'min-h-14 flex-wrap gap-x-2 gap-y-1.5'
         }`}
       >
+        {chromeCompact && compactOmitTitle ? title : null}
         {hamburger ? <div className="flex shrink-0 items-center md:hidden">{hamburger}</div> : null}
         <OperativePmaHomeButton user={user} />
         {prepend ? <div className="flex shrink-0 items-center">{prepend}</div> : null}
         {chromeCompact ? (
-          <div className="relative isolate flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-            <div className="min-w-0 max-w-[min(11rem,36vw)] shrink-0 overflow-hidden border-r border-white/10 pr-1.5">
-              {title}
-            </div>
-            {headerActions ? (
-              <div className="pma-shell-header-actions flex min-h-[2.75rem] min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] pr-0.5">
+          compactOmitTitle ? (
+            headerActions ? (
+              <div className="pma-shell-header-actions flex min-h-11 min-w-0 flex-1 items-center gap-2 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] pr-0.5 [scrollbar-width:thin]">
                 {headerActions}
               </div>
             ) : (
               <div className="min-w-0 flex-1" aria-hidden />
-            )}
-          </div>
+            )
+          ) : (
+            <div className="relative isolate flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+              <div className="min-w-0 max-w-[min(11rem,36vw)] shrink-0 overflow-hidden border-r border-white/10 pr-1.5">
+                {title}
+              </div>
+              {headerActions ? (
+                <div className="pma-shell-header-actions flex min-h-11 min-w-0 flex-1 items-center gap-2 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] pr-0.5 [scrollbar-width:thin]">
+                  {headerActions}
+                </div>
+              ) : (
+                <div className="min-w-0 flex-1" aria-hidden />
+              )}
+            </div>
+          )
         ) : (
           <>
             <div className="flex min-w-0 max-w-full flex-[1_1_auto] items-center gap-2 sm:min-w-[8rem] sm:max-w-[min(100%,28rem)]">
@@ -124,7 +138,7 @@ export function OperativeShellHeader({
         <div
           className={
             chromeCompact
-              ? 'ml-auto flex shrink-0 flex-nowrap items-center justify-end gap-1'
+              ? 'ml-auto flex shrink-0 flex-nowrap items-center justify-end gap-1.5 self-center'
               : 'ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2'
           }
         >

@@ -61,10 +61,10 @@ export function OperativeUserTray({
         className={
           isDark
             ? compact
-              ? 'pma-theme-skip flex h-8 w-8 shrink-0 items-center justify-center rounded border border-white/30 text-[#e8e8f8] hover:bg-white/10'
+              ? 'pma-theme-skip flex h-10 w-10 shrink-0 items-center justify-center rounded border border-white/30 text-[#e8e8f8] hover:bg-white/10'
               : 'shrink-0 whitespace-nowrap rounded border border-white/30 px-2 py-1 text-[11px] font-bold uppercase text-[#e8e8f8] hover:bg-white/10 sm:px-2.5 sm:text-xs'
             : compact
-              ? 'pma-theme-skip flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+              ? 'pma-theme-skip flex h-10 w-10 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
               : 'shrink-0 whitespace-nowrap rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold uppercase text-slate-800 hover:bg-slate-50 sm:px-2.5 sm:text-xs'
         }
       >

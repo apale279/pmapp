@@ -29,15 +29,15 @@ export function SyncLiveIndicator({
 
   return (
     <div
-      className={`flex min-w-0 shrink-0 items-center rounded-md border font-medium ${box} ${
-        compact ? 'gap-0.5 px-1 py-0.5 text-[10px]' : 'gap-2 px-2 py-1 text-sm'
+      className={`flex h-10 min-h-10 shrink-0 items-center rounded-md border font-medium ${box} ${
+        compact ? 'gap-1 px-1.5 py-0 text-[10px]' : 'gap-2 px-2 py-1 text-sm'
       }`}
     >
       <button
         type="button"
         onClick={() => toggleAudioMuted()}
         className={`pma-theme-skip flex shrink-0 items-center justify-center rounded border border-transparent leading-none ${btnHover} ${
-          compact ? 'h-7 w-7 text-sm' : 'h-8 w-8 text-lg'
+          compact ? 'h-8 w-8 text-sm' : 'h-8 w-8 text-lg'
         }`}
         title={audioMuted ? 'Audio disattivato' : 'Audio attivo'}
         aria-pressed={audioMuted}
