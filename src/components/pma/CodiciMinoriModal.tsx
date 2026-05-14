@@ -1,8 +1,9 @@
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Timestamp } from 'firebase/firestore'
 import { datetimeLocalToTimestamp, toDatetimeLocal } from '../../lib/schedaDatetimeLocal'
 import { createCodiceMinore, updateCodiceMinore } from '../../lib/codiciMinoriFirestore'
 import { useCodiciMinoriForPma } from '../../hooks/useCodiciMinoriForPma'
+import { useIsSmartphone } from '../../hooks/useIsSmartphone'
 import type { CodiceMinore } from '../../types/codiceMinore'
 
 function IconClock({ className }: { className?: string }) {
@@ -246,6 +247,70 @@ function CodiceMinoreRow({ row, spinnerClass }: { row: CodiceMinore; spinnerClas
   )
 }
 
+function CodiceMinoreMobileDetailSheet({
+  row,
+  spinnerClass,
+  th,
+  onClose,
+}: {
+  row: CodiceMinore
+  spinnerClass: string
+  th: string
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/45 sm:items-center sm:p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="codice-minore-detail-title"
+        className="max-h-[min(90vh,34rem)] w-full max-w-lg overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[85vh] sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2.5">
+          <div className="min-w-0">
+            <h3 id="codice-minore-detail-title" className="truncate text-sm font-bold text-slate-900">
+              Dettaglio · pett. {row.numero_pettorale ?? '—'}
+            </h3>
+            <p className="truncate text-xs text-slate-500">{row.motivo_accesso?.trim() || '—'}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="pma-theme-skip shrink-0 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold uppercase text-slate-800 hover:bg-slate-50"
+          >
+            Chiudi
+          </button>
+        </div>
+        <div className="max-h-[calc(min(90vh,34rem)-4rem)] overflow-auto p-2 sm:max-h-[calc(85vh-4rem)]">
+          <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
+            <thead>
+              <tr>
+                <th className={th}>Ora accesso</th>
+                <th className={th}>Pett.</th>
+                <th className={th}>Motivo</th>
+                <th className={th}>Prestazioni</th>
+                <th className={th}>Ora dimissione</th>
+                <th className={`${th} w-7`} aria-hidden />
+              </tr>
+            </thead>
+            <tbody>
+              <CodiceMinoreRow row={row} spinnerClass={spinnerClass} />
+            </tbody>
+          </table>
+          <p className="mt-2 px-1 text-center text-[11px] leading-snug text-slate-500">
+            Scorri orizzontalmente per modificare tutti i campi.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export type CodiciMinoriModalProps = {
   open: boolean
   onClose: () => void
@@ -320,6 +385,26 @@ export function CodiciMinoriModal({
     }
   }, [idManifestazione, pmaId])
 
+  const smartphone = useIsSmartphone()
+  const [detailRowId, setDetailRowId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) setDetailRowId(null)
+  }, [open])
+
+  useEffect(() => {
+    if (!smartphone) setDetailRowId(null)
+  }, [smartphone])
+
+  useEffect(() => {
+    if (detailRowId && !items.some((r) => r.id === detailRowId)) setDetailRowId(null)
+  }, [detailRowId, items])
+
+  const detailRow = useMemo((): CodiceMinore | null => {
+    if (!detailRowId) return null
+    return items.find((r) => r.id === detailRowId) ?? null
+  }, [detailRowId, items])
+
   if (!open) return null
 
   const inputCls =
@@ -333,7 +418,10 @@ export function CodiciMinoriModal({
       role="dialog"
       aria-modal
       aria-labelledby="codici-minori-title"
-      onClick={onClose}
+      onClick={() => {
+        if (detailRowId) setDetailRowId(null)
+        else onClose()
+      }}
     >
       <div
         className="mb-8 w-full max-w-6xl rounded-lg border border-slate-200 bg-white shadow-xl"
@@ -345,7 +433,9 @@ export function CodiciMinoriModal({
               Codici minori
             </h2>
             <p className="text-xs text-[#a8a8c8]">
-              Registrazione rapida · sincronizzazione in tempo reale · ID record nascosto
+              {smartphone
+                ? 'Elenco compatto: tocca una riga per aprire il dettaglio completo.'
+                : 'Registrazione rapida · sincronizzazione in tempo reale · ID record nascosto'}
             </p>
           </div>
           <div className="pma-bar__right flex-wrap">
@@ -381,90 +471,197 @@ export function CodiciMinoriModal({
             </p>
           ) : null}
 
-          <table className="w-full border-collapse text-left">
-            <thead>
-              <tr>
-                <th className={th}>Ora accesso</th>
-                <th className={th}>Pett.</th>
-                <th className={th}>Motivo</th>
-                <th className={th}>Prestazioni</th>
-                <th className={th}>Ora dimissione</th>
-                <th className={`${th} w-7`} aria-hidden />
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="bg-blue-50/50">
-                <td className={draftCell}>
-                  <input
-                    type="datetime-local"
-                    value={draft.ora_accesso}
-                    onChange={(e) => setDraft((d) => ({ ...d, ora_accesso: e.target.value }))}
-                    className={inputCls}
-                    step={60}
-                  />
-                </td>
-                <td className={`${draftCell} w-[4.25rem]`}>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={draft.numero_pettorale}
-                    onChange={(e) => setDraft((d) => ({ ...d, numero_pettorale: e.target.value }))}
-                    className={inputCls}
-                    placeholder="—"
-                  />
-                </td>
-                <td className={draftCell}>
-                  <input
-                    type="text"
-                    value={draft.motivo_accesso}
-                    onChange={(e) => setDraft((d) => ({ ...d, motivo_accesso: e.target.value }))}
-                    className={inputCls}
-                    maxLength={200}
-                    placeholder="Motivo…"
-                  />
-                </td>
-                <td className={draftCell}>
-                  <input
-                    type="text"
-                    value={draft.prestazioni}
-                    onChange={(e) => setDraft((d) => ({ ...d, prestazioni: e.target.value }))}
-                    className={inputCls}
-                    maxLength={200}
-                    placeholder="Prestazioni…"
-                  />
-                </td>
-                <td className={draftCell}>
-                  <span className="text-xs text-slate-400">—</span>
-                </td>
-                <td className={`${draftCell} w-7 text-center`}>
+          {smartphone ? (
+            <>
+              <section className="space-y-3 border-b border-slate-200 bg-blue-50/60 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-700">Nuova registrazione</p>
+                <div className="space-y-2">
+                  <label className="block">
+                    <span className="mb-0.5 block text-xs font-medium text-slate-600">Ora accesso</span>
+                    <input
+                      type="datetime-local"
+                      value={draft.ora_accesso}
+                      onChange={(e) => setDraft((d) => ({ ...d, ora_accesso: e.target.value }))}
+                      className={inputCls}
+                      step={60}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-0.5 block text-xs font-medium text-slate-600">N. pettorale</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={draft.numero_pettorale}
+                      onChange={(e) => setDraft((d) => ({ ...d, numero_pettorale: e.target.value }))}
+                      className={inputCls}
+                      placeholder="—"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-0.5 block text-xs font-medium text-slate-600">Motivo ingresso</span>
+                    <input
+                      type="text"
+                      value={draft.motivo_accesso}
+                      onChange={(e) => setDraft((d) => ({ ...d, motivo_accesso: e.target.value }))}
+                      className={inputCls}
+                      maxLength={200}
+                      placeholder="Motivo…"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-0.5 block text-xs font-medium text-slate-600">Prestazioni</span>
+                    <input
+                      type="text"
+                      value={draft.prestazioni}
+                      onChange={(e) => setDraft((d) => ({ ...d, prestazioni: e.target.value }))}
+                      className={inputCls}
+                      maxLength={200}
+                      placeholder="Prestazioni…"
+                    />
+                  </label>
                   <button
                     type="button"
                     disabled={draftBusy}
-                    title="Registra (invia riga)"
                     onClick={() => void addFromDraft()}
-                    className="inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded bg-blue-700 px-2 text-sm font-bold uppercase text-white hover:bg-blue-800 disabled:opacity-50"
+                    className="w-full rounded bg-blue-700 py-2.5 text-sm font-bold uppercase text-white hover:bg-blue-800 disabled:opacity-50"
                   >
-                    OK
+                    Registra
                   </button>
-                </td>
-              </tr>
-
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-2 py-4 text-center text-xs text-slate-500">
+                </div>
+              </section>
+              <ul className="min-h-[120px] divide-y divide-slate-200">
+                {loading ? (
+                  <li className="px-3 py-6 text-center text-xs text-slate-500">
                     <span className={`mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 ${spinnerClass}`} />
                     Caricamento…
+                  </li>
+                ) : null}
+                {!loading && items.length === 0 ? (
+                  <li className="px-3 py-6 text-center text-sm text-slate-500">Nessun codice minore registrato.</li>
+                ) : null}
+                {!loading
+                  ? items.map((row) => (
+                      <li key={row.id}>
+                        <button
+                          type="button"
+                          className="flex w-full items-start gap-3 px-3 py-3.5 text-left hover:bg-slate-50 active:bg-slate-100"
+                          onClick={() => setDetailRowId(row.id)}
+                        >
+                          <span className="flex h-11 min-w-[2.85rem] shrink-0 items-center justify-center rounded-lg bg-slate-200 px-1 text-base font-bold tabular-nums text-slate-900">
+                            {row.numero_pettorale != null ? row.numero_pettorale : '—'}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="mb-0.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              Motivo ingresso
+                            </span>
+                            <span className="line-clamp-3 text-sm leading-snug text-slate-800">
+                              {row.motivo_accesso?.trim() ? row.motivo_accesso : '—'}
+                            </span>
+                          </span>
+                          <span className="shrink-0 self-center text-lg font-light text-slate-400" aria-hidden>
+                            ›
+                          </span>
+                        </button>
+                      </li>
+                    ))
+                  : null}
+              </ul>
+            </>
+          ) : (
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr>
+                  <th className={th}>Ora accesso</th>
+                  <th className={th}>Pett.</th>
+                  <th className={th}>Motivo</th>
+                  <th className={th}>Prestazioni</th>
+                  <th className={th}>Ora dimissione</th>
+                  <th className={`${th} w-7`} aria-hidden />
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="bg-blue-50/50">
+                  <td className={draftCell}>
+                    <input
+                      type="datetime-local"
+                      value={draft.ora_accesso}
+                      onChange={(e) => setDraft((d) => ({ ...d, ora_accesso: e.target.value }))}
+                      className={inputCls}
+                      step={60}
+                    />
+                  </td>
+                  <td className={`${draftCell} w-[4.25rem]`}>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={draft.numero_pettorale}
+                      onChange={(e) => setDraft((d) => ({ ...d, numero_pettorale: e.target.value }))}
+                      className={inputCls}
+                      placeholder="—"
+                    />
+                  </td>
+                  <td className={draftCell}>
+                    <input
+                      type="text"
+                      value={draft.motivo_accesso}
+                      onChange={(e) => setDraft((d) => ({ ...d, motivo_accesso: e.target.value }))}
+                      className={inputCls}
+                      maxLength={200}
+                      placeholder="Motivo…"
+                    />
+                  </td>
+                  <td className={draftCell}>
+                    <input
+                      type="text"
+                      value={draft.prestazioni}
+                      onChange={(e) => setDraft((d) => ({ ...d, prestazioni: e.target.value }))}
+                      className={inputCls}
+                      maxLength={200}
+                      placeholder="Prestazioni…"
+                    />
+                  </td>
+                  <td className={draftCell}>
+                    <span className="text-xs text-slate-400">—</span>
+                  </td>
+                  <td className={`${draftCell} w-7 text-center`}>
+                    <button
+                      type="button"
+                      disabled={draftBusy}
+                      title="Registra (invia riga)"
+                      onClick={() => void addFromDraft()}
+                      className="inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded bg-blue-700 px-2 text-sm font-bold uppercase text-white hover:bg-blue-800 disabled:opacity-50"
+                    >
+                      OK
+                    </button>
                   </td>
                 </tr>
-              ) : null}
 
-              {!loading
-                ? items.map((row) => <CodiceMinoreRow key={row.id} row={row} spinnerClass={spinnerClass} />)
-                : null}
-            </tbody>
-          </table>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="px-2 py-4 text-center text-xs text-slate-500">
+                      <span className={`mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 ${spinnerClass}`} />
+                      Caricamento…
+                    </td>
+                  </tr>
+                ) : null}
+
+                {!loading
+                  ? items.map((row) => <CodiceMinoreRow key={row.id} row={row} spinnerClass={spinnerClass} />)
+                  : null}
+              </tbody>
+            </table>
+          )}
         </div>
+        {smartphone && detailRow ? (
+          <CodiceMinoreMobileDetailSheet
+            row={detailRow}
+            spinnerClass={spinnerClass}
+            th={th}
+            onClose={() => setDetailRowId(null)}
+          />
+        ) : null}
       </div>
     </div>
   )
