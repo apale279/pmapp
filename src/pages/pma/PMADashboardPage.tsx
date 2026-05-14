@@ -230,7 +230,6 @@ function ManagerQueueBox({
   onInCarico,
   smartphoneOpenDetail,
   onSelectPatientDetail,
-  smartphoneHeading,
 }: {
   titleLine1: string
   titleLine2: string
@@ -242,23 +241,11 @@ function ManagerQueueBox({
   /** Smartphone: tap sul paziente apre il popup dettaglio invece della navigazione diretta. */
   smartphoneOpenDetail?: boolean
   onSelectPatientDetail?: (pz: PazienteListItem) => void
-  /** Smartphone: titolo principale coda (es. IN ARRIVO) e sottotitolo stato in piccolo. */
-  smartphoneHeading?: { main: string; sub: string }
 }) {
   const openDetail = Boolean(smartphoneOpenDetail && onSelectPatientDetail)
   const preview = lista.slice(0, 2)
-  const headingMain =
-    openDetail && smartphoneHeading
-      ? smartphoneHeading.main
-      : openDetail
-        ? titleLine2
-        : titleLine1
-  const headingSub =
-    openDetail && smartphoneHeading
-      ? smartphoneHeading.sub
-      : openDetail
-        ? titleLine1
-        : titleLine2
+  const headingMain = openDetail ? titleLine2 : titleLine1
+  const headingSub = openDetail ? null : titleLine2
   const rows = openDetail ? lista : preview
 
   const canTakeCharge = (pz: PazienteListItem) =>
@@ -269,7 +256,7 @@ function ManagerQueueBox({
     <section className={openDetail ? 'pma-card min-w-0 max-w-full overflow-hidden' : 'pma-card'}>
       <div
         className={`border-b border-slate-100 text-center ${
-          openDetail ? 'px-2 pb-3.5 pt-1.5' : 'pb-2'
+          openDetail ? 'px-2 pb-2 pt-1.5' : 'pb-2'
         }`}
       >
         <div
@@ -279,13 +266,9 @@ function ManagerQueueBox({
         >
           {headingMain}
         </div>
-        <div
-          className={`pma-card__hdr text-center text-slate-500 ${
-            openDetail ? 'mx-auto mt-2.5 max-w-[22rem] text-[11px] leading-snug' : 'mb-0 mt-1'
-          }`}
-        >
-          {headingSub}
-        </div>
+        {headingSub != null ? (
+          <div className="pma-card__hdr mb-0 mt-1 text-center text-slate-500">{headingSub}</div>
+        ) : null}
       </div>
       {rows.length === 0 ? (
         <p className="mt-2 text-center text-sm text-slate-400">—</p>
@@ -1315,11 +1298,6 @@ export function PMADashboardPage() {
                 onInCarico={handleInCarico}
                 smartphoneOpenDetail={smartphone}
                 onSelectPatientDetail={smartphone ? (pz) => setMobilePatientSnap(pz) : undefined}
-                smartphoneHeading={
-                  smartphone
-                    ? { main: 'IN ARRIVO', sub: PAZIENTE_STATO_LABEL.in_arrivo }
-                    : undefined
-                }
               />
               <ManagerQueueBox
                 titleLine1="Pazienti"
@@ -1330,14 +1308,6 @@ export function PMADashboardPage() {
                 onInCarico={handleInCarico}
                 smartphoneOpenDetail={smartphone}
                 onSelectPatientDetail={smartphone ? (pz) => setMobilePatientSnap(pz) : undefined}
-                smartphoneHeading={
-                  smartphone
-                    ? {
-                        main: 'IN ATTESA',
-                        sub: `${PAZIENTE_STATO_LABEL.in_attesa} · ${PAZIENTE_STATO_LABEL.in_sospeso}`,
-                      }
-                    : undefined
-                }
               />
             </div>
           </div>
