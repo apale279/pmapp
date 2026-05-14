@@ -45,6 +45,125 @@ function formatPermanenza(apertura: Timestamp | null, nowMs: number): string {
   return `${h}h ${rm}m`
 }
 
+/** Smartphone: riepilogo paziente senza overflow (stack + break-words). */
+function PazienteSnapDetailSheet({
+  pz,
+  pmaId,
+  nowMs,
+  canDelete,
+  onClose,
+  onRequestDelete,
+}: {
+  pz: PazienteListItem
+  pmaId: string
+  nowMs: number
+  canDelete: boolean
+  onClose: () => void
+  onRequestDelete: (id: string, label: string) => void
+}) {
+  const navigate = useNavigate()
+  const nome = [pz.cognome, pz.nome].filter(Boolean).join(' ') || 'Senza nome'
+  const schedaTo = `/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`
+  const etaDisp = pz.eta !== null && pz.eta !== undefined ? `${pz.eta} anni` : '—'
+  const motivo = pz.breve_descrizione?.trim() || '—'
+  const refI = pz.infermiere_rif.trim()
+  const refM = pz.medico_rif.trim()
+  const refLines = [refI ? `Infermiere: ${refI}` : null, refM ? `Medico: ${refM}` : null].filter(Boolean) as string[]
+
+  return (
+    <div
+      className="fixed inset-0 z-[55] flex items-end justify-center bg-slate-900/45 px-3 pb-3 pt-[max(env(safe-area-inset-top),0.5rem)] sm:items-center sm:p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="paziente-snap-title"
+        className="mx-auto flex max-h-[min(92vh,40rem)] w-full max-w-sm flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[min(88vh,36rem)] sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2.5">
+          <div className="min-w-0 flex-1">
+            <h2 id="paziente-snap-title" className="break-words text-base font-bold leading-snug text-slate-900">
+              {nome}
+            </h2>
+            <p className="mt-0.5 break-all font-mono text-xs text-slate-600">{pz.id_paziente_visibile}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="pma-theme-skip shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold uppercase text-slate-800 hover:bg-slate-50"
+          >
+            Chiudi
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
+          <dl className="space-y-3 text-sm text-slate-800">
+            <div className="min-w-0">
+              <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Codice colore</dt>
+              <dd className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                <span className={`h-3 w-3 shrink-0 rounded-full ${DOT_BG[pz.codice_colore]}`} aria-hidden />
+                <span className="min-w-0 break-words">{CODICE_COLORE_LABEL[pz.codice_colore]}</span>
+              </dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Stato</dt>
+              <dd className="mt-1 break-words font-medium">{PAZIENTE_STATO_LABEL[pz.stato]}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Età</dt>
+              <dd className="mt-1 break-words">{etaDisp}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Permanenza</dt>
+              <dd className="mt-1 break-words tabular-nums">{formatPermanenza(pz.apertura_scheda, nowMs)}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Motivo / accesso</dt>
+              <dd className="mt-1 whitespace-pre-wrap break-words">{motivo}</dd>
+            </div>
+            {refLines.length > 0 ? (
+              <div className="min-w-0">
+                <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Riferimenti</dt>
+                <dd className="mt-1 space-y-1 break-words">
+                  {refLines.map((line) => (
+                    <div key={line}>{line}</div>
+                  ))}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+        </div>
+        <div className="shrink-0 space-y-2 border-t border-slate-200 bg-slate-50 p-3">
+          <button
+            type="button"
+            onClick={() => {
+              onClose()
+              void navigate(schedaTo)
+            }}
+            className="pma-theme-skip w-full rounded-lg bg-blue-700 py-2.5 text-sm font-bold uppercase text-white hover:bg-blue-800"
+          >
+            Apri scheda completa
+          </button>
+          {canDelete ? (
+            <button
+              type="button"
+              onClick={() => {
+                onRequestDelete(pz.id, pz.id_paziente_visibile)
+                onClose()
+              }}
+              className="pma-theme-skip w-full rounded-lg border border-red-300 bg-white py-2.5 text-sm font-bold uppercase text-red-800 hover:bg-red-50"
+            >
+              Elimina scheda…
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function sortByColoreCodice(list: PazienteListItem[]) {
   return [...list].sort((a, b) => {
     const ia = CODICI_ORDINE_TRIAGE.indexOf(a.codice_colore)
@@ -109,6 +228,8 @@ function ManagerQueueBox({
   pmaId,
   takeChargeFromQueues,
   onInCarico,
+  smartphoneOpenDetail,
+  onSelectPatientDetail,
 }: {
   titleLine1: string
   titleLine2: string
@@ -117,6 +238,9 @@ function ManagerQueueBox({
   /** Prendi in carico da coda IN ARRIVO, IN ATTESA o IN SOSPESO (staff clinico). */
   takeChargeFromQueues: boolean
   onInCarico: (id: string) => void
+  /** Smartphone: tap sul paziente apre il popup dettaglio invece della navigazione diretta. */
+  smartphoneOpenDetail?: boolean
+  onSelectPatientDetail?: (pz: PazienteListItem) => void
 }) {
   const preview = lista.slice(0, 2)
   return (
@@ -132,38 +256,70 @@ function ManagerQueueBox({
           {preview.map((pz) => {
             const nome = [pz.cognome, pz.nome].filter(Boolean).join(' ') || '—'
             const schedaTo = `/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`
+            const openDetail = Boolean(smartphoneOpenDetail && onSelectPatientDetail)
             return (
-              <li key={pz.id} className="relative rounded-md border border-slate-100 bg-slate-50/40">
-                <Link
-                  to={schedaTo}
-                  className="absolute inset-0 z-0 rounded-md"
-                  aria-label={`Apri scheda ${nome}`}
-                />
-                <div className="pointer-events-none relative z-[1] p-2">
-                  <div className="flex min-w-0 items-start justify-between gap-1.5">
-                    <div className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-900">
-                      <span className="line-clamp-2">{nome}</span>
-                    </div>
+              <li key={pz.id} className="rounded-md border border-slate-100 bg-slate-50/40">
+                {openDetail ? (
+                  <div className="flex min-w-0 items-start justify-between gap-1.5 p-2">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 rounded-md py-0.5 text-left hover:bg-white/80"
+                      aria-label={`Dettagli ${nome}`}
+                      onClick={() => onSelectPatientDetail?.(pz)}
+                    >
+                      <div className="min-w-0 break-words text-sm font-medium leading-snug text-slate-900">
+                        {nome}
+                      </div>
+                      <div className="mt-0.5 break-all font-mono text-xs font-medium text-slate-600">
+                        {pz.id_paziente_visibile}
+                      </div>
+                    </button>
                     {takeChargeFromQueues &&
                     (pz.stato === 'in_arrivo' || pz.stato === 'in_attesa' || pz.stato === 'in_sospeso') ? (
                       <button
                         type="button"
                         title="Prendi in carico"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          onInCarico(pz.id)
-                        }}
-                        className="pointer-events-auto relative z-[2] shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-bold uppercase leading-none text-slate-800 hover:bg-slate-50"
+                        onClick={() => onInCarico(pz.id)}
+                        className="shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-bold uppercase leading-none text-slate-800 hover:bg-slate-50"
                       >
                         Prendi
                       </button>
                     ) : null}
                   </div>
-                  <div className="mt-0.5 font-mono text-xs font-medium text-slate-600">
-                    {pz.id_paziente_visibile}
+                ) : (
+                  <div className="relative rounded-md">
+                    <Link
+                      to={schedaTo}
+                      className="absolute inset-0 z-0 rounded-md"
+                      aria-label={`Apri scheda ${nome}`}
+                    />
+                    <div className="pointer-events-none relative z-[1] p-2">
+                      <div className="flex min-w-0 items-start justify-between gap-1.5">
+                        <div className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-900">
+                          <span className="line-clamp-2">{nome}</span>
+                        </div>
+                        {takeChargeFromQueues &&
+                        (pz.stato === 'in_arrivo' || pz.stato === 'in_attesa' || pz.stato === 'in_sospeso') ? (
+                          <button
+                            type="button"
+                            title="Prendi in carico"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              onInCarico(pz.id)
+                            }}
+                            className="pointer-events-auto relative z-[2] shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-bold uppercase leading-none text-slate-800 hover:bg-slate-50"
+                          >
+                            Prendi
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="mt-0.5 font-mono text-xs font-medium text-slate-600">
+                        {pz.id_paziente_visibile}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </li>
             )
           })}
@@ -182,7 +338,8 @@ function ListaPazientiInCarico({
   emptyMessage = 'Nessun paziente in carico.',
   evidenzaIds,
   visualVariant = 'default',
-  compactInfermiereMobile = false,
+  smartphoneCompactList = false,
+  onSelectPatientDetail,
   inCaricoMineCount = 0,
 }: {
   lista: PazienteListItem[]
@@ -194,8 +351,9 @@ function ListaPazientiInCarico({
   evidenzaIds?: Set<string>
   /** Layout allineato al mock PMA Manager (desktop). */
   visualVariant?: 'default' | 'manager'
-  /** Infermiere + smartphone: elenco compatto (triage, nome, ID). */
-  compactInfermiereMobile?: boolean
+  /** Smartphone: elenco compatto (triage, nome, ID); tap apre popup se `onSelectPatientDetail` è definito. */
+  smartphoneCompactList?: boolean
+  onSelectPatientDetail?: (pz: PazienteListItem) => void
   /** Indice esclusivo: dopo questi pazienti viene mostrato un separatore (stesso PMA, «a me» prima). */
   inCaricoMineCount?: number
 }) {
@@ -216,7 +374,7 @@ function ListaPazientiInCarico({
     )
   }
 
-  if (compactInfermiereMobile) {
+  if (smartphoneCompactList) {
     return (
       <ul className="mt-1 divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white">
         {lista.flatMap((pz, idx) => {
@@ -226,8 +384,11 @@ function ListaPazientiInCarico({
             <li key={pz.id}>
               <button
                 type="button"
-                className="flex w-full min-w-0 items-center gap-2 px-2 py-2.5 text-left transition hover:bg-slate-50 active:bg-slate-100"
-                onClick={() => navigate(schedaTo)}
+                className="flex w-full min-w-0 max-w-full items-center gap-2 px-2 py-2.5 text-left transition hover:bg-slate-50 active:bg-slate-100"
+                onClick={() => {
+                  if (onSelectPatientDetail) onSelectPatientDetail(pz)
+                  else void navigate(schedaTo)
+                }}
               >
                 <span className="flex shrink-0 flex-col items-center gap-0.5" title={CODICE_COLORE_LABEL[pz.codice_colore]}>
                   <span className={`h-3 w-3 shrink-0 rounded-full ${DOT_BG[pz.codice_colore]}`} aria-hidden />
@@ -235,7 +396,7 @@ function ListaPazientiInCarico({
                     {CODICE_COLORE_LABEL[pz.codice_colore].slice(0, 3)}
                   </span>
                 </span>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 overflow-hidden">
                   <div className="truncate text-sm font-semibold leading-tight text-slate-900">{nome}</div>
                   <div className="truncate font-mono text-xs text-slate-600">{pz.id_paziente_visibile}</div>
                 </div>
@@ -262,11 +423,11 @@ function ListaPazientiInCarico({
     <div
       className={
         manager
-          ? 'mt-2 overflow-auto border border-slate-200 bg-white'
-          : 'mt-1.5 max-h-[min(82vh,44rem)] overflow-auto rounded border border-slate-200 bg-white'
+          ? 'mt-2 max-w-full overflow-x-auto border border-slate-200 bg-white'
+          : 'mt-1.5 max-h-[min(82vh,44rem)] max-w-full overflow-auto rounded border border-slate-200 bg-white'
       }
     >
-      <table className="w-full border-collapse text-left text-sm font-medium leading-snug">
+      <table className="w-full max-w-full border-collapse text-left text-sm font-medium leading-snug">
         <thead
           className={
             manager
@@ -471,6 +632,7 @@ export function PMADashboardPage() {
   const [deleteErr, setDeleteErr] = useState<string | null>(null)
   const [codiciMinoriOpen, setCodiciMinoriOpen] = useState(false)
   const [pmaAlertToast, setPmaAlertToast] = useState<{ id: string; msg: string } | null>(null)
+  const [mobilePatientSnap, setMobilePatientSnap] = useState<PazienteListItem | null>(null)
 
   const { bumpSync } = useSyncLive()
   useEffect(() => {
@@ -808,7 +970,7 @@ export function PMADashboardPage() {
   const topToolbarEl = (
       <div
         className={`flex min-w-0 items-center gap-2 ${
-          infermiereSm ? 'flex-nowrap overflow-x-auto [-webkit-overflow-scrolling:touch] pb-0.5' : 'flex-wrap'
+          smartphone ? 'flex-nowrap overflow-x-auto [-webkit-overflow-scrolling:touch] pb-0.5' : 'flex-wrap'
         }`}
       >
         <button
@@ -977,7 +1139,7 @@ export function PMADashboardPage() {
           ) : null
         }
       >
-        <div className="pma-dashboard space-y-4">
+        <div className="pma-dashboard max-w-full space-y-4 overflow-x-hidden sm:overflow-x-visible">
         {listaError ? (
           <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
             {listaError}
@@ -1026,12 +1188,12 @@ export function PMADashboardPage() {
         ) : (
           <div
             className={
-              infermiereSm ? 'flex flex-col gap-3' : 'flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10'
+              smartphone ? 'flex flex-col gap-3' : 'flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10'
             }
           >
             <div
               className={
-                infermiereSm ? 'min-w-0 w-full pma-card px-1 py-0' : 'min-w-0 lg:w-[68%] lg:max-w-[70%] lg:flex-none pma-card'
+                smartphone ? 'min-w-0 w-full max-w-full overflow-hidden pma-card px-1 py-0' : 'min-w-0 lg:w-[68%] lg:max-w-[70%] lg:flex-none pma-card'
               }
             >
               <div className="pma-card__hdr">Pazienti in carico</div>
@@ -1043,15 +1205,16 @@ export function PMADashboardPage() {
                 onDeleteClick={(pid, label) => setDeleteModal({ id: pid, label, step: 1 })}
                 evidenzaIds={undefined}
                 visualVariant="manager"
-                compactInfermiereMobile={infermiereSm}
+                smartphoneCompactList={smartphone}
+                onSelectPatientDetail={smartphone ? (pz) => setMobilePatientSnap(pz) : undefined}
                 inCaricoMineCount={inCaricoMineCount}
               />
             </div>
 
             <div
               className={
-                infermiereSm
-                  ? 'grid w-full shrink-0 grid-cols-2 gap-2'
+                smartphone
+                  ? 'grid w-full min-w-0 max-w-full shrink-0 grid-cols-2 gap-2'
                   : 'w-full shrink-0 space-y-4 lg:min-w-[16rem] lg:max-w-[28%] lg:flex-1'
               }
             >
@@ -1062,6 +1225,8 @@ export function PMADashboardPage() {
                 pmaId={pmaId}
                 takeChargeFromQueues={showPrendiInCarico}
                 onInCarico={handleInCarico}
+                smartphoneOpenDetail={smartphone}
+                onSelectPatientDetail={smartphone ? (pz) => setMobilePatientSnap(pz) : undefined}
               />
               <ManagerQueueBox
                 titleLine1="Pazienti"
@@ -1070,12 +1235,25 @@ export function PMADashboardPage() {
                 pmaId={pmaId}
                 takeChargeFromQueues={showPrendiInCarico}
                 onInCarico={handleInCarico}
+                smartphoneOpenDetail={smartphone}
+                onSelectPatientDetail={smartphone ? (pz) => setMobilePatientSnap(pz) : undefined}
               />
             </div>
           </div>
         )}
         </div>
       </PmaManagerShell>
+
+      {smartphone && mobilePatientSnap ? (
+        <PazienteSnapDetailSheet
+          pz={pazienti.find((x) => x.id === mobilePatientSnap.id) ?? mobilePatientSnap}
+          pmaId={pmaId}
+          nowMs={nowMs}
+          canDelete={canDeletePaziente}
+          onClose={() => setMobilePatientSnap(null)}
+          onRequestDelete={(id, label) => setDeleteModal({ id, label, step: 1 })}
+        />
+      ) : null}
 
       {dimessiModalOpen ? (
         <div
@@ -1139,7 +1317,7 @@ export function PMADashboardPage() {
               ) : dimessiModalFiltrati.length === 0 ? (
                 <p className="py-6 text-center text-sm text-slate-500">Nessun risultato.</p>
               ) : (
-                <ul className="max-h-[min(60vh,28rem)] divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
+                <ul className="max-h-[min(60vh,28rem)] w-full max-w-full divide-y divide-slate-100 overflow-x-hidden overflow-y-auto rounded-lg border border-slate-200">
                   {dimessiModalFiltrati.map((pz) => {
                     const busy = dimessiModalBusyId === pz.id
                     const riprendiBusy = dimessiRiprendiBusyId === pz.id
@@ -1147,11 +1325,11 @@ export function PMADashboardPage() {
                     return (
                       <li
                         key={pz.id}
-                        className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                        className="flex min-w-0 max-w-full flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                       >
                         <Link
                           to={`/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`}
-                          className="min-w-0 flex-1 rounded-md py-0.5 text-left hover:bg-slate-50 sm:pr-2"
+                          className="min-w-0 max-w-full flex-1 break-words rounded-md py-0.5 text-left hover:bg-slate-50 sm:pr-2"
                           onClick={() => setDimessiModalOpen(false)}
                         >
                           <span className="block font-semibold text-slate-900">{nome}</span>
@@ -1159,7 +1337,7 @@ export function PMADashboardPage() {
                             {pz.id_paziente_visibile}
                           </span>
                         </Link>
-                        <div className="flex shrink-0 flex-wrap gap-2">
+                        <div className="flex min-w-0 max-w-full shrink-0 flex-wrap gap-2">
                           {user?.rank === 'Medico' ? (
                             <button
                               type="button"
