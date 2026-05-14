@@ -1,4 +1,5 @@
 import type { UserProfile } from '../../types/userProfile'
+import { useIsSmartphone } from '../../hooks/useIsSmartphone'
 
 function LogoutDoorIcon() {
   return (
@@ -25,6 +26,7 @@ export function OperativeUserTray({
   variant?: 'light' | 'dark'
   compact?: boolean
 }) {
+  const smartphone = useIsSmartphone()
   const isDark = variant === 'dark'
   const nomeCls = isDark ? 'text-[#e8e8f8]' : 'text-slate-900'
   const badgeCls = isDark
@@ -36,19 +38,21 @@ export function OperativeUserTray({
         compact ? 'max-w-[min(100%,9.5rem)] gap-1' : 'min-w-0 max-w-[min(100%,14rem)] gap-2 sm:max-w-[min(100%,20rem)]'
       }`}
     >
-      <div
-        className={`flex min-w-0 max-w-full items-center rounded-md border font-bold uppercase leading-tight tracking-wide ${badgeCls} ${
-          compact ? 'gap-0.5 px-1 py-0.5 text-[9px]' : 'gap-1.5 px-2 py-1 text-xs'
-        }`}
-        title={`${user.rank} · ${user.nome}`}
-      >
-        <span className="max-w-[4.5rem] shrink-0 truncate" title={user.rank}>
-          {user.rank}
-        </span>
-        <span className={`min-w-0 truncate font-semibold normal-case ${nomeCls} ${compact ? 'max-w-[3.75rem]' : ''}`}>
-          {user.nome}
-        </span>
-      </div>
+      {!smartphone ? (
+        <div
+          className={`flex min-w-0 max-w-full items-center rounded-md border font-bold uppercase leading-tight tracking-wide ${badgeCls} ${
+            compact ? 'gap-0.5 px-1 py-0.5 text-[9px]' : 'gap-1.5 px-2 py-1 text-xs'
+          }`}
+          title={`${user.rank} · ${user.nome}`}
+        >
+          <span className="max-w-[4.5rem] shrink-0 truncate" title={user.rank}>
+            {user.rank}
+          </span>
+          <span className={`min-w-0 truncate font-semibold normal-case ${nomeCls} ${compact ? 'max-w-[3.75rem]' : ''}`}>
+            {user.nome}
+          </span>
+        </div>
+      ) : null}
       <button
         type="button"
         onClick={() => void logout()}
