@@ -282,35 +282,44 @@ function ManagerQueueBox({
               <li key={pz.id}>
                 <div className="flex w-full min-w-0 max-w-full items-center gap-2 px-2 py-2.5 transition-colors hover:bg-slate-50 active:bg-slate-100">
                   <span
-                    className="flex shrink-0 flex-col items-center gap-0.5"
+                    className="flex shrink-0 items-center pt-0.5"
                     title={CODICE_COLORE_LABEL[pz.codice_colore]}
                   >
                     <span className={`h-3 w-3 shrink-0 rounded-full ${DOT_BG[pz.codice_colore]}`} aria-hidden />
-                    <span className="max-w-[2.5rem] truncate text-[9px] font-bold uppercase leading-none text-slate-600">
-                      {CODICE_COLORE_LABEL[pz.codice_colore].slice(0, 3)}
-                    </span>
+                    <span className="sr-only">{CODICE_COLORE_LABEL[pz.codice_colore]}</span>
                   </span>
                   <div className="flex min-w-0 flex-1 overflow-hidden rounded-md border border-slate-200 bg-slate-50/90">
-                    {take ? (
+                    <div className="flex min-w-0 flex-1 flex-col px-2 py-1.5">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 truncate text-left text-sm font-semibold leading-tight text-slate-900 transition-colors hover:text-slate-950"
+                          aria-label={`Dettagli ${nome}`}
+                          onClick={() => onSelectPatientDetail?.(pz)}
+                        >
+                          {nome}
+                        </button>
+                        {take ? (
+                          <button
+                            type="button"
+                            title="Prendi in carico"
+                            aria-label={`Prendi in carico ${nome}`}
+                            onClick={() => onInCarico(pz.id)}
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-300/80 bg-white text-base font-semibold leading-none text-slate-800 hover:bg-slate-100 active:bg-slate-200"
+                          >
+                            ←
+                          </button>
+                        ) : null}
+                      </div>
                       <button
                         type="button"
-                        title="Prendi in carico"
-                        aria-label={`Prendi in carico ${nome}`}
-                        onClick={() => onInCarico(pz.id)}
-                        className="flex w-10 shrink-0 items-center justify-center border-r border-slate-200 bg-white text-lg font-semibold leading-none text-slate-800 hover:bg-slate-100 active:bg-slate-200"
+                        className="mt-0.5 w-full truncate text-left font-mono text-xs text-slate-600 transition-colors hover:text-slate-800"
+                        aria-label={`Dettagli ${nome}, ID ${pz.id_paziente_visibile}`}
+                        onClick={() => onSelectPatientDetail?.(pz)}
                       >
-                        ←
+                        {pz.id_paziente_visibile}
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 px-2 py-1.5 text-left transition-colors hover:bg-white/70 active:bg-white"
-                      aria-label={`Dettagli ${nome}`}
-                      onClick={() => onSelectPatientDetail?.(pz)}
-                    >
-                      <div className="truncate text-sm font-semibold leading-tight text-slate-900">{nome}</div>
-                      <div className="truncate font-mono text-xs text-slate-600">{pz.id_paziente_visibile}</div>
-                    </button>
+                    </div>
                   </div>
                 </div>
               </li>
@@ -417,25 +426,26 @@ function ListaPazientiInCarico({
           const schedaTo = `/pma/${encodeURIComponent(pmaId)}/paziente/${encodeURIComponent(pz.id)}?tab=generale`
           const row = (
             <li key={pz.id}>
-              <button
-                type="button"
-                className="flex w-full min-w-0 max-w-full items-center gap-2 px-2 py-2.5 text-left transition hover:bg-slate-50 active:bg-slate-100"
-                onClick={() => {
-                  if (onSelectPatientDetail) onSelectPatientDetail(pz)
-                  else void navigate(schedaTo)
-                }}
-              >
-                <span className="flex shrink-0 flex-col items-center gap-0.5" title={CODICE_COLORE_LABEL[pz.codice_colore]}>
+              <div className="flex w-full min-w-0 max-w-full items-center gap-2 px-2 py-2.5 transition-colors hover:bg-slate-50 active:bg-slate-100">
+                <span
+                  className="flex shrink-0 items-center pt-0.5"
+                  title={CODICE_COLORE_LABEL[pz.codice_colore]}
+                >
                   <span className={`h-3 w-3 shrink-0 rounded-full ${DOT_BG[pz.codice_colore]}`} aria-hidden />
-                  <span className="max-w-[2.5rem] truncate text-[9px] font-bold uppercase leading-none text-slate-600">
-                    {CODICE_COLORE_LABEL[pz.codice_colore].slice(0, 3)}
-                  </span>
+                  <span className="sr-only">{CODICE_COLORE_LABEL[pz.codice_colore]}</span>
                 </span>
-                <div className="min-w-0 flex-1 overflow-hidden">
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 overflow-hidden rounded-md border border-slate-200 bg-slate-50/90 px-2 py-1.5 text-left transition hover:bg-slate-100/90 active:bg-slate-100"
+                  onClick={() => {
+                    if (onSelectPatientDetail) onSelectPatientDetail(pz)
+                    else void navigate(schedaTo)
+                  }}
+                >
                   <div className="truncate text-sm font-semibold leading-tight text-slate-900">{nome}</div>
                   <div className="truncate font-mono text-xs text-slate-600">{pz.id_paziente_visibile}</div>
-                </div>
-              </button>
+                </button>
+              </div>
             </li>
           )
           const sep =
@@ -802,42 +812,73 @@ export function PMADashboardPage() {
     user?.rank === 'Soccorritore' ||
     user?.rank === 'Triage'
 
-  const triageStripEl = (
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm font-medium text-white">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ef4444]" aria-hidden />
-          Rosso{' '}
-          <span className="tabular-nums font-semibold text-white">{countByColor(inCaricoListaDisplay, 'rosso')}</span>
-        </span>
-        <span className="text-white/45" aria-hidden>
-          •
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#eab308]" aria-hidden />
-          Giallo{' '}
-          <span className="tabular-nums font-semibold text-white">{countByColor(inCaricoListaDisplay, 'giallo')}</span>
-        </span>
-        <span className="text-white/45" aria-hidden>
-          •
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" aria-hidden />
-          Verde{' '}
-          <span className="tabular-nums font-semibold text-white">{countByColor(inCaricoListaDisplay, 'verde')}</span>
-        </span>
-        <span className="text-white/45" aria-hidden>
-          •
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            className="h-2 w-2 shrink-0 rounded-full border border-white/50 bg-slate-200 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.25)]"
-            aria-hidden
-          />
-          Bianco{' '}
-          <span className="tabular-nums font-semibold text-white">{countByColor(inCaricoListaDisplay, 'bianco')}</span>
-        </span>
-      </div>
-    )
+  const triageStripEl = smartphone ? (
+    <div className="flex max-w-full flex-nowrap items-center gap-x-2 overflow-x-auto overscroll-x-contain whitespace-nowrap text-xs font-semibold text-white [-webkit-overflow-scrolling:touch]">
+      <span className="inline-flex shrink-0 items-center gap-1" title="Rosso in carico">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ef4444]" aria-hidden />
+        <span className="tabular-nums text-white">R {countByColor(inCaricoListaDisplay, 'rosso')}</span>
+      </span>
+      <span className="text-white/35" aria-hidden>
+        ·
+      </span>
+      <span className="inline-flex shrink-0 items-center gap-1" title="Giallo in carico">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#eab308]" aria-hidden />
+        <span className="tabular-nums text-white">G {countByColor(inCaricoListaDisplay, 'giallo')}</span>
+      </span>
+      <span className="text-white/35" aria-hidden>
+        ·
+      </span>
+      <span className="inline-flex shrink-0 items-center gap-1" title="Verde in carico">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" aria-hidden />
+        <span className="tabular-nums text-white">V {countByColor(inCaricoListaDisplay, 'verde')}</span>
+      </span>
+      <span className="text-white/35" aria-hidden>
+        ·
+      </span>
+      <span className="inline-flex shrink-0 items-center gap-1" title="Bianco in carico">
+        <span
+          className="h-2 w-2 shrink-0 rounded-full border border-white/50 bg-slate-200 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.25)]"
+          aria-hidden
+        />
+        <span className="tabular-nums text-white">B {countByColor(inCaricoListaDisplay, 'bianco')}</span>
+      </span>
+    </div>
+  ) : (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm font-medium text-white">
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ef4444]" aria-hidden />
+        Rosso{' '}
+        <span className="tabular-nums font-semibold text-white">{countByColor(inCaricoListaDisplay, 'rosso')}</span>
+      </span>
+      <span className="text-white/45" aria-hidden>
+        •
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#eab308]" aria-hidden />
+        Giallo{' '}
+        <span className="tabular-nums font-semibold text-white">{countByColor(inCaricoListaDisplay, 'giallo')}</span>
+      </span>
+      <span className="text-white/45" aria-hidden>
+        •
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" aria-hidden />
+        Verde{' '}
+        <span className="tabular-nums font-semibold text-white">{countByColor(inCaricoListaDisplay, 'verde')}</span>
+      </span>
+      <span className="text-white/45" aria-hidden>
+        •
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          className="h-2 w-2 shrink-0 rounded-full border border-white/50 bg-slate-200 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.25)]"
+          aria-hidden
+        />
+        Bianco{' '}
+        <span className="tabular-nums font-semibold text-white">{countByColor(inCaricoListaDisplay, 'bianco')}</span>
+      </span>
+    </div>
+  )
 
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
