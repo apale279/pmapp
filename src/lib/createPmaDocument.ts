@@ -30,10 +30,13 @@ export async function createPmaDocument(
     throw new PmaNomeDuplicatoError()
   }
 
+  const token = crypto.randomUUID()
+
   await setDoc(ref, {
     nome: nomePmaInput.trim(),
     luogo: luogoTrim,
     id_manifestazione: manifestazioneId,
+    token,
     impostazioni_pma: {
       posti_letto: Math.floor(postiLetto),
       elenco_farmaci_usati: [],

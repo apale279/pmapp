@@ -1,5 +1,5 @@
 import { useMemo, useState, useLayoutEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useRankTheme } from '../../hooks/useRankTheme'
 import { useManifestazioniAdminList } from '../../hooks/useManifestazioniAdminList'
 import { deleteManifestazioneCascade } from '../../lib/deleteManifestazioneCascade'
@@ -144,15 +144,26 @@ export function AdminManifestazioniPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right sm:px-5">
-                      <AdminRowActions
-                        onEdit={() => {
-                          void navigate(`/manifestazione/${encodeURIComponent(m.nome)}/impostazioni`)
-                        }}
-                        onDelete={() => {
-                          setDeleteErr(null)
-                          setDeleteTarget(m)
-                        }}
-                      />
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        <Link
+                          to={`/manifestazione/${encodeURIComponent(m.nome)}`}
+                          className={`${opPrimaryBtn} shrink-0 px-3 py-1.5 text-xs`}
+                        >
+                          Dashboard
+                        </Link>
+                        <AdminRowActions
+                          onEdit={() => {
+                            void navigate(
+                              `/manifestazione/${encodeURIComponent(m.nome)}/impostazioni`,
+                            )
+                          }}
+                          editTitle="Impostazioni manifestazione"
+                          onDelete={() => {
+                            setDeleteErr(null)
+                            setDeleteTarget(m)
+                          }}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))

@@ -1,10 +1,12 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ManifestazioneNomeDuplicatoError,
   ManifestazioneNomeInvalidoError,
   createManifestazioneDocument,
 } from '../../lib/createManifestazione'
 import { auth, db } from '../../lib/firebase'
+import { opPrimaryBtn } from '../layout/operativeTokens'
 
 type Props = {
   open: boolean
@@ -12,12 +14,13 @@ type Props = {
 }
 
 export function NewManifestazioneModal({ open, onClose }: Props) {
+  const navigate = useNavigate()
   const titleId = useId()
   const [nome, setNome] = useState('')
   const [data, setData] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [successDetail, setSuccessDetail] = useState<string | null>(null)
+  const [createdId, setCreatedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -33,7 +36,7 @@ export function NewManifestazioneModal({ open, onClose }: Props) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    setSuccessDetail(null)
+    setCreatedId(null)
     if (!db || !auth?.currentUser) {
       setError('Sessione o Firebase non disponibili.')
       return
@@ -41,9 +44,7 @@ export function NewManifestazioneModal({ open, onClose }: Props) {
     setSubmitting(true)
     try {
       const nomeId = await createManifestazioneDocument(db, nome, data)
-      setSuccessDetail(
-        `Manifestazione “${nomeId}” creata con stato APERTA. Il personale va aggiunto da “Aggiungi utente”.`,
-      )
+      setCreatedId(nomeId)
     } catch (err: unknown) {
       if (err instanceof ManifestazioneNomeDuplicatoError) {
         setError(err.message)
@@ -103,21 +104,39 @@ export function NewManifestazioneModal({ open, onClose }: Props) {
               {error}
             </p>
           ) : null}
-          {successDetail ? (
-            <p className="mx-3 mb-2 rounded-md bg-slate-50 p-3 text-sm text-slate-700" role="status">
-              {successDetail}
-            </p>
+          {createdId ? (
+            <div className="mx-3 mb-2 space-y-2 rounded-md bg-emerald-50 p-3 text-sm text-emerald-950" role="status">
+              <p>
+                Manifestazione <strong>{createdId}</strong> creata con stato APERTA.
+              </p>
+              <p className="text-emerald-900/90">
+                Apri la dashboard per creare i PMA dell&apos;evento, poi aggiungi il personale da Gestione utenti.
+              </p>
+            </div>
           ) : null}
 
-          <div className="flex justify-end gap-2 border-t border-slate-100 px-3 py-3">
+          <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-3 py-3">
             <button
               type="button"
               className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
               onClick={onClose}
             >
-              {successDetail ? 'Chiudi' : 'Annulla'}
+              {createdId ? 'Chiudi' : 'Annulla'}
             </button>
-            {!successDetail ? (
+            {createdId ? (
+              <button
+                type="button"
+                className={opPrimaryBtn}
+                onClick={() => {
+                  onClose()
+                  void navigate(
+                    `/manifestazione/${encodeURIComponent(createdId)}?nuovoPma=1`,
+                  )
+                }}
+              >
+                Apri dashboard e crea PMA
+              </button>
+            ) : (
               <button
                 type="submit"
                 disabled={submitting}
@@ -125,7 +144,7 @@ export function NewManifestazioneModal({ open, onClose }: Props) {
               >
                 {submitting ? 'Salvataggio…' : 'Crea'}
               </button>
-            ) : null}
+            )}
           </div>
         </form>
       </div>

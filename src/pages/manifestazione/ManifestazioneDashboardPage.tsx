@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import type { Timestamp } from 'firebase/firestore'
 import { collection, deleteField, limit, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
@@ -12,6 +12,7 @@ import { NewPmaModal } from '../../components/manifestazione/NewPmaModal'
 import { PmaCard } from '../../components/manifestazione/PmaCard'
 import { PmaOperationalCounts } from '../../components/manifestazione/PmaOperationalCounts'
 import { PmaCentraleFocusPanel } from '../../components/manifestazione/PmaCentraleFocusPanel'
+import { CentraleZonaTecnicaPanel } from '../../components/manifestazione/CentraleZonaTecnicaPanel'
 import { PmaCapacityFromPmaId } from '../../components/manifestazione/PmaCapacityGauge'
 import { OperativePageGrid } from '../../components/layout/OperativePageGrid'
 import type { CodiceColorePaziente } from '../../types/paziente'
@@ -60,6 +61,7 @@ function formatManifestazioneData(
 
 export function ManifestazioneDashboardPage() {
   const { id: idParam } = useParams<{ id: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
   const manifestazioneId = idParam ? decodeURIComponent(idParam) : ''
 
   const { user } = useAuth()
@@ -133,6 +135,17 @@ export function ManifestazioneDashboardPage() {
   useEffect(() => {
     if (!manLoading && manExists) bumpSync()
   }, [manLoading, manExists, bumpSync])
+
+  useEffect(() => {
+    if (searchParams.get('nuovoPma') !== '1') return
+    if (manLoading || !manExists) return
+    if (rank == null || !manifestazioneDashboardAllows(rank, 'CREATE')) return
+    setPmaModalKey((k) => k + 1)
+    setPmaModalOpen(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('nuovoPma')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams, manLoading, manExists, rank])
 
   useEffect(() => {
     if (!db || !manifestazioneId.trim() || rank !== 'Centrale') return
@@ -538,6 +551,14 @@ export function ManifestazioneDashboardPage() {
               </ul>
             ) : null}
           </section>
+
+          {rank === 'Centrale' ? (
+            <CentraleZonaTecnicaPanel
+              manifestazioneId={manifestazioneId}
+              pmaList={pmaList}
+              loading={pmaLoading}
+            />
+          ) : null}
 
           <NewPmaModal
             key={pmaModalKey}

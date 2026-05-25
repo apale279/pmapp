@@ -1,17 +1,18 @@
 import { useMemo } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import type { UserProfile, UserRank } from '../../types/userProfile'
 import { useManifestazioneDoc } from '../../hooks/useManifestazioneDoc'
 import { usePmaDocSnapshot } from '../../hooks/usePmaDocNome'
+import { SidebarNavIcon } from '../icons/navLogos'
+import {
+  SidebarDrawerDisabled,
+  SidebarDrawerLink,
+  SidebarRailDisabled,
+  SidebarRailLink,
+} from './sidebarNavLinks'
 
 const RAIL_CLASS =
   'sticky top-0 z-20 flex h-screen w-14 shrink-0 flex-col items-center gap-1 border-r border-[#e2e8f0] bg-[#f8fafc] py-3'
-
-const EMOJI_BTN =
-  'flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-xl leading-none text-slate-600 transition-colors hover:bg-white hover:text-[#2563eb] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]'
-
-const EMOJI_BTN_ACTIVE =
-  'relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white text-[#2563eb] shadow-[inset_3px_0_0_0_#2563eb]'
 
 function parsePathIds(pathname: string): { manFromUrl: string; pmaFromUrl: string } {
   const man = pathname.match(/^\/manifestazione\/([^/]+)/)
@@ -20,85 +21,6 @@ function parsePathIds(pathname: string): { manFromUrl: string; pmaFromUrl: strin
     manFromUrl: man ? decodeURIComponent(man[1]) : '',
     pmaFromUrl: pma ? decodeURIComponent(pma[1]) : '',
   }
-}
-
-function RailLink({
-  to,
-  end,
-  title,
-  emoji,
-  onNavigate,
-}: {
-  to: string
-  end?: boolean
-  title: string
-  emoji: string
-  onNavigate?: () => void
-}) {
-  return (
-    <NavLink
-      to={to}
-      end={end}
-      title={title}
-      aria-label={title}
-      onClick={() => onNavigate?.()}
-      className={({ isActive }) => (isActive ? EMOJI_BTN_ACTIVE : EMOJI_BTN)}
-    >
-      <span aria-hidden>{emoji}</span>
-    </NavLink>
-  )
-}
-
-function RailDisabled({ title, emoji }: { title: string; emoji: string }) {
-  return (
-    <span className={`${EMOJI_BTN} cursor-not-allowed opacity-35`} title={title} aria-hidden>
-      {emoji}
-    </span>
-  )
-}
-
-function DrawerLink({
-  to,
-  end,
-  label,
-  emoji,
-  onNavigate,
-}: {
-  to: string
-  end?: boolean
-  label: string
-  emoji: string
-  onNavigate?: () => void
-}) {
-  return (
-    <NavLink
-      to={to}
-      end={end}
-      onClick={() => onNavigate?.()}
-      className={({ isActive }) =>
-        [
-          'flex items-center gap-3 rounded-md px-3 py-2.5 text-xs font-bold uppercase tracking-wide transition-colors',
-          isActive ? 'bg-slate-100 text-[#2563eb]' : 'text-slate-900 hover:bg-slate-50',
-        ].join(' ')
-      }
-    >
-      <span className="text-xl leading-none" aria-hidden>
-        {emoji}
-      </span>
-      <span className="min-w-0 truncate">{label}</span>
-    </NavLink>
-  )
-}
-
-function DrawerDisabled({ label, emoji }: { label: string; emoji: string }) {
-  return (
-    <div className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-400 opacity-50">
-      <span className="text-xl leading-none" aria-hidden>
-        {emoji}
-      </span>
-      <span>{label}</span>
-    </div>
-  )
 }
 
 export type UnifiedEmojiSidebarProps = {
@@ -116,19 +38,12 @@ const RANKS_WITH_MANIFEST_EVENTO_SETTINGS: readonly UserRank[] = [
   'Triage',
 ]
 
-const RANKS_PMA_DASH: readonly UserRank[] = [
-  'Medico',
-  'Infermiere',
-  'Soccorritore',
-  'Triage',
-]
+const RANKS_PMA_DASH: readonly UserRank[] = ['Medico', 'Infermiere', 'Soccorritore', 'Triage']
 
-/** Staff su singolo PMA: niente voce Home (evita confusione; login → dashboard PMA). */
 const RANKS_HIDE_HOME_IN_NAV: readonly UserRank[] = [...RANKS_PMA_DASH]
 
 /**
- * Navigazione globale: contesto da **profilo** (`id_pma`, `id_manifestazione`) integrato con la **URL**
- * corrente (`/manifestazione/...`, `/pma/...`). Il Superadmin usa `AdminEmojiSidebar` nell'app shell.
+ * Navigazione globale: contesto da profilo + URL. Superadmin usa `AdminEmojiSidebar`.
  */
 export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiSidebarProps) {
   const rank = user.rank
@@ -168,76 +83,129 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
   const showElencoUtentiCentrale = rank === 'Centrale'
   const showDashPma = RANKS_PMA_DASH.includes(rank) && Boolean(pmaSeg)
   const showImpEvento = RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) && Boolean(manSeg)
-
   const showHomeNav = !RANKS_HIDE_HOME_IN_NAV.includes(rank)
 
-  const operatoreInitial = (user.nome?.trim()?.charAt(0) || user.email?.trim()?.charAt(0) || '?').toUpperCase()
+  const iconHome = <SidebarNavIcon name="home" />
+  const iconDashCentrale = <SidebarNavIcon name="dashboardEvento" />
+  const iconUtenti = <SidebarNavIcon name="listaUtenti" />
+  const iconPma = <SidebarNavIcon name="vistaPma" />
+  const iconRubrica = <SidebarNavIcon name="rubrica" />
+  const iconFileUtili = <SidebarNavIcon name="fileUtili" />
+  const iconImpostazioni = <SidebarNavIcon name="impostazioni" />
+
+  const brandIcon =
+    rank === 'Centrale' ? (
+      <SidebarNavIcon name="dashboardEvento" />
+    ) : RANKS_PMA_DASH.includes(rank) ? (
+      <SidebarNavIcon name="vistaPma" />
+    ) : (
+      <SidebarNavIcon name="home" />
+    )
 
   if (variant === 'rail') {
     return (
       <aside className={RAIL_CLASS} aria-label="Navigazione principale">
         <div
-          className="mb-1 flex h-10 w-10 items-center justify-center rounded-full border border-[#e2e8f0] bg-white text-xs font-bold text-slate-600"
+          className="mb-1 flex h-10 w-10 items-center justify-center"
           title={`${user.nome} · ${rank}`}
         >
-          {operatoreInitial}
+          {brandIcon}
         </div>
 
-        {showHomeNav ? <RailLink to="/" end title="Home" emoji="🏠" onNavigate={onNavigate} /> : null}
+        {showHomeNav ? (
+          <SidebarRailLink to="/" end title="Home" icon={iconHome} theme="operative" onNavigate={onNavigate} />
+        ) : null}
 
         {showDashCentrale && manSeg ? (
-          <RailLink
+          <SidebarRailLink
             to={`/manifestazione/${manSeg}`}
             end
             title="Dashboard centrale"
-            emoji="🖥️"
+            icon={iconDashCentrale}
+            theme="operative"
             onNavigate={onNavigate}
           />
         ) : showDashCentrale ? (
-          <RailDisabled title="Dashboard centrale (apri una manifestazione dalla Home)" emoji="🖥️" />
+          <SidebarRailDisabled
+            title="Dashboard centrale (apri una manifestazione dalla Home)"
+            icon={iconDashCentrale}
+            theme="operative"
+          />
         ) : null}
 
         {showElencoUtentiCentrale ? (
-          <RailLink to="/admin/utenti" title="Elenco utenti" emoji="👥" onNavigate={onNavigate} />
+          <SidebarRailLink
+            to="/admin/utenti"
+            title="Elenco utenti"
+            icon={iconUtenti}
+            theme="operative"
+            onNavigate={onNavigate}
+          />
         ) : null}
 
         {showDashPma ? (
-          <RailLink to={`/pma/${pmaSeg}`} end title="Dashboard PMA" emoji="🏥" onNavigate={onNavigate} />
+          <SidebarRailLink
+            to={`/pma/${pmaSeg}`}
+            end
+            title="Dashboard PMA"
+            icon={iconPma}
+            theme="operative"
+            onNavigate={onNavigate}
+          />
         ) : RANKS_PMA_DASH.includes(rank) ? (
-          <RailDisabled title="Dashboard PMA (nessun PMA nel contesto: profilo o URL /pma/…)" emoji="🏥" />
+          <SidebarRailDisabled
+            title="Dashboard PMA (nessun PMA nel contesto: profilo o URL /pma/…)"
+            icon={iconPma}
+            theme="operative"
+          />
         ) : null}
 
         {showImpEvento ? (
-          <RailLink
+          <SidebarRailLink
             to={`/manifestazione/${manSeg}/rubrica`}
             title="Rubrica"
-            emoji="📞"
+            icon={iconRubrica}
+            theme="operative"
             onNavigate={onNavigate}
           />
         ) : RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) ? (
-          <RailDisabled title="Rubrica (nessuna manifestazione nel contesto)" emoji="📞" />
+          <SidebarRailDisabled
+            title="Rubrica (nessuna manifestazione nel contesto)"
+            icon={iconRubrica}
+            theme="operative"
+          />
         ) : null}
 
         {showImpEvento ? (
-          <RailLink
+          <SidebarRailLink
             to={`/manifestazione/${manSeg}/file-utili`}
             title="File utili"
-            emoji="📎"
+            icon={iconFileUtili}
+            theme="operative"
             onNavigate={onNavigate}
           />
         ) : RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) ? (
-          <RailDisabled title="File utili (nessuna manifestazione nel contesto)" emoji="📎" />
+          <SidebarRailDisabled
+            title="File utili (nessuna manifestazione nel contesto)"
+            icon={iconFileUtili}
+            theme="operative"
+          />
         ) : null}
 
         {showImpEvento ? (
-          <RailLink
+          <SidebarRailLink
             to={`/manifestazione/${manSeg}/impostazioni`}
             title="Impostazioni evento"
-            emoji="🏟️"
+            icon={iconImpostazioni}
+            theme="operative"
             onNavigate={onNavigate}
           />
         ) : RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) ? (
-          <RailDisabled title="Impostazioni evento (nessuna manifestazione nel contesto)" emoji="🏟️" />
+          <SidebarRailDisabled
+            title="Impostazioni evento (nessuna manifestazione nel contesto)"
+            icon={iconImpostazioni}
+            theme="operative"
+          />
         ) : null}
       </aside>
     )
@@ -254,55 +222,74 @@ export function UnifiedEmojiSidebar({ user, variant, onNavigate }: UnifiedEmojiS
         </p>
       </div>
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
-        {showHomeNav ? <DrawerLink to="/" end label="Home" emoji="🏠" onNavigate={onNavigate} /> : null}
+        {showHomeNav ? (
+          <SidebarDrawerLink to="/" end label="Home" icon={iconHome} theme="operative" onNavigate={onNavigate} />
+        ) : null}
         {showDashCentrale && manSeg ? (
-          <DrawerLink
+          <SidebarDrawerLink
             to={`/manifestazione/${manSeg}`}
             end
             label="Dashboard centrale"
-            emoji="🖥️"
+            icon={iconDashCentrale}
+            theme="operative"
             onNavigate={onNavigate}
           />
         ) : showDashCentrale ? (
-          <DrawerDisabled label="Dashboard centrale" emoji="🖥️" />
+          <SidebarDrawerDisabled label="Dashboard centrale" icon={iconDashCentrale} />
         ) : null}
         {showElencoUtentiCentrale ? (
-          <DrawerLink to="/admin/utenti" label="Elenco utenti" emoji="👥" onNavigate={onNavigate} />
+          <SidebarDrawerLink
+            to="/admin/utenti"
+            label="Elenco utenti"
+            icon={iconUtenti}
+            theme="operative"
+            onNavigate={onNavigate}
+          />
         ) : null}
         {showDashPma ? (
-          <DrawerLink to={`/pma/${pmaSeg}`} end label="Dashboard PMA" emoji="🏥" onNavigate={onNavigate} />
+          <SidebarDrawerLink
+            to={`/pma/${pmaSeg}`}
+            end
+            label="Dashboard PMA"
+            icon={iconPma}
+            theme="operative"
+            onNavigate={onNavigate}
+          />
         ) : RANKS_PMA_DASH.includes(rank) ? (
-          <DrawerDisabled label="Dashboard PMA" emoji="🏥" />
+          <SidebarDrawerDisabled label="Dashboard PMA" icon={iconPma} />
         ) : null}
         {showImpEvento ? (
-          <DrawerLink
+          <SidebarDrawerLink
             to={`/manifestazione/${manSeg}/rubrica`}
             label="Rubrica"
-            emoji="📞"
+            icon={iconRubrica}
+            theme="operative"
             onNavigate={onNavigate}
           />
         ) : RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) ? (
-          <DrawerDisabled label="Rubrica" emoji="📞" />
+          <SidebarDrawerDisabled label="Rubrica" icon={iconRubrica} />
         ) : null}
         {showImpEvento ? (
-          <DrawerLink
+          <SidebarDrawerLink
             to={`/manifestazione/${manSeg}/file-utili`}
             label="File utili"
-            emoji="📎"
+            icon={iconFileUtili}
+            theme="operative"
             onNavigate={onNavigate}
           />
         ) : RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) ? (
-          <DrawerDisabled label="File utili" emoji="📎" />
+          <SidebarDrawerDisabled label="File utili" icon={iconFileUtili} />
         ) : null}
         {showImpEvento ? (
-          <DrawerLink
+          <SidebarDrawerLink
             to={`/manifestazione/${manSeg}/impostazioni`}
             label="Impostazioni evento"
-            emoji="🏟️"
+            icon={iconImpostazioni}
+            theme="operative"
             onNavigate={onNavigate}
           />
         ) : RANKS_WITH_MANIFEST_EVENTO_SETTINGS.includes(rank) ? (
-          <DrawerDisabled label="Impostazioni evento" emoji="🏟️" />
+          <SidebarDrawerDisabled label="Impostazioni evento" icon={iconImpostazioni} />
         ) : null}
       </nav>
     </aside>

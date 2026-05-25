@@ -41,6 +41,7 @@ function parsePma(docId: string, d: Record<string, unknown>): Pma {
     luogo: typeof d.luogo === 'string' ? d.luogo : '—',
     id_manifestazione:
       typeof d.id_manifestazione === 'string' ? d.id_manifestazione : '',
+    token: typeof d.token === 'string' && d.token.trim() ? d.token.trim() : undefined,
     impostazioni_pma: { posti_letto: posti, elenco_farmaci_usati: mergeFarmaciUsatiFromPmaDoc(d) },
     ...(d.createdAt &&
     typeof (d.createdAt as Timestamp).toMillis === 'function'

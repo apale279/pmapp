@@ -10,12 +10,16 @@ import { createPazienteWithProgressivo } from '../../lib/createPazienteWithProgr
 import { updateSchedaPazienteGranular } from '../../lib/updateSchedaPaziente'
 import { usePazientiForPma } from '../../hooks/usePazientiForPma'
 import { usePmaDocSnapshot } from '../../hooks/usePmaDocNome'
+import { usePmaListForManifestazione } from '../../hooks/usePmaListForManifestazione'
 import { useManifestazioneDoc } from '../../hooks/useManifestazioneDoc'
 import { useManifestazioneListeCliniche } from '../../hooks/useManifestazioneListeCliniche'
 import { useDimessiManifestazione } from '../../hooks/useDimessiManifestazione'
 import { parsePazienteFromFirestore } from '../../hooks/usePazienteDoc'
 import { buildMailtoReportPaziente, defaultPdfFilename } from '../../lib/pdf/pazientePdfHelpers'
 import { CodiciMinoriModal } from '../../components/pma/CodiciMinoriModal'
+import { GeneraTokenButton, TokenDisplay } from '../../components/pma/CrossTokenPanel'
+import { PmaImpostazioniCsvPanel } from '../../components/pma/PmaImpostazioniCsvPanel'
+import { manifestazioneImpostazioniAllows } from '../../lib/rankMatrix'
 import { PmaManagerShell } from '../../components/pma/PmaManagerShell'
 import { opToolbarBtnSm } from '../../components/layout/operativeTokens'
 import { useInfermiereSmartphone } from '../../hooks/useInfermiereSmartphone'
@@ -676,6 +680,13 @@ export function PMADashboardPage() {
   const infermiereSm = useInfermiereSmartphone(user)
   const smartphone = useIsSmartphone()
   const pmaSnap = usePmaDocSnapshot(pmaId || undefined)
+  const manIdForCsv = (user?.id_manifestazione?.trim() || pmaSnap.idManifestazione?.trim() || '').trim()
+  const { items: pmaListForCsv } = usePmaListForManifestazione(manIdForCsv || undefined)
+  const pmaCsvOptions = useMemo(
+    () => pmaListForCsv.map((p) => ({ id: p.id, nome: p.nome })),
+    [pmaListForCsv],
+  )
+  const canEditImpostazioniCsv = Boolean(user && manifestazioneImpostazioniAllows(user.rank, 'UPDATE'))
   const { data: manZipMeta } = useManifestazioneDoc(pmaSnap.idManifestazione || undefined)
   const manListeCliniche = useManifestazioneListeCliniche(pmaSnap.idManifestazione || undefined)
   const { items: pazienti, loading: listaLoading, error: listaError } = usePazientiForPma(
@@ -1151,12 +1162,12 @@ export function PMADashboardPage() {
             onClick={() => void Notification.requestPermission()}
           >
             {infermiereSm ? (
-              <span className="inline-flex items-center gap-1" title="Notifiche allerta">
+              <span className="inline-flex items-center gap-1" title="NOTIFICHE ALLERTA">
                 <span aria-hidden>🔔</span>
-                <span className="sr-only">Notifiche allerta</span>
+                <span className="sr-only">NOTIFICHE ALLERTA</span>
               </span>
             ) : (
-              'Notifiche allerta'
+              'NOTIFICHE ALLERTA'
             )}
           </button>
         ) : null}
@@ -1338,6 +1349,41 @@ export function PMADashboardPage() {
             </div>
           </div>
         )}
+        {user.rank === 'Superadmin' ? (
+          <section className="mt-8 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
+            <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">
+              Integrazione CROSS — Token PMA
+            </h3>
+            <p className="mb-3 text-xs text-slate-500">
+              Incolla questo token nel campo &quot;Token PMApp&quot; del PMA corrispondente su CROSS. Serve a CROSS
+              per indirizzare automaticamente i pazienti trasportati in questo PMA.
+            </p>
+            {pmaSnap.loading ? (
+              <p className="text-xs text-slate-400">Caricamento…</p>
+            ) : pmaSnap.token ? (
+              <TokenDisplay token={pmaSnap.token} pmaId={pmaId} />
+            ) : (
+              <p className="text-xs text-amber-700">
+                Token non presente. Questo PMA è stato creato prima dell&apos;integrazione CROSS. Usa il pulsante qui
+                sotto per generarlo.
+              </p>
+            )}
+            {!pmaSnap.loading && !pmaSnap.token && db ? <GeneraTokenButton pmaId={pmaId} /> : null}
+          </section>
+        ) : null}
+        {canEditImpostazioniCsv && manIdForCsv ? (
+          <section className="mt-8 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">
+              Export / Import impostazioni
+            </h3>
+            <PmaImpostazioniCsvPanel
+              manifestazioneId={manIdForCsv}
+              pmaOptions={pmaCsvOptions}
+              canEdit
+              defaultPmaId={pmaId}
+            />
+          </section>
+        ) : null}
         </div>
       </PmaManagerShell>
 

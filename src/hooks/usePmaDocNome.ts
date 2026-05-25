@@ -7,6 +7,8 @@ export type PmaDocSnapshot = {
   nome: string | null
   /** Collegamento alla manifestazione (campo su `pma/{id}`). */
   idManifestazione: string | null
+  /** Token integrazione CROSS. */
+  token: string | null
   loading: boolean
 }
 
@@ -15,12 +17,14 @@ export function usePmaDocSnapshot(pmaId: string | undefined): PmaDocSnapshot {
   const { bumpSync } = useSyncLive()
   const [nome, setNome] = useState<string | null>(null)
   const [idManifestazione, setIdManifestazione] = useState<string | null>(null)
+  const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!db || !pmaId?.trim()) {
       setNome(null)
       setIdManifestazione(null)
+      setToken(null)
       setLoading(false)
       return
     }
@@ -33,6 +37,7 @@ export function usePmaDocSnapshot(pmaId: string | undefined): PmaDocSnapshot {
         if (!snap.exists()) {
           setNome(id)
           setIdManifestazione(null)
+          setToken(null)
           setLoading(false)
           bumpSync()
           return
@@ -43,14 +48,17 @@ export function usePmaDocSnapshot(pmaId: string | undefined): PmaDocSnapshot {
           typeof d.id_manifestazione === 'string' && d.id_manifestazione.trim() !== ''
             ? d.id_manifestazione.trim()
             : null
+        const tok = typeof d.token === 'string' && d.token.trim() ? d.token.trim() : null
         setNome(n)
         setIdManifestazione(mid)
+        setToken(tok)
         setLoading(false)
         bumpSync()
       },
       () => {
         setNome(id)
         setIdManifestazione(null)
+        setToken(null)
         setLoading(false)
         bumpSync()
       },
@@ -58,7 +66,7 @@ export function usePmaDocSnapshot(pmaId: string | undefined): PmaDocSnapshot {
     return () => unsub()
   }, [pmaId, bumpSync])
 
-  return { nome, idManifestazione, loading }
+  return { nome, idManifestazione, token, loading }
 }
 
 /** Nome visualizzato del PMA (compat). */

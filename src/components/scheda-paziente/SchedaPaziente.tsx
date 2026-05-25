@@ -40,6 +40,7 @@ import { createPmaAlert } from '../../lib/createPmaAlert'
 import { SchedaPazienteShell } from '../pma/SchedaPazienteShell'
 import { findPartecipanteByPettorale } from '../../types/manifestazionePartecipanti'
 import { TesseraSanitariaCfScanner } from './TesseraSanitariaCfScanner'
+import { CrossDatiSchedaPanel } from './CrossDatiSchedaPanel'
 
 type Props = {
   pazienteId: string
@@ -669,6 +670,8 @@ export function SchedaPaziente({ pazienteId }: Props) {
                       />
                     </label>
                   </div>
+
+                  <CrossDatiSchedaPanel p={p} />
 
                   {showCentraleFields ? (
                     <>

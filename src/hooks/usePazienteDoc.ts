@@ -200,6 +200,11 @@ function parsePaziente(id: string, d: Record<string, unknown>): Paziente {
 
     infermiere_rif: strOrEmpty(d.infermiere_rif),
     medico_rif: strOrEmpty(d.medico_rif),
+
+    external_source: optionalStr(d.external_source),
+    external_app_id: optionalStr(d.external_app_id),
+    external_sync_at: tsOrNull(d.external_sync_at),
+    cross_dati_scheda: optionalStr(d.cross_dati_scheda),
   }
 }
 

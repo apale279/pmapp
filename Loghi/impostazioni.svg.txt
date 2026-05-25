@@ -1,0 +1,21 @@
+<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#64748b"/>
+      <stop offset="1" stop-color="#94a3b8"/>
+    </linearGradient>
+  </defs>
+  <rect width="80" height="80" rx="20" fill="url(#bg)"/>
+  <!-- Gear body filled polygon with 8 teeth -->
+  <path d="
+    M45 8.4 L49.6 17 L59 14.4 L64 23.6 L56.4 30 L59 40
+    L71.6 43 L70 53 L59.6 53 L55 62 L62 69 L54.4 76
+    L47 69 L40 72 L38 71.6 L35 69 L27.6 76 L20 69
+    L27 62 L22.4 53 L12 53 L10.4 43 L23 40 L25.6 30
+    L18 23.6 L23 14.4 L32.4 17 L35 8.4 Z
+  " fill="white" fill-opacity="0.92"/>
+  <!-- Inner hole matching gradient bg -->
+  <circle cx="40" cy="40" r="14" fill="url(#bg)"/>
+  <!-- Subtle inner ring -->
+  <circle cx="40" cy="40" r="8" fill="white" fill-opacity="0.2"/>
+</svg>

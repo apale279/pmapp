@@ -11,6 +11,8 @@ export interface Pma {
     /** Elenco farmaci usati nel PMA (aggiornato da schede paziente). */
     elenco_farmaci_usati?: string[]
   }
+  /** Token opaco per integrazione CROSS (lookup `pma` where token == crossToken). */
+  token?: string
   /** Campi opzionali per estensioni future */
   createdAt?: Timestamp
 }

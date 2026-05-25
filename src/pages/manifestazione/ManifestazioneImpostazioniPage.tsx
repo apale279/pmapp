@@ -25,6 +25,12 @@ import {
 } from '../../types/manifestazioneImpostazioni'
 import { FARMACO_VIA_LABEL, FARMACO_VIE, isFarmacoVia, type FarmacoVia } from '../../types/cartellaClinica'
 import { parsePartecipantiExcelFile } from '../../lib/parsePartecipantiExcel'
+import { buildPmaImpostazioniBundleFromDrafts } from '../../lib/pmaImpostazioniCsv'
+import {
+  PmaImpostazioniCsvPanel,
+  refreshPmaSliceForExport,
+} from '../../components/pma/PmaImpostazioniCsvPanel'
+import { parsePartecipantiElencoFromFirestore } from '../../types/manifestazionePartecipanti'
 
 /** Testo textarea → righe pulite, deduplicate, ordinate, rimesse su righe. */
 function sortLinesText(text: string): string {
@@ -157,6 +163,9 @@ export function ManifestazioneImpostazioniPage() {
   const [presetFarmaciDraft, setPresetFarmaciDraft] = useState<PresetFarmaciPack[]>([])
 
   const [partecipantiElencoCount, setPartecipantiElencoCount] = useState(0)
+  const [partecipantiElenco, setPartecipantiElenco] = useState<
+    ReturnType<typeof parsePartecipantiElencoFromFirestore>
+  >([])
   const [partExcelBusy, setPartExcelBusy] = useState(false)
 
   const [loading, setLoading] = useState(true)
@@ -227,7 +236,9 @@ export function ManifestazioneImpostazioniPage() {
         setPresetFarmaciDraft(parsePresetFarmaciFromFirestore(imp.preset_farmaci))
 
         const rawPe = imp.partecipanti_elenco
-        setPartecipantiElencoCount(Array.isArray(rawPe) ? rawPe.length : 0)
+        const parsedPe = parsePartecipantiElencoFromFirestore(rawPe)
+        setPartecipantiElenco(parsedPe)
+        setPartecipantiElencoCount(parsedPe.length)
 
         setLoading(false)
         bumpSync()
@@ -411,6 +422,48 @@ export function ManifestazioneImpostazioniPage() {
     }
   }, [db, manifestazioneId, isReadOnlyManifestazione, bumpSync])
 
+  const buildExportBundle = useCallback(
+    async (sourcePmaId: string) => {
+      const pma = pmaConsumatiList.find((p) => p.id === sourcePmaId)
+      const pmaSlice = await refreshPmaSliceForExport(sourcePmaId, {
+        posti_letto: pma?.impostazioni_pma.posti_letto ?? 0,
+        elenco_farmaci_usati: pma?.impostazioni_pma.elenco_farmaci_usati ?? [],
+      })
+      return buildPmaImpostazioniBundleFromDrafts({
+        sourcePmaId,
+        sourceManifestazioneId: manifestazioneId,
+        postiLetto: pmaSlice.posti_letto,
+        elencoFarmaciUsati: pmaSlice.elenco_farmaci_usati,
+        prestazioniDraft,
+        farmaciDraft,
+        tipoEvento,
+        dettaglioDraft,
+        eoDraft,
+        consensoGenericoDraft,
+        consensoPrivacyDraft,
+        rifiutoInvioPsDraft,
+        presetDimissioneDraft,
+        presetFarmaciDraft,
+        partecipantiElenco,
+      })
+    },
+    [
+      consensoGenericoDraft,
+      consensoPrivacyDraft,
+      dettaglioDraft,
+      eoDraft,
+      farmaciDraft,
+      manifestazioneId,
+      partecipantiElenco,
+      pmaConsumatiList,
+      presetDimissioneDraft,
+      presetFarmaciDraft,
+      prestazioniDraft,
+      rifiutoInvioPsDraft,
+      tipoEvento,
+    ],
+  )
+
   return (
     <div className="pma-dashboard mx-auto w-full max-w-[1920px] pb-12">
       <OperativePageGrid
@@ -442,6 +495,32 @@ export function ManifestazioneImpostazioniPage() {
 
       {!loading ? (
         <div className="space-y-4">
+          <details name={IMP_ACC_NAME} className={IMP_DETAILS} open>
+            <summary className={IMP_SUMMARY}>
+              <span>Export / Import CSV</span>
+              <span
+                className="shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180"
+                aria-hidden
+              >
+                ▼
+              </span>
+            </summary>
+            <div className={IMP_PANEL}>
+              <PmaImpostazioniCsvPanel
+                manifestazioneId={manifestazioneId}
+                pmaOptions={pmaConsumatiList.map((p) => ({ id: p.id, nome: p.nome }))}
+                canEdit={!isReadOnlyManifestazione}
+                buildExportBundle={buildExportBundle}
+                onSuccess={(msg) => {
+                  setSaved(msg)
+                  bumpSync()
+                  window.setTimeout(() => setSaved(null), 5000)
+                }}
+                onError={setError}
+              />
+            </div>
+          </details>
+
           <details name={IMP_ACC_NAME} className={IMP_DETAILS}>
             <summary className={IMP_SUMMARY}>
               <span>Evento</span>

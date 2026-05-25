@@ -143,6 +143,18 @@ export interface Paziente {
   infermiere_rif: string
   /** Riferimento soft: chi ha preso per primo in carico come medico (solo informativo). */
   medico_rif: string
+
+  /** Integrazione CROSS — origine scheda e dati non mappati su campi PMApp. */
+  external_source?: string | null
+  external_app_id?: string | null
+  external_sync_at?: Timestamp | null
+  /** Testo formattato (valutazioni MSB/MSA, evento, missione, SOREU, …). */
+  cross_dati_scheda?: string | null
+}
+
+/** Scheda creata/sincronizzata da CROSS. */
+export function isPazienteDaCross(p: Pick<Paziente, 'external_source'>): boolean {
+  return String(p.external_source ?? '').trim().toUpperCase() === 'CROSS'
 }
 
 export const TIPO_PAZIENTE_LABEL: Record<TipoPaziente, string> = {

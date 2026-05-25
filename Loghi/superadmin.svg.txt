@@ -1,0 +1,16 @@
+<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="80" height="80" rx="20" fill="url(#bg)"/>
+  <!-- Head -->
+  <circle cx="40" cy="26" r="12" fill="white"/>
+  <!-- Body -->
+  <path d="M16 72c0-13.2 10.8-24 24-24s24 10.8 24 24" stroke="white" stroke-width="4.4" stroke-linecap="round" fill="none"/>
+  <!-- Star badge -->
+  <circle cx="62" cy="20" r="14" fill="#8b5cf6"/>
+  <polygon points="62,10 64.8,16.2 71.6,17 66.8,21.6 68,28.2 62,25 56,28.2 57.2,21.6 52.4,17 59.2,16.2" fill="white"/>
+</svg>

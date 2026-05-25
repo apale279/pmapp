@@ -1,0 +1,35 @@
+<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10b981"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="gear" x1="44" y1="44" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#059669"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+  </defs>
+  <rect width="80" height="80" rx="20" fill="url(#bg)"/>
+  <!-- Tent roof -->
+  <path d="M40 6 L76 50 L4 50 Z" fill="white" fill-opacity="0.2" stroke="white" stroke-width="4" stroke-linejoin="round"/>
+  <!-- Tent walls -->
+  <rect x="8" y="50" width="64" height="20" rx="2" fill="white" fill-opacity="0.15" stroke="white" stroke-width="3.5"/>
+  <!-- Door arch -->
+  <path d="M30 70 L30 58 Q40 48 50 58 L50 70" fill="white" fill-opacity="0.25" stroke="white" stroke-width="3"/>
+  <!-- White cross on tent -->
+  <rect x="37" y="53" width="6" height="14" rx="2" fill="white"/>
+  <rect x="31" y="58" width="18" height="6" rx="2" fill="white"/>
+  <!-- Gear badge — large, bottom-right -->
+  <circle cx="60" cy="60" r="22" fill="url(#gear)"/>
+  <path d="
+    M62 40.5 L65 46.5 L71 44.8 L74.5 50.5
+    L69.8 54.5 L71.2 60 L78 61.5 L77.2 67.5
+    L71.2 67.5 L68.8 73 L73 77.5 L68.5 81.5
+    L64 77.5 L60 79.5 L58.5 79.2 L56 77.5
+    L51.5 81.5 L47 77.5 L51.2 73 L48.8 67.5
+    L42.8 67.5 L42 61.5 L48.8 60 L50.2 54.5
+    L45.5 50.5 L49 44.8 L55 46.5 L58 40.5 Z
+  " fill="white" fill-opacity="0.95"/>
+  <!-- Gear inner hole -->
+  <circle cx="60" cy="60" r="9" fill="url(#gear)"/>
+</svg>
